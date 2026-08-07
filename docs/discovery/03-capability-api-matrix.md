@@ -40,8 +40,8 @@ Doc section: Assets → Host Lists / Asset IPs.
 | Add IPs / ranges | POST | `/api/2.0/fo/asset/ip/` | `add` | `ips` (single IPs + hyphenated ranges, comma-separated), `enable_vm`, `enable_pc`, `ag_title`, `comment` | SIMPLE_RETURN | Confirmed. **CIDR input `Unverified` — official examples show ranges only; plan to expand CIDR client-side** |
 | Update host metadata | POST | `/api/2.0/fo/asset/ip/` | `update` | select by `ids`/`ips` (+`network_id`, `tracking_method`); set `new_tracking_method` (IP\|DNS\|NETBIOS only), `new_owner`, `new_ud1..3`, `new_comment` — values **overwrite all matched hosts** | SIMPLE_RETURN | Confirmed |
 | Remove assets | — | — | — | **No delete API exists for subscription IPs** (official article 000003463); purge is the only API-side reduction | — | Confirmed absence |
-| Purge host data | POST | `/api/2.0/fo/asset/host/` | `purge` | selectors `ids`/`ips`/`ag_ids`; `data_scope=vm|pc` and `echo_request` names `Unverified` | SIMPLE_RETURN-style | Endpoint/action/permissions confirmed; exact params `Unverified` |
-| Host detection list | GET/POST | `/api/2.0/fo/asset/host/vm/detection/` | `list` | `status=New,Active,Re-Opened,Fixed`, `detection_updated_since/before`, `vm_scan_date_before/after`, `vm_processed_before/after`, `truncation_limit`, `id_min` | detection output (root name + DTD path `Unverified`); fields `FIRST_FOUND_DATETIME`, `LAST_FOUND_DATETIME`, `LAST_SCAN_DATETIME` | Confirmed; `include_ignored` param `Unverified` |
+| Purge host data | POST | `/api/2.0/fo/asset/host/` | `purge` | IP/AG mode (`use_tags=0`, default): `ids`, `ips`, `ag_ids`, `ag_titles`, `network_ids` (needs Network Support); tag mode (`use_tags=1`): `tag_set_include`, `tag_set_exclude`, `tag_include_selector`, `tag_exclude_selector`; filters: `data_scope` (`vm`, `pc`, or `vm,pc`), `compliance_enabled`, `no_vm_scan_since`, `no_compliance_scan_since`, `os_pattern`, `echo_request` | **`BATCH_RETURN`** (not SIMPLE_RETURN) — `BATCH_LIST/BATCH/TEXT` ("Hosts Queued for Purging") + `ID_SET`; DTD `/api/2.0/fo/asset/host/dtd/purge/output.dtd` | Endpoint/action/permissions Confirmed; parameter set + BATCH_RETURN **Corroborated (non-official)**; `tag_set_by` for purge `Unverified` |
+| Host detection list | GET/POST | `/api/2.0/fo/asset/host/vm/detection/` | `list` | `status`, `include_ignored` (0/1, default 0), `include_disabled` (0/1, default 0), `detection_updated_since/before`, `detection_processed_after/before`, `detection_last_tested_since/before`(`_days`), `vm_scan_date_before/after`, `vm_auth_scan_date_before/after`, `vm_processed_before/after`, `max_days_since_last_vm_scan`, `max_days_since_detection_updated`, `truncation_limit`, `id_min`; dates `YYYY-MM-DD[THH:MM:SSZ]` | root **`HOST_LIST_VM_DETECTION_OUTPUT`**; DTD **`/api/2.0/fo/asset/host/vm/detection/dtd/output.dtd`** (no `list/` segment); fields `FIRST_FOUND_DATETIME`, `LAST_FOUND_DATETIME`, `LAST_SCAN_DATETIME` | Confirmed (root/DTD/`include_ignored`/`include_disabled`/date filters) |
 | Excluded IPs list | GET/POST | `/api/2.0/fo/asset/excluded_ip/` | `list` | `ips` | excluded host list XML | Confirmed |
 | Excluded IPs add | POST | `/api/2.0/fo/asset/excluded_ip/` | `add` | `ips`, `comment`, `expiry_days` | SIMPLE_RETURN | Confirmed |
 | Excluded IPs remove | POST | `/api/2.0/fo/asset/excluded_ip/` | `remove` | `ips`, `comment` | SIMPLE_RETURN | Action confirmed; params `Unverified` |
@@ -61,7 +61,7 @@ Doc section: Assets → Host Lists / Asset IPs.
 |---|---|---|---|---|---|---|
 | List hosts | data source | `qualys_host_assets` | n/a | none | P1 | — |
 | Add/update IPs | resource | `qualys_ip_registration` (create=add, update=update; **destroy is a no-op or optional purge — no delete API**) | `ips` string (+`network_id`) | update overwrites metadata on all matched hosts | P1 | CIDR handling client-side; purge-on-destroy opt-in flag |
-| Purge host data | imperative operation | NOT a resource; expose via separate stale-asset review/purge subsystem | n/a | **destructive** — removes vuln/compliance data, tickets, removes asset from AssetView; never blind-retry | P2 | exact param names (`data_scope`) |
+| Purge host data | imperative operation | NOT a resource; expose via separate stale-asset review/purge subsystem | n/a | **destructive** — removes vuln/compliance data, tickets, removes asset from AssetView; **asynchronous/queued** (BATCH_RETURN returns hosts *queued*, so a follow-up read may still see the host — verification must poll, not assume); never blind-retry | P2 | `tag_set_by` for purge |
 | Host detections | data source | `qualys_host_detections` (feeds stale-asset subsystem) | n/a | none | P2 | `include_ignored` |
 | Excluded IPs | resource | `qualys_excluded_ips` | `ips` | removing exclusions re-enables scanning | P3 | remove params |
 
@@ -74,8 +74,8 @@ Doc section: Assets → Asset Groups. Path `/api/2.0/fo/asset/group/`.
 | Operation | Method | Action | Key params | Response / DTD | Status |
 |---|---|---|---|---|---|
 | List | GET/POST | `list` | `ids`, filters | `ASSET_GROUP_LIST_OUTPUT` / `.../asset/group/asset_group_list_output.dtd` | Confirmed |
-| Create | POST | `add` | `title` (req), `network_id`, `ips`, `comments`, `division`, `function`, `location`, `business_impact`, `cvss_enviro_cdp/td/cr/ir/ar` | SIMPLE_RETURN with new ID | Confirmed |
-| Update | POST | `edit` | `id` (req); member lists support **both additive (`add_ips`/`remove_ips`) and authoritative (`set_ips`) semantics**; official params page confirms set/remove pattern extends to domains, DNS/NetBIOS names, appliances (exact `set_domains`/`set_appliance_ids` names `Unverified`) | SIMPLE_RETURN | Confirmed (ips); sibling param names `Unverified` |
+| Create | POST | `add` | **bare names** (no `set_` prefix): `title` (req), `network_id`, `ips`, `domains`, `dns_names`, `netbios_names`, `appliance_ids`, `default_appliance_id`, `comments`, `division`, `function`, `location`, `business_impact`, `cvss_enviro_cdp/td/cr/ir/ar` | SIMPLE_RETURN with new ID | Confirmed (official params page); full bare-name list **Corroborated (non-official)** |
+| Update | POST | `edit` | `id` (req). **Member lists use `add_*`/`remove_*`/`set_*` triads**: `add_ips`/`remove_ips`/`set_ips`, `add_domains`/`remove_domains`/`set_domains`, `add_dns_names`/`remove_dns_names`/`set_dns_names`, `add_netbios_names`/`remove_netbios_names`/`set_netbios_names`, `add_appliance_ids`/`remove_appliance_ids`/`set_appliance_ids`. Scalars are **set-only**: `set_title`, `set_comments`, `set_division`, `set_function`, `set_location`, `set_business_impact`, `set_default_appliance_id`, `set_cvss_enviro_cdp/td/cr/ir/ar` | SIMPLE_RETURN | `set_ips`/`add_ips`/`remove_ips` + set/remove semantics Confirmed; the remaining triads and scalar `set_*` names **Corroborated (non-official)** — two independent wrappers agree verbatim |
 | Delete | POST | `delete` | `id` | SIMPLE_RETURN | Confirmed |
 | Legacy V1 list | GET | `/msp/asset_group_list.php` | — | V1 XML | legacy — superseded by 2.0; formal deprecation status `Unverified` |
 
@@ -83,13 +83,24 @@ Doc section: Assets → Asset Groups. Path `/api/2.0/fo/asset/group/`.
   `set_*` = authoritative overwrite (can empty the group), `add_*`/`remove_*` = additive/
   subtractive. **Terraform must use `set_*` (authoritative) to converge on declared
   state.**
+- **Create/update parameter asymmetry (important for the client):** `action=add` takes
+  bare names (`ips`, `domains`, `title`, ...); `action=edit` takes prefixed names
+  (`set_ips`, `set_domains`, `set_title`, ...). The two calls are **not** the same
+  parameter set with a different action — the client needs separate encoders.
+- *Owner and network:* no `set_owner_user_id` / `set_network_id` parameter was found on
+  `edit`; `network_id` appears only on `add`, while `OWNER_USER_ID`/`NETWORK_IDS` exist
+  as *output* attributes. **Treat owner and network as create-time (ForceNew) until
+  disproved** (`Unverified`).
+- *Enum caveat:* `business_impact` — the Qualys UI doc lists Critical/High/Medium/Low/
+  **Minor**; one wrapper models the tail as **none**. The exact enum tail is
+  `Unverified`; validate against the tenant rather than hard-coding.
 - *Permissions:* dedicated perms page; Unit Managers restricted to their business unit;
   exact API matrix `Unverified`.
 - *Stable identifier:* numeric group ID (returned on create).
 
 | Classification | Terraform mapping | Import | Destructive effects | Priority | Unresolved |
 |---|---|---|---|---|---|
-| resource + data source | `qualys_asset_group` (use `set_*`); `data.qualys_asset_groups` | group ID | delete removes group (not member hosts); `set_*` can empty member lists | **P0** (dependency of scans/schedules) | exact `set_*` names for domains/dns/netbios/appliances; scanner-appliance assignment params |
+| resource + data source | `qualys_asset_group` (use `set_*` on update, bare names on create); `data.qualys_asset_groups` | group ID | delete removes group (not member hosts); `set_*` can empty member lists | **P0** (dependency of scans/schedules) | owner/network mutability; `business_impact` enum tail |
 
 ---
 
@@ -141,10 +152,10 @@ Doc section: Scans → Appliances. Path `/api/2.0/fo/appliance/`.
 
 | Operation | Method | Action | Key params | Response | Status |
 |---|---|---|---|---|---|
-| List | GET/POST | `list` | `output_mode=brief|full`, `type=physical|virtual|offline`, `network_id`, `busy`, `scan_detail`, `include_license_info`, `show_tags` | `APPLIANCE_LIST_OUTPUT` / `appliance_list_output.dtd`; STATUS `Online|Offline`, SOFTWARE_VERSION, RUNNING_SCAN_COUNT, NETWORK_ID | Confirmed |
+| List | GET/POST | `list` | `output_mode=brief|full`, `type=physical|virtual|offline`, `network_id`, `busy`, `scan_detail`, `include_license_info`, `show_tags` | `APPLIANCE_LIST_OUTPUT` / `appliance_list_output.dtd`. `output_mode=full` APPLIANCE elements: `ID`, `UUID`, `NAME`, `NETWORK_ID`, `SOFTWARE_VERSION`, `RUNNING_SLICES_COUNT`, `RUNNING_SCAN_COUNT`, `STATUS`, `CMD_ONLY_START`, `MODEL_NUMBER`, `SERIAL_NUMBER`, **`ACTIVATION_CODE`**, `INTERFACE_SETTINGS`, `PROXY_SETTINGS`, `IS_CLOUD_DEPLOYED`, `CLOUD_INFO`, `VLANS` (children `SETTING`, `VLAN`), `STATIC_ROUTES`, `ML_LATEST`/`ML_VERSION`, `VULNSIGS_LATEST`/`VULNSIGS_VERSION`, `ASSET_GROUP_COUNT`, `ASSET_GROUP_LIST`, `ASSET_TAGS_LIST`, `LAST_UPDATED_DATE`, `POLLING_INTERVAL`, `USER_LOGIN`, **`HEARTBEATS_MISSED`**, `SS_CONNECTION`, `SS_LAST_CONNECTED`, `FDCC_ENABLED`, `USER_LIST`, `UPDATED`, `COMMENTS`, `RUNNING_SCANS`, `MAX_CAPACITY_UNITS` | Confirmed |
 | Read details | GET | scanner details page | returns `IP_SCANNERS_LIST_OUTPUT` | — | Confirmed existence; params `Unverified` |
 | Create virtual scanner | POST | `create` | `name`, `polling_interval` (60–360, default 180), `asset_group_id` (required for UM/Scanner; Managers must omit) | `APPLIANCE_CREATE_OUTPUT` — **includes ACTIVATION CODE (the personalisation code / "perscode") and REMAINING_QVSA_LICENSES** | Confirmed |
-| Update virtual | POST | `update` | `id`, `name`, `comment`, `polling_interval`, `set_vlans`, `set_routes` (formats: VLAN `id\|ip\|netmask\|name[...ipv6]`, route `ip\|netmask\|gateway\|name`; up to 4094 each), `set_tags`/`add_tags`/`remove_tags`, `enable_ipv6` | SIMPLE_RETURN | Confirmed (`set_*` replace semantics implied, `Unverified` whether merge) |
+| Update virtual | POST | `update` | `id`, `name`, `comment`, `polling_interval` (60–3600, default 180), `set_vlans`, `set_routes`, `set_tags`/`add_tags`/`remove_tags`, `enable_ipv6`. **`set_vlans`/`set_routes` are authoritative replace** — the value passed becomes the entire list and `""` deletes all records; there are **no** `add_vlans`/`remove_vlans` parameters. Formats: VLAN `<VLAN_ID>|<IPv4>|<NETMASK>|<VLAN_NAME>|ipv6_static\|ipv6_auto|<IPv6>` (skipped IPv4 attributes need an empty space placeholder), route `<IP>|<NETMASK>|<GATEWAY>|<NAME>`; comma-separated for multiple; up to 4094 each. Requires the "VLANs and static routes" subscription feature | SIMPLE_RETURN | Confirmed (replace semantics now confirmed) |
 | Update physical | POST | `/api/2.0/fo/appliance/physical/` `update` | `id`, `name`, `polling_interval`, `comment`, `set_vlans`, tags | SIMPLE_RETURN | Confirmed |
 | Delete virtual | POST | `delete` | `id`; virtual only; fails while scans run; side effects: removed from asset groups, dependent schedules deactivated | SIMPLE_RETURN | Confirmed |
 | Replace appliance | — | **UI-only wizard** (config transfer incl. VLANs/routes/heartbeat) | — | Confirmed UI-only |
@@ -160,13 +171,26 @@ Doc section: Scans → Appliances. Path `/api/2.0/fo/appliance/`.
    exported by step 1.
 3. *Connection & activation* — happens when the deployed VM personalises itself with
    the code; not a Qualys API call.
-4. *Readiness verification* — poll `action=list` until STATUS=`Online` (readiness
-   values `SS_OK`/`SS_CONNECTED` are **not** confirmed API values — console codes;
-   `Unverified`). → provider helper / validation operation, not a resource.
+4. *Readiness verification* — poll `action=list` until `STATUS`=`Online`, using
+   `HEARTBEATS_MISSED`, `LAST_UPDATED_DATE`, `SS_CONNECTION`/`SS_LAST_CONNECTED` and
+   the `ML_VERSION` vs `ML_LATEST` / `VULNSIGS_VERSION` vs `VULNSIGS_LATEST` pairs
+   (up-to-date check without an extra call). There is **no "check readiness now"
+   action** — polling `action=list` is the mechanism, and the platform heartbeat runs
+   only **every 4 hours** (offline threshold configurable 1–5 missed checks), so a
+   short-timeout wait loop inside Create would be wrong. → provider helper /
+   validation operation, not a resource. (`SS_OK`/`SS_CONNECTED` remain unconfirmed as
+   API *values*; `SS_CONNECTION` is the real element name.)
+
+**Activation code retrieval (state-design critical):** `ACTIVATION_CODE` appears in
+`APPLIANCE_LIST_OUTPUT` as well as `APPLIANCE_CREATE_OUTPUT`, **but only while the
+appliance is not yet activated** — once activated it is no longer returned. A Read that
+blindly overwrites the attribute will therefore erase it from state on the first apply
+after activation. The resource must treat `activation_code` as Computed + Sensitive and
+**only update it when the API returns a non-empty value**.
 
 | Operation | Classification | Terraform mapping | Import | Destructive | Priority | Unresolved |
 |---|---|---|---|---|---|---|
-| Create/update/delete virtual | resource | `qualys_virtual_scanner` — exports `activation_code` (sensitive), `status` | appliance ID | delete deactivates schedules, alters asset groups | **P1** | `set_vlans`/`set_routes` replace-vs-merge; full-output element list |
+| Create/update/delete virtual | resource | `qualys_virtual_scanner` — exports `activation_code` (Computed+Sensitive, never overwritten with empty), `status`; VLANs/routes as whole-list attributes written on every update | appliance ID | delete deactivates schedules, alters asset groups | **P1** | — |
 | List/details | data source | `data.qualys_scanner_appliances` | n/a | none | P1 | details params |
 | Network assignment | part of resource (separate call) | attribute `network_id` on `qualys_virtual_scanner` | — | — | P1 | un-assign mechanics |
 | Readiness wait | validation operation | optional `wait_for_online` timeout on resource / standalone helper | — | — | P2 | polling interval etiquette |
@@ -185,10 +209,26 @@ Doc section: Scans → Option Profiles. **Two parallel API surfaces:**
 | Import | POST | `/api/2.0/fo/subscription/option_profile/` | `import` | body = `OPTION_PROFILES` XML (`text/xml`); returns new ID; **Manager only**; since ~8.10 | Confirmed |
 | List (VM) | GET/POST | `/api/2.0/fo/subscription/option_profile/vm/` | `list` | full XML incl. `BASIC_INFO/ID`, `IS_DEFAULT`, `IS_GLOBAL`, `USER_ID`, scan sections | Confirmed |
 | Create (VM) | POST | `/api/2.0/fo/subscription/option_profile/vm/` | `create` | **field-level form params** (`title`, `global`, `scan_tcp_ports=full`, `vulnerability_detection=complete`, ...) per `vm_op_params.htm` | Confirmed |
-| Update (VM) | POST | `/api/2.0/fo/subscription/option_profile/vm/` | `update` | `id` + create-params | Pattern confirmed via PC twin + quick ref; VM page `Unverified` |
+| Update (VM) | POST | `/api/2.0/fo/subscription/option_profile/vm/` | `update` | `id` (req) + `title` + create-params; `vm_op_params.htm` is the shared parameter reference for create and update | Confirmed (endpoint/action/`id`); a separate `update_vm_op.htm` page `Unverified` |
 | Delete (VM) | POST | `/api/2.0/fo/subscription/option_profile/vm/` | `delete` | `id` | Confirmed (quick reference) |
 | PC variants | — | `/subscription/option_profile/pc/` | `list/create/update/delete` | parallel | Confirmed |
-| v3 variant | — | `/api/3.0/fo/subscription/option_profile/vm/` | — | referenced in docs; details `Unverified` | Partially confirmed |
+| **Newer major versions** | — | `/api/4.0/fo/subscription/option_profile/vm/` (Release 10.36, Nov 2025); `POST /api/5.0/fo/subscription/option_profile/vm` and `GET,POST /api/7.0/fo/subscription/option_profile/` (Release 10.39.1, Jul 2026 — adds `allow_on_host_script_execution`) | — | **There is no `/api/3.0/` option-profile endpoint** — the version ladder is 2.0 → 4.0 → 5.0 → 7.0. (The "3.0" reference in `release_10_30_api_versioned.htm` is about the *Host Detection List* API, not option profiles.) | Existence Confirmed; 2.0→4.0/5.0 field/encoding delta `Unverified` |
+
+**Confirmed field-level parameter names** (correcting several plausible-but-wrong guesses):
+
+| Group | Parameters |
+|---|---|
+| Identity/scope | `title` (req on create), `id` (req on update), `owner`, `global` (0/1), **`default`** (0/1 — the IS_DEFAULT setter), `offline_scanner` |
+| Ports | `scan_tcp_ports` (`none|full|standard|light`), `scan_tcp_ports_additional`, `scan_udp_ports`, `scan_udp_ports_additional`, `3_way_handshake`, `authoritative_option` |
+| Dead hosts | `scan_dead_hosts`, **`close_vuln_on_dead_hosts`** (not `close_vulnerabilities`), `not_found_alive_times`, **`purge_host_data`** (not `purge`) |
+| Performance | **`scan_overall_performance`** (`high|normal|low|custom`, not `overall_performance`), `scan_parallel_scaling`, `scan_external_scanners`, `scan_scanner_appliances`, **`scan_total_process`** (not `processes_to_run`), `scan_http_process`, **`scan_packet_delay`** (not `packet_delay`), `external_scanners_use` |
+| Behaviour | **`load_balancer`** (not `load_balancer_detection`), **`enable_dissolvable_agent`** (not `dissolvable_agent`), `test_authentication`, `allow_on_host_script_execution` (10.39.1+) |
+| Map settings | `perform_live_host_sweep`, `disable_dns_traffic`, `map_overall_performance`, `map_external_scanners`, `map_scanner_appliances`, `map_netblock_size`, `basic_information_gathering` (**a Map setting, not a scan setting**) |
+
+Still missing API names (`Unverified`, and each is a core resource field — see doc 08):
+the Vulnerability Detection Complete/Custom toggle and its custom-search-list-ID
+companion; the per-technology authentication toggles (Windows/Unix/Oracle/...); the
+password brute-force level parameter.
 
 - **Managed lifecycle is viable — option profiles need not be read-only.** The viable
   Terraform schema is the *field-level* create/update/delete surface (form params),
@@ -199,12 +239,19 @@ Doc section: Scans → Option Profiles. **Two parallel API surfaces:**
   fallback of Vulnerability Detection to "Complete" → these fields must be
   `ignore_changes`-style suppressed or write-only in the schema.
 - *Stable identifier:* numeric profile ID (in `BASIC_INFO/ID`).
-- *Default designation:* `IS_DEFAULT` readable; whether it is settable via
-  create/update params `Unverified`.
+- *Default designation:* settable at **create** via `default={0|1}`; read back as
+  `IS_DEFAULT`/`DEFAULT_FLAG`. **Coupling hazard:** marking a profile default also
+  forces it global, so `default` and `global` are *not* independent booleans — modelling
+  them independently will produce perpetual drift. Whether `default` is honoured on
+  `update` is `Unverified`.
+- *Mutability:* `title` **is** mutable (the canonical update example is a title change),
+  so it must not be ForceNew. No option-profile field is documented as immutable —
+  **no ForceNew is currently justified by evidence**; `global`/`owner` mutability is
+  `Unverified`.
 
 | Classification | Terraform mapping | Import | Destructive | Priority | Unresolved |
 |---|---|---|---|---|---|
-| resource (field-level API) + data source; XML import/export = provider helper | `qualys_vm_option_profile`; `data.qualys_option_profiles` | profile ID | delete breaks referencing scans/schedules | **P0–P1** (dependency of scans/schedules) | VM update page; replacement-forcing fields; `IS_DEFAULT` writability; v3 endpoint differences |
+| resource (field-level API) + data source; XML import/export = provider helper | `qualys_vm_option_profile`; `data.qualys_option_profiles` | profile ID | delete breaks referencing scans/schedules | **P0–P1** (dependency of scans/schedules) | vulnerability-detection / auth-toggle / brute-force parameter names; `default`+`global` on update; 2.0→4.0/5.0 delta |
 
 ---
 
@@ -243,9 +290,9 @@ Doc section: Scans → Schedules. Path `/api/2.0/fo/schedule/scan/` (PC variant
 
 | Operation | Method | Action | Key params | Status |
 |---|---|---|---|---|
-| List | GET/POST | `list` | `id`, `is_active`-style filters | Confirmed — `SCHEDULE_SCAN_LIST_OUTPUT` / `schedule_scan_list_output.dtd` |
-| Create | POST | `create` | `scan_title`, `option_id|option_title`, `active=0|1`; targets/scanners as scan launch (`ip`, `asset_group_ids`, `target_from=tags` + tag params, `iscanner_name`, `priority`); recurrence: `occurrence=daily|weekly|monthly`, `frequency_days`, `frequency_weeks`+`weekdays` (numeric 0–6, 0=Sunday), `frequency_months` + (`day_of_month` XOR `day_of_week`+`week_of_month`); time: `start_hour` 0–23, `start_minute`, `time_zone_code`, `observe_dst=yes|no`; duration: `end_after` (0–119)+`end_after_mins`, `pause_after_hours`+`pause_after_mins`, `resume_in_days`+`resume_in_hours` (resume relative to start); notifications: `before_notify=1`+`before_notify_unit`+`before_notify_time`, `after_notify=1`, `recipient_group_ids` (distribution-group IDs, only with a notify flag) | Confirmed (`start_date` param name `Unverified`; `client_id/client_name` as inputs `Unverified`) |
-| Update | POST | `update` | `id` + fields; `set_start_time` documented for start-time changes | Confirmed |
+| List | GET/POST | `list` | `id`, `show_notifications`, `scan_type` (e.g. `perimeter`), `show_cloud_details` | Confirmed — `SCHEDULE_SCAN_LIST_OUTPUT` / `schedule_scan_list_output.dtd`. An `active`/`is_active` filter and the pagination model are `Unverified` |
+| Create | POST | `create` | `scan_title`, `option_id|option_title`, `active=0|1`; targets/scanners as scan launch (`ip`, `asset_group_ids`, `target_from=tags` + tag params, `iscanner_name`, `priority`); recurrence: `occurrence=daily|weekly|monthly`, `frequency_days`, `frequency_weeks`+`weekdays` (numeric 0–6, 0=Sunday), `frequency_months` + (`day_of_month` XOR `day_of_week`+`week_of_month`), **`recurrence`** = number of occurrences after which the schedule deactivates itself; time: **`start_date` (MM/DD/YYYY)**, `start_hour` 0–23, `start_minute`, `time_zone_code`, `observe_dst=yes|no`; duration cap (**not** an end date): `end_after` (hours, 0–119)+`end_after_mins`, `pause_after_hours` (1–119)+`pause_after_mins`, `resume_in_days` (1–9)+`resume_in_hours`; notifications: `before_notify=1`+`before_notify_unit` (`hours|days|minutes`)+`before_notify_time`, `after_notify=1`+`after_notify_message`, `recipient_group_ids` (distribution-group IDs, only valid with a notify flag) | Confirmed. **There is no `end_date` parameter.** `before_notify_message` and `client_id`/`client_name` on *create* remain `Unverified` |
+| Update | POST | `update` | `id`, `echo_request`, `client_id`, `client_name`, + fields. **Time changes are gated:** any change to the start time requires `set_start_time=1` **plus all five** of `start_date`, `start_hour`, `start_minute`, `time_zone_code`, `observe_dst` sent together — update is not a field-by-field PATCH for this group | Confirmed |
 | Delete | POST | `delete` | `id` | Confirmed |
 | Enable/disable | POST | `update` with `active=0|1` | — | Confirmed |
 | Launch schedule now | — | **does not exist** (no `action=launch` on schedule/scan; asymmetric with report schedules) | — | Confirmed absence |
@@ -255,10 +302,19 @@ Doc section: Scans → Schedules. Path `/api/2.0/fo/schedule/scan/` (PC variant
   (DTD `time_zone_code_list.dtd`); DST via `observe_dst`.
 - *Recipients:* distribution groups only — **no free-form email addresses**; no
   distribution-group CRUD API found (doc 08).
+- **`ACTIVE` is a four-valued enum, not a boolean:** `0` deactivated, `1` active,
+  `2` active and not paused (*continuous schedules only*), `3` paused (*continuous
+  schedules only*). Values 2/3 are newer than the 10.15 DTD. The provider must not map
+  this to a Go `bool`; use an int, or normalise `{1,2}→true` / `{0,3}→false` and accept
+  that pause state becomes invisible.
+- **Server-side drift hazard:** a schedule using `recurrence` (occurrence count) sets
+  itself `ACTIVE=0` once the count is exhausted. If `active` is a managed field, such
+  schedules will show perpetual diffs — it needs drift suppression or a documented
+  caveat.
 
 | Classification | Terraform mapping | Import | Priority | Unresolved |
 |---|---|---|---|---|
-| resource + data source; legacy `/msp/scheduled_scans.php` = legacy (not used); timezone list = provider helper/validation | `qualys_scan_schedule`; `data.qualys_scan_schedules` | schedule ID | **P0–P1** (core of recurring-scan onboarding) | `start_date`/`end date` params; ACTIVE output values 2/3; introduction version |
+| resource + data source; legacy `/msp/scheduled_scans.php` = legacy (not used); timezone list = provider helper/validation | `qualys_scan_schedule` (start-time fields as one always-written block); `data.qualys_scan_schedules` | schedule ID | **P0–P1** (core of recurring-scan onboarding) | `before_notify_message`; `client_id/client_name` on create; list pagination/`active` filter |
 
 ---
 
@@ -268,8 +324,8 @@ Doc section: Reports. Path `/api/2.0/fo/report/`.
 
 | Operation | Method | Action | Key params | Status |
 |---|---|---|---|---|
-| List | GET/POST | `list` | `id`, `state` (Running/Finished/Submitted/Canceled/Errors), `EXPIRATION_DATETIME` in output | Confirmed — `REPORT_LIST_OUTPUT` / `report_list_output.dtd` (an `/api/3.0/fo/report/` DTD also referenced — details `Unverified`) |
-| Launch | POST | `launch` | `template_id`, `report_title`, `output_format`, `report_type`, `report_refs` (scan-based), `ips`/`asset_group_ids` (host-based), `pdf_password`, `recipient_group` (distribution groups, max 50) | Confirmed |
+| List | GET/POST | `list` | `id`, `state` (Running/Finished/Submitted/Canceled/Errors), `EXPIRATION_DATETIME` in output | Confirmed — `REPORT_LIST_OUTPUT` / `report_list_output.dtd`. A **v3 report endpoint exists** (`/api/3.0/fo/report/?action=fetch&id=` for downloading saved reports); v2 remains current and was updated as recently as Release 10.32. The 2.0→3.0 delta and whether v3 covers `launch`/`list` are `Unverified` |
+| Launch | POST | `launch` | `template_id`, `report_title`, `output_format`, `report_type`, `pdf_password`, `recipient_group` (distribution groups, max 50). **Targeting depends on the template's findings mode, not the report type:** *Scan Based Findings* → `report_refs` is **required**; *Host Based Findings* → use `ips`, `ips_network_id`, `asset_group_ids` (or tag params) and not `report_refs` | Confirmed |
 | Launch with tags | POST | `launch` | `use_tags=1`, `tag_set_by=id|name`, `tag_include_selector=all|any`, `tag_set_include/exclude` — vulnerability & compliance reports (other types `Unverified`) | Confirmed |
 | Status | GET/POST | `list` | poll by `id` | Confirmed |
 | Cancel | POST | `cancel` | `id` | Confirmed |
@@ -378,12 +434,13 @@ AdminBastion, HashiCorp; Azure Key Vault at least for Palo Alto records (10.1).
 | Object | Operations (confirmed unless noted) | Terraform mapping | Priority |
 |---|---|---|---|
 | `webapp` | `create`, `search`, `count`, `delete` (single + bulk-by-filter); `get`/`update` per URL grammar (pattern-confirmed); tags via `TagList` element | resource `qualys_web_application` + data source | P2 |
-| `optionprofile` | `create`, `update`, `get`, `search` confirmed; `delete` `Unverified` | resource `qualys_was_option_profile` | P2 |
+| `optionprofile` | `create`, `update`, `get`, `search` confirmed; `delete` confirmed via guide TOC | resource `qualys_was_option_profile` | P2 |
 | `webappauthrecord` | `create` confirmed (form/server/Selenium/OAuth2); `get` masks secrets without view-permissions; update/delete/search pattern-confirmed | resource `qualys_was_auth_record` (write-only secrets) | P2 |
-| `wasscan` | `launch`, `search`, `status`, `download` confirmed; `cancel`/`delete` endpoints `Unverified` (cancelAfterNHours param confirmed) | imperative operation | P3 |
-| `wasscanschedule` | `update` + object name confirmed; full CRUD + recurrence field model `Unverified` | resource (pending field verification) `qualys_was_scan_schedule` | P2–P3 |
+| `wasscan` | `launch`, `search`, `status`, `download` confirmed. **`cancel/was/wasscan/<id>` confirmed** — takes optional boolean `cancelWithResults` to retain partial results; supported for single and *child* scans only (not parent scans), and recommended only after ~20 minutes in Running status. **`delete/was/wasscan` confirmed** as a *filtered bulk* delete (`<filters><Criteria field="id" operator="IN">` with comma-separated IDs) | imperative operation | P3 |
+| `wasscanschedule` | **Full CRUD confirmed** — Count, Search, Get Details, Create (single web app), Create (multiple), Update, Delete, Activate, Download (iCalendar). **Recurrence element model still `Unverified`**: UI semantics are known (one-time; daily every N days; weekly every N weeks + selected weekdays; monthly every N months by date *or* by day-of-week-of-week; start time/date/timezone; ends after N occurrences) but the XSD element names are not. **Do not copy the VM/FO `<SCHEDULE>` DTD shape — that is a different API family** | resource (pending element-name verification) `qualys_was_scan_schedule` | P2–P3 |
 | `report` / report templates | `create`, `get` (status), `download` confirmed; search template endpoint confirmed; delete pattern-confirmed | imperative operation + data source | P3 |
-| report schedules | UI feature; **API `Unverified`** | gap (doc 08) | — |
+| report schedules | **No v3 API — UI-only.** However Qualys announced (13 Apr 2026) **new V4 API endpoints for schedule and report management, explicitly covering scheduled reports**, with V3 endpoints unchanged. V4 paths/schemas `Unverified` (`/qps/rest/4.0/...` inferred, not confirmed) | deferred — re-scope once V4 reference docs are available | deferred |
+| `optionprofile` delete | `delete/was/optionprofile/<id>` present in the WAS API guide TOC ("Delete an Option Profile"); literal path not printed on a retrieved page | — | — |
 
 Auth: Basic per request (baseline); JWT "token-based auth" documented in a technical
 brief — per-endpoint WAS support `Unverified`. Encoding: XML default; JSON since
@@ -403,9 +460,9 @@ WAS 4.5 with both `Accept` and `Content-Type: application/json`. Pagination:
 | Assign tags to host assets | `POST /qps/rest/2.0/update/am/hostasset` with `tags.add.TagSimple{id}` / `tags.remove`; bulk via Criteria `id IN` | Confirmed |
 | `update/am/asset` variant | static tags only — **dynamic tags rejected** on add/remove/set | Confirmed |
 | List assets by tag | `search/am/hostasset` Criteria `tagName`/`tagId EQUALS` | Confirmed |
-| Untagged-asset discovery | negative/NOT operator **not supported** on `search/am/hostasset` (community evidence); no official `NONE` operator found | `Unverified` — plan client-side set difference |
-| WAS webapp tag assignment | `TagList` on `webapp` create/update | Confirmed |
-| Cross-module tag identity | Strong official indications of a single shared tag tree (AssetView tag tree visible in all apps; WAS tag API references CSAM-managed tags) — **but no explicit statement that the same tag ID is usable across VMDR, AssetView and WAS. Status: `Unverified` (per task instruction, must remain so until official confirmation).** | `Unverified` |
+| Untagged-asset discovery | **Negation is supported on the gateway surface**: `POST gateway.<pod>.apps.qualys.com/rest/2.0/search/am/asset` accepts QQL with `not tags.name:"X"` (official worked example combines positive and negated tag predicates). `NOT_EQUALS` is documented as an operator for `tags.name`. **Client-side set difference is therefore not required for "assets lacking tag X"** | Confirmed (gateway QQL negation). `NOT_EQUALS` against `tagName` on the *classic* `/qps/rest/2.0/search/am/hostasset` endpoint is `Unverified` (community reports boolean-operator limits there); a "has zero tags at all" predicate is `Unverified` and still needs client-side computation |
+| WAS webapp tag assignment | `TagList` on `webapp` create/update; WAS search supports `webApp.tags.id` / `webapp.tags.name` | Confirmed |
+| **Cross-module tag identity** | **Now Confirmed — one subscription-wide tag tree.** (a) *VMDR*: tags are chosen from the same tree that AssetView/CSAM manages — *"a benefit of the tag tree is that you can assign any tag in the tree to a scan or report"*, and *"All users can see all tags in the subscription and can choose tags for their scans and reports"*, so `tag_set_include`/`tag_set_by=id` on scan/report launch resolve against tags created by `create/am/tag`. (b) *WAS*: *"Tags are defined through the CyberSecurity Asset Management (CSAM) application"* — WAS does not have a private tag namespace, and its `TagList` carries the same numeric tag `id`. **Caveat to carry forward:** the AM&T API v2 guide lists its own supported modules as VM, PC, SCA, CERTVIEW, CLOUDVIEW (WAS absent) — this reads as the scope of the *AM API surface* rather than a namespace split, since the WAS-side docs independently source their tags from CSAM, but no single official sentence asserts the full round trip in one breath | **Confirmed** for both (a) and (b), with the `modules`-list caveat noted |
 
 | Classification | Terraform mapping | Import | Priority |
 |---|---|---|---|

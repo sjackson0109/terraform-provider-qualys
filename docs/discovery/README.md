@@ -35,6 +35,12 @@ success.qualys.com knowledge base). Every operation in the matrix carries:
 - a **verification status**:
   - `Confirmed` — the fact was directly confirmed against official documentation
     (page title/snippet/URL evidence captured during discovery);
+  - `Corroborated (non-official)` — the fact is not visible in retrievable official
+    documentation, but two or more **independent** third-party implementations that
+    call the API agree on it verbatim (principally the Cortex XSOAR `demisto/content`
+    Qualys v2 pack and the `qualysdk` Python library, which quote Qualys' own
+    parameter names and descriptions). Strong enough to design a schema against;
+    **must still be probed against a tenant before release**;
   - `Unverified` — the fact is believed correct from the documented API pattern or
     adjacent official material, but the specific page/field could not be retrieved
     during this discovery pass. **Nothing marked `Unverified` may be implemented

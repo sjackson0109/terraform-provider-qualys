@@ -98,7 +98,7 @@ separate source and must not be used to infer VMDR endpoint behaviour.
 
 | Family | Base path | Encoding | Envelope | Pagination | Auth |
 |---|---|---|---|---|---|
-| VM/PA (VMDR) | `/api/2.0/fo/` + legacy `/msp/` | form-encoded in, XML out (DTD) | action RPC, `SIMPLE_RETURN` | `truncation_limit` + WARNING/`id_min` next-URL | Basic or session (`QualysSession`), `X-Requested-With` required |
+| VM/PA (VMDR) | `/api/2.0/fo/` + legacy `/msp/` | form-encoded in, XML out (DTD) | action RPC, `SIMPLE_RETURN` | `truncation_limit` + WARNING/`id_min` next-URL | Basic, session (`QualysSession`), or JWT bearer (subscription opt-in); `X-Requested-With` required |
 | WAS | `/qps/rest/3.0/.../was/...` | XML (default) or JSON | `ServiceRequest`/`ServiceResponse` | `hasMoreRecords`/`lastId` + Criteria GREATER | Basic (JWT partially documented — `Unverified` per endpoint) |
-| AV/CSAM tagging | `/qps/rest/2.0/.../am/...` | XML or JSON | `ServiceRequest`/`ServiceResponse` | `hasMoreRecords`/`lastId` + Criteria GREATER | Basic; CSAM gateway APIs use JWT Bearer |
+| AV/CSAM tagging | `/qps/rest/2.0/.../am/...` | XML or JSON | `ServiceRequest`/`ServiceResponse` | `hasMoreRecords`/`lastId` + Criteria GREATER | Basic; CSAM gateway APIs use JWT Bearer (429 limit regime) |
 | TotalCloud/CloudView | `/cloudview-api/rest/v1/` | JSON | plain REST | `pageNo`/`pageSize` | Basic (gateway TC APIs: JWT) |

@@ -25,7 +25,9 @@ clear diagnostics rather than raw API errors:
 | `/qps/rest/2.0/.../am/...` | AssetView/CSAM available (standard on VMDR subscriptions) |
 | `/cloudview-api/rest/v1/...` | CloudView/TotalCloud module; **deprecation state of connector APIs on the tenant** |
 | Auth-record secrets read-back | "View Password in Authentication Record" permission (provider must not depend on it) |
-| Rate/concurrency ceilings | subscription tier (headers observed at runtime are authoritative) |
+| Rate/concurrency ceilings | subscription tier (headers observed at runtime are authoritative; limits are customisable per subscription by Qualys Support, so **never hardcode tier numbers**) |
+| **JWT bearer auth on `/api/2.0/fo/`** | **opt-in per subscription** (OpenID Connect API authentication or native `/auth/oauth` — both require Qualys Support activation). Probe by attempting a token and falling back to Basic; never assume tokens work |
+| WAS V4 schedule/report APIs | announced Apr 2026 — availability on the tenant must be probed before use |
 
 Recommended pattern: a `provider helper` "tenant capability probe" that runs cheap
 list calls (`network?action=list`, `appliance?action=list`, WAS `count/was/webapp`,
@@ -51,30 +53,102 @@ Confirmed-absent (documented nowhere; community evidence corroborates absence):
 9. **Vulnerability scorecards other than vulnerability type via API** — compliance and
    WAS scorecards not launchable by API.
 
-`Unverified` items to resolve before implementation (from all matrix rows; the ones
-that gate design decisions are bolded):
+### Closed by the second research pass
 
-- **CIDR notation acceptance on `asset/ip/?action=add`** (assume ranges-only; expand
-  CIDR client-side).
-- **Exact purge parameter names** (`data_scope=vm|pc`, selector params, `echo_request`).
-- **Asset-group `set_*` parameter names beyond `set_ips`** (domains, dns/netbios
-  names, appliance IDs) — gates `qualys_asset_group` schema.
-- **Cross-module tag identity (same tag ID across VMDR / AssetView / WAS)** — strong
-  official indications, no explicit statement; must stay `Unverified` until confirmed.
-- **Untagged-asset discovery**: no NOT/NONE operator on `search/am/hostasset`
-  (community says unsupported) → plan client-side set difference; confirm.
-- `include_ignored` and first/last-found input filters on host detection list.
-- Host-detection output root element + DTD path.
-- Appliance `set_vlans`/`set_routes` replace-vs-merge semantics; full `output_mode=full`
-  element list; readiness values (`SS_*` unconfirmed as API values).
-- VM option profile `update` doc page; `IS_DEFAULT` writability; fields forcing
-  replacement; `/api/3.0/` option-profile endpoint delta.
-- Scan-schedule `start_date`/end-date params; `ACTIVE` output values 2/3;
-  `client_id`/`client_name` as schedule inputs; `before_notify_message`.
-- Report types (beyond vuln/compliance) accepting `use_tags`; `report_refs`
-  required/optional matrix; max concurrent running reports; `/api/3.0/fo/report/`
-  variant details.
+The following were `Unverified` in the first pass and are now resolved (details in
+doc 03; `Corroborated (non-official)` where noted):
+
+- Asset-group `set_*`/`add_*`/`remove_*` triads for domains, DNS names, NetBIOS names
+  and appliance IDs, plus the scalar `set_*` names — and the **create-vs-edit
+  parameter asymmetry** (bare names on `add`, prefixed on `edit`).
+  *(Corroborated (non-official).)*
+- Host-purge parameter set, `data_scope` values (`vm`/`pc`/`vm,pc`), and that purge
+  returns **`BATCH_RETURN`** with hosts *queued* — i.e. asynchronous.
+  *(Corroborated (non-official).)*
+- Host-detection root element `HOST_LIST_VM_DETECTION_OUTPUT` and DTD
+  `/api/2.0/fo/asset/host/vm/detection/dtd/output.dtd` (**no `list/` segment**);
+  `include_ignored` and `include_disabled` both exist.
+- Appliance `set_vlans`/`set_routes` are **authoritative replace** (`""` clears);
+  full `output_mode=full` element list; readiness signals (`HEARTBEATS_MISSED`,
+  `SS_CONNECTION`, `LAST_UPDATED_DATE`, `*_LATEST` pairs) and the 4-hour platform
+  heartbeat cadence.
+- **`ACTIVATION_CODE` is re-retrievable via `action=list`, but only until the appliance
+  activates** — drives the Computed+Sensitive never-overwrite-with-empty rule.
+- Option-profile field-level parameter names (several earlier guesses were wrong);
+  `default={0|1}` sets IS_DEFAULT at create and **forces the profile global**;
+  `title` is mutable; **no `/api/3.0/` option-profile endpoint exists** (ladder is
+  2.0 → 4.0 → 5.0 → 7.0).
+- Scan schedule `start_date` (MM/DD/YYYY), the `set_start_time=1` gate requiring all
+  five time fields together, `recurrence` as occurrence count, confirmation that
+  `end_after`/`end_after_mins` are a **duration cap and not an end date**, and that
+  **`ACTIVE` is a four-valued enum** (0/1/2/3).
+- Report `report_refs` is required for **Scan Based Findings** templates and unused for
+  **Host Based Findings** — determined by the template, not the report type.
+- A v3 report endpoint exists for `action=fetch`.
+- **Cross-module tag identity is Confirmed** — one subscription-wide tag tree spanning
+  VMDR scan/report targeting, AssetView/CSAM and WAS (see doc 03 §14 for the exact
+  wording and the AM&T `modules`-list caveat). This was the single most consequential
+  open question and it resolves in favour of a single shared `qualys_asset_tag`.
+- **Untagged-asset discovery is partly solved**: the CSAM gateway accepts QQL
+  `not tags.name:"X"`, so "assets lacking tag X" needs no client-side set difference.
+- WAS `cancel/was/wasscan` (with `cancelWithResults`), bulk `delete/was/wasscan`,
+  `delete/was/optionprofile`, and full `wasscanschedule` CRUD (9 operations) all exist.
+- **`/api/2.0/fo/` does accept JWT bearer tokens** (subscription opt-in) — this reverses
+  the first pass's "gateway-only" reading.
+- Limit regimes are split: FO/qps return **409**, the CSAM gateway returns **429** with
+  no concurrency headers and no per-subscription tiering.
+
+### Newly surfaced (not known in the first pass)
+
+- **WAS V4 schedule/report APIs** announced 13 Apr 2026, explicitly covering scheduled
+  reports, with V3 unchanged — this may eventually make a WAS report-schedule resource
+  possible. Paths and schemas `Unverified`.
+- **Option-profile API versions 4.0 / 5.0 / 7.0** exist (10.36 and 10.39.1); V2 is not
+  the only generation.
+
+### Still `Unverified` (bolded items gate design decisions)
+
+- **CIDR notation acceptance on `asset/ip/?action=add`** — no Qualys source affirms or
+  denies it; only the Restricted IPs endpoint documents CIDR. Mitigation is
+  version-proof: accept CIDR in config, normalise to hyphenated ranges on the wire.
+- **Numeric error code for "object not found"** on `edit`/`delete`, and the full v2
+  error-code table. Only `WARNING` code 1980 (truncation) is grounded; 1901 (invalid
+  parameter) is single-source non-official; 1905 exists but its meaning is not grounded.
+  **Note also that some VM/PA calls return HTTP 200 on error** — the provider must parse
+  `CODE`/`TEXT` rather than branch on HTTP status. Until this closes, implement
+  not-found detection as a list-by-id returning an empty set, not a code match.
+- **VM option profile: the Vulnerability Detection Complete/Custom toggle and its
+  custom-search-list-ID companion; the per-technology authentication toggles
+  (Windows/Unix/Oracle/…); the password brute-force level parameter.** All are core
+  resource fields with no discoverable API name.
+- **Whether `default`/`global` are accepted on option-profile `update`**, and whether
+  any option-profile field is genuinely immutable (no ForceNew is currently justified).
+- **WAS `WasScanSchedule` recurrence element model** — CRUD is confirmed but the XSD
+  element names are not, so the schedule resource's schema cannot be written yet.
+  Explicitly do **not** reuse the VM/FO `<SCHEDULE>` DTD shape.
+- `NOT_EQUALS` against `tagName` on the classic `/qps/rest/2.0/search/am/hostasset`
+  endpoint (confirmed for `tags.name` on the gateway surface only); and any predicate
+  for "assets with no tags at all", which still needs client-side computation.
+- Asset group: `set_owner_user_id`/`set_network_id` appear not to exist (treat owner and
+  network as create-time); `business_impact` enum tail ("Minor" vs "none") disputed
+  between sources.
+- `tag_set_by` on purge; a third-party reference to `/api/5.0/fo/asset/host/?action=purge`
+  that could not be corroborated.
+- `before_notify_message`; `client_id`/`client_name` on schedule *create*; scan-schedule
+  list pagination model and whether an `active` filter exists.
+- Option-profile 2.0 → 4.0/5.0/7.0 field and encoding delta; the 2.0 → 3.0 report delta;
+  WAS V4 schedule/report paths and schemas.
+- Report types beyond vulnerability/compliance accepting `use_tags`; a report-specific
+  concurrency cap (likely none distinct from the default-2 per-API limit).
 - Excluded-hosts change-history endpoint path; excluded-IP `remove` params.
+- Full per-service-level API limits table (only Standard 300/3600s + concurrency 2 are
+  grounded); CloudView's rate-limit regime; the complete platform hostname table
+  (UK1/AU1/KSA1/EU3 unconfirmed, and a `.co.uk` vs `.uk` conflict for UK1) — mitigated
+  by requiring explicit URL configuration rather than a hardcoded POD map.
+- Literal endpoint paths for `delete/was/optionprofile` and `delete/was/wasscan`
+  (existence confirmed via guide TOC; verify at runtime before shipping).
+- Current version of the evergreen WAS API guide PDF (latest indexed versioned copy is
+  3.12 / 2022-06-03, but WAS 3.18 release notes from 2024 prove it is newer).
 - Vault per-type parameter schemas; `/api/2.0/fo/vault/index.php` path form; VM-side
   per-type password echo behaviour.
 - WAS: `delete/was/optionprofile`, `cancel|delete/was/wasscan`, full `wasscanschedule`

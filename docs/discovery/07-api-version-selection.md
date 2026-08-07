@@ -13,10 +13,10 @@ global VMDR version. "V1" = legacy `/msp/*.php`; "V2" = `/api/2.0/fo/`; "v3" =
 | Networks | V2 only | **V2** | no delete in any version |
 | Domains | V2 (Domain V2 API) | **V2** | Basic-auth only; bulk delete needs platform ≥10.25 (Dec 2023) — minimum-release note |
 | Scanner appliances | V2 only | **V2** | create returns activation code |
-| Option profiles | V2 field-level (`/subscription/option_profile/vm|pc/`), V2 XML export/import, v3 variant observed | **V2 field-level** for resource CRUD; V2 export/import for backup/migration helpers; **v3 deferred** until documented delta is known (`Unverified`) | field-level params round-trip better with Terraform diffs than whole-XML import; import silently rewrites search-list/brute-force fields |
+| Option profiles | V2 field-level (`/subscription/option_profile/vm|pc/`), V2 XML export/import, **plus newer major versions 4.0 (Release 10.36) and 5.0/7.0 (Release 10.39.1)** — there is **no 3.0** | **V2 field-level** for resource CRUD; V2 export/import for backup/migration helpers; **4.0/5.0/7.0 deferred** until the field/encoding delta is documented (`Unverified`) | field-level params round-trip better with Terraform diffs than whole-XML import; import silently rewrites search-list/brute-force fields. Note 5.0 carries at least one parameter V2 lacks (`allow_on_host_script_execution`), so pinning V2 forfeits newer options — revisit once the delta is known |
 | VM scans | V2 only | **V2** | scan summary has two generations — prefer `/scan/vm/summary/` (newer, richer) where Manager role available |
 | Scan schedules | V1 `scheduled_scans.php` vs V2 `schedule/scan/` | **V2** | V2 has full CRUD; V1 retained **only** if scheduled *maps* are ever required (legacy classification) |
-| Reports (launch/list/fetch) | V2 (an `/api/3.0/fo/report/` DTD reference observed) | **V2** | v3 details `Unverified`; V2 fully documented |
+| Reports (launch/list/fetch) | V2, plus a v3 endpoint confirmed at least for `action=fetch` | **V2** | V2 fully documented and still maintained (updated in Release 10.32); v3 scope/delta `Unverified` |
 | Report templates | list = V1 `report_template_list.php`; CRUD = V2 `report/template/<type>/` | **V2 CRUD + V1 list** | V1 list is the only listing surface — a deliberate mixed-generation selection |
 | Report schedules | V2 list/launch_now only | **V2 (read/trigger only)** | schedule definition GUI-only — no version provides create/update/delete |
 | Scan authentication records | V2 only | **V2** | per-type slugs; Cisco IOS/Checkpoint via `unix` slug |
@@ -29,6 +29,14 @@ global VMDR version. "V1" = legacy `/msp/*.php`; "V2" = `/api/2.0/fo/`; "v3" =
 
 **Minimum-release implications:** Domain bulk delete ≥10.25; EC2 scan
 `ec2_instance_ids` behaviours ≥10.16; option-profile import/export ≥8.10; schedule
-`priority` ≥8.9. The provider should not assume features below these releases on
-private-cloud platforms (PCP) that lag SaaS versions — tenant validation (doc 08)
-must probe rather than assume.
+`priority` ≥8.9; option-profile `allow_on_host_script_execution` ≥10.39.1 (and only on
+API 5.0/7.0); scan-schedule `ACTIVE` values 2/3 postdate the 10.15 DTD. The provider
+should not assume features below these releases on private-cloud platforms (PCP) that
+lag SaaS versions — tenant validation (doc 08) must probe rather than assume.
+
+**Versioning contract (Confirmed):** Qualys increments the major version only for
+breaking changes, and older versions remain callable
+(<https://notifications.qualys.com/api/2024/05/17/introducing-api-versioning-a-strategic-upgrade-for-enhanced-stability-and-control-for-api-integrations>);
+since Aug 2025 a deprecated version gets 12 months (6 months End of Support + 6 months
+EOL). Pinning V2 per capability is therefore safe in the near term, but each pin needs a
+scheduled re-review rather than being treated as permanent.
