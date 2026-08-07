@@ -24,6 +24,7 @@ as a **separate API-family source** and is never used to infer VMDR endpoint beh
 | 08 | [Tenant validation & gaps](08-tenant-validation-and-gaps.md) | Endpoints requiring tenant validation; capabilities with no official documentation found |
 | 09 | [Revised MVP sequence](09-mvp-sequence.md) | Revised MVP sequence based on actual supported API dependencies |
 | 10 | [Onboarding workbook schema](10-onboarding-workbook-schema.md) | Companion: XLSX workbook columns implied by the confirmed API surface (explicit network declaration; no secrets) |
+| 11 | [Verified parameter reference](11-verified-parameter-reference.md) | Authoritative parameter lists read from the official Qualys API Quick Reference — supersedes conflicting detail elsewhere |
 
 ## Method and evidence policy
 
@@ -37,14 +38,33 @@ success.qualys.com knowledge base). Every operation in the matrix carries:
     (page title/snippet/URL evidence captured during discovery);
   - `Corroborated (non-official)` — the fact is not visible in retrievable official
     documentation, but two or more **independent** third-party implementations that
-    call the API agree on it verbatim (principally the Cortex XSOAR `demisto/content`
-    Qualys v2 pack and the `qualysdk` Python library, which quote Qualys' own
-    parameter names and descriptions). Strong enough to design a schema against;
-    **must still be probed against a tenant before release**;
+    call the API agree on it verbatim. Principal sources: the Cortex XSOAR
+    `demisto/content` Qualys v2 pack; the `qualysdk` Python library
+    (<https://github.com/0x41424142/qualysdk>, docs <https://qualysdk.jakelindsay.uk>),
+    whose call schemas were read directly from source at commit `e8c9529`; and
+    PowerShell wrappers such as `MSAdministrator/POSH-Guard`. Strong enough to design a
+    schema against; **must still be probed against a tenant before release**. Where
+    these sources *disagree* with official documentation the conflict is recorded
+    explicitly rather than silently resolved — see the `asset/ip/?action=update`
+    callout in doc 03 §1;
   - `Unverified` — the fact is believed correct from the documented API pattern or
     adjacent official material, but the specific page/field could not be retrieved
     during this discovery pass. **Nothing marked `Unverified` may be implemented
     without first confirming it against the live documentation or a test tenant.**
+
+### Source materials supplied directly
+
+The **Qualys API Quick Reference Guide** (official PDF) was supplied for this discovery
+and is the authority behind doc 11. Qualys copyright material is **cited, not
+committed** — the extracted text is not stored in this repository.
+
+Two documents would still materially improve the output and could not be obtained:
+
+1. **Qualys API (VM and PA) User Guide** (`qualys-api-vmpc-user-guide.pdf`) — its
+   appendices hold the v2 error/response code table (needed for not-found detection)
+   and the per-service-level API limits table. The Quick Reference contains neither.
+2. **WAS API User Guide** (`qualys-was-api-user-guide.pdf`) — for the per-occurrence
+   recurrence sub-elements of `WasScanSchedule`.
 
 ### Research constraint (must be re-run before implementation)
 

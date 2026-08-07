@@ -37,15 +37,25 @@ Doc section: Assets → Host Lists / Asset IPs.
 |---|---|---|---|---|---|---|
 | List host assets | GET/POST | `/api/2.0/fo/asset/host/` | `list` | `ids`, `ips`, `ag_ids`, `use_tags`+`tag_set_by`, `no_vm_scan_since`, `vm_scan_since`, `details`, `truncation_limit` | `HOST_LIST_OUTPUT` / `.../asset/host/dtd/list/output.dtd` (renamed in 10.9) | Confirmed |
 | List IPs | GET/POST | `/api/2.0/fo/asset/ip/` | `list` | `ips` filter | IP list output | Page confirmed; params `Unverified` |
-| Add IPs / ranges | POST | `/api/2.0/fo/asset/ip/` | `add` | `ips` (single IPs + hyphenated ranges, comma-separated), `enable_vm`, `enable_pc`, `ag_title`, `comment` | SIMPLE_RETURN | Confirmed. **CIDR input `Unverified` — official examples show ranges only; plan to expand CIDR client-side** |
-| Update host metadata | POST | `/api/2.0/fo/asset/ip/` | `update` | select by `ids`/`ips` (+`network_id`, `tracking_method`); set `new_tracking_method` (IP\|DNS\|NETBIOS only), `new_owner`, `new_ud1..3`, `new_comment` — values **overwrite all matched hosts** | SIMPLE_RETURN | Confirmed |
+| Add IPs / ranges | POST | `/api/2.0/fo/asset/ip/` | `add` | `ips` (single IPs + hyphenated ranges, comma-separated), `tracking_method`, `enable_vm`, `enable_pc`, **`enable_certview`**, **`enable_sca`**, `owner`, `ud1`, `ud2`, `ud3`, `comment`, `ag_title`, `echo_request` | SIMPLE_RETURN | Confirmed (core params); `enable_certview`/`enable_sca`/`ud*` on add **Corroborated (non-official)**. **CIDR input still `Unverified`** — every retrievable description says "a host IP range is specified with a hyphen"; expand CIDR client-side |
+| Update host metadata | POST | `/api/2.0/fo/asset/ip/` | `update` | **Selectors:** `ips`, `ids`, `ag_ids`, `ag_titles`, `network_id`/`network_name` (scoping only — cannot move an IP between networks), `tracking_method`, `host_dns`, `host_netbios`. **Setters:** `new_tracking_method` (IP\|DNS\|NETBIOS only), `new_owner`, `new_ud1`, `new_ud2`, `new_ud3`, `new_comment`. Setters **overwrite all matched hosts** | SIMPLE_RETURN | Confirmed (full selector/setter split — see callout below) |
 | Remove assets | — | — | — | **No delete API exists for subscription IPs** (official article 000003463); purge is the only API-side reduction | — | Confirmed absence |
-| Purge host data | POST | `/api/2.0/fo/asset/host/` | `purge` | IP/AG mode (`use_tags=0`, default): `ids`, `ips`, `ag_ids`, `ag_titles`, `network_ids` (needs Network Support); tag mode (`use_tags=1`): `tag_set_include`, `tag_set_exclude`, `tag_include_selector`, `tag_exclude_selector`; filters: `data_scope` (`vm`, `pc`, or `vm,pc`), `compliance_enabled`, `no_vm_scan_since`, `no_compliance_scan_since`, `os_pattern`, `echo_request` | **`BATCH_RETURN`** (not SIMPLE_RETURN) — `BATCH_LIST/BATCH/TEXT` ("Hosts Queued for Purging") + `ID_SET`; DTD `/api/2.0/fo/asset/host/dtd/purge/output.dtd` | Endpoint/action/permissions Confirmed; parameter set + BATCH_RETURN **Corroborated (non-official)**; `tag_set_by` for purge `Unverified` |
+| Purge host data | POST | `/api/2.0/fo/asset/host/` | `purge` | IP/AG mode (`use_tags=0`, default): `ids`, `ips`, `ag_ids`, `ag_titles`, `network_ids` (needs Network Support); tag mode (`use_tags=1`): `tag_set_include`, `tag_set_exclude`, `tag_include_selector`, `tag_exclude_selector`; filters: `data_scope` (`vm`, `pc`, or `vm,pc`), `compliance_enabled`, `no_vm_scan_since`, `no_compliance_scan_since`, `os_pattern`, `echo_request` | **`BATCH_RETURN`** (not SIMPLE_RETURN) — `BATCH_LIST/BATCH/TEXT` ("Hosts Queued for Purging") + `ID_SET`; DTD `/api/2.0/fo/asset/host/dtd/purge/output.dtd` | Endpoint/action/permissions Confirmed; parameter set **Corroborated (non-official)** — the `qualysdk` call schema lists exactly this set, matching the XSOAR pack independently; `tag_set_by` for purge `Unverified` |
 | Host detection list | GET/POST | `/api/2.0/fo/asset/host/vm/detection/` | `list` | `status`, `include_ignored` (0/1, default 0), `include_disabled` (0/1, default 0), `detection_updated_since/before`, `detection_processed_after/before`, `detection_last_tested_since/before`(`_days`), `vm_scan_date_before/after`, `vm_auth_scan_date_before/after`, `vm_processed_before/after`, `max_days_since_last_vm_scan`, `max_days_since_detection_updated`, `truncation_limit`, `id_min`; dates `YYYY-MM-DD[THH:MM:SSZ]` | root **`HOST_LIST_VM_DETECTION_OUTPUT`**; DTD **`/api/2.0/fo/asset/host/vm/detection/dtd/output.dtd`** (no `list/` segment); fields `FIRST_FOUND_DATETIME`, `LAST_FOUND_DATETIME`, `LAST_SCAN_DATETIME` | Confirmed (root/DTD/`include_ignored`/`include_disabled`/date filters) |
 | Excluded IPs list | GET/POST | `/api/2.0/fo/asset/excluded_ip/` | `list` | `ips` | excluded host list XML | Confirmed |
-| Excluded IPs add | POST | `/api/2.0/fo/asset/excluded_ip/` | `add` | `ips`, `comment`, `expiry_days` | SIMPLE_RETURN | Confirmed |
-| Excluded IPs remove | POST | `/api/2.0/fo/asset/excluded_ip/` | `remove` | `ips`, `comment` | SIMPLE_RETURN | Action confirmed; params `Unverified` |
-| Excluded hosts history | GET | path `Unverified` | — | — | — | Feature in guide TOC; `Unverified` |
+| Excluded IPs add | POST | `/api/2.0/fo/asset/excluded_ip/` | `add` | `ips`, `comment`, `expiry_days`, `dg_names`, `network_id` | SIMPLE_RETURN | Confirmed |
+| Excluded IPs remove | POST | `/api/2.0/fo/asset/excluded_ip/` | `remove`, `remove_all` | `ips`, `comment`, `network_id` (*"`ips` is invalid for `remove_all`"*) | SIMPLE_RETURN | Confirmed |
+| Excluded hosts history | GET/POST | `/api/2.0/fo/asset/excluded_ip/history/` | `list` | `ips`, `ids`, `id_min`, `id_max`, `network_id`, `echo_request` | XML | **Confirmed** (endpoint path now known) |
+
+> ✅ **RESOLVED — `asset/ip/?action=update` selector vs setter split.** The Quick
+> Reference lists both groups on the same action: the **bare** names (`tracking_method`,
+> `host_dns`, `host_netbios`, `ips`, `ids`, `ag_ids`, `ag_titles`, `network_id`,
+> `network_name`) are **selectors** that choose which hosts to act on, while the
+> **`new_*`** names (`new_tracking_method`, `new_owner`, `new_ud1`, `new_ud2`,
+> `new_ud3`, `new_comment`) are the **setters** that carry the new values. The earlier
+> conflict came from a third-party SDK sending bare `owner`/`ud1`/`comment` as if they
+> were setters — those are silently treated as filters, so such a call filters rather
+> than updates. **The provider must use the `new_*` spelling for all writes.**
 
 - *Pagination:* host list & detection list default 1,000 records; `truncation_limit`
   override; continuation via `WARNING` (code 1980) containing next-URL with `id_min`.
@@ -75,7 +85,7 @@ Doc section: Assets → Asset Groups. Path `/api/2.0/fo/asset/group/`.
 |---|---|---|---|---|---|
 | List | GET/POST | `list` | `ids`, filters | `ASSET_GROUP_LIST_OUTPUT` / `.../asset/group/asset_group_list_output.dtd` | Confirmed |
 | Create | POST | `add` | **bare names** (no `set_` prefix): `title` (req), `network_id`, `ips`, `domains`, `dns_names`, `netbios_names`, `appliance_ids`, `default_appliance_id`, `comments`, `division`, `function`, `location`, `business_impact`, `cvss_enviro_cdp/td/cr/ir/ar` | SIMPLE_RETURN with new ID | Confirmed (official params page); full bare-name list **Corroborated (non-official)** |
-| Update | POST | `edit` | `id` (req). **Member lists use `add_*`/`remove_*`/`set_*` triads**: `add_ips`/`remove_ips`/`set_ips`, `add_domains`/`remove_domains`/`set_domains`, `add_dns_names`/`remove_dns_names`/`set_dns_names`, `add_netbios_names`/`remove_netbios_names`/`set_netbios_names`, `add_appliance_ids`/`remove_appliance_ids`/`set_appliance_ids`. Scalars are **set-only**: `set_title`, `set_comments`, `set_division`, `set_function`, `set_location`, `set_business_impact`, `set_default_appliance_id`, `set_cvss_enviro_cdp/td/cr/ir/ar` | SIMPLE_RETURN | `set_ips`/`add_ips`/`remove_ips` + set/remove semantics Confirmed; the remaining triads and scalar `set_*` names **Corroborated (non-official)** — two independent wrappers agree verbatim |
+| Update | POST | `edit` | `id` (req). **Member lists use `add_*`/`remove_*`/`set_*` triads**: `add_ips`/`remove_ips`/`set_ips`, `add_domains`/`remove_domains`/`set_domains`, `add_dns_names`/`remove_dns_names`/`set_dns_names`, `add_netbios_names`/`remove_netbios_names`/`set_netbios_names`, `add_appliance_ids`/`remove_appliance_ids`/`set_appliance_ids`. Scalars are **set-only**: `set_title`, `set_comments`, `set_division`, `set_function`, `set_location`, `set_business_impact`, `set_default_appliance_id`, `set_cvss_enviro_cdp/td/cr/ir/ar` | SIMPLE_RETURN | `set_ips`/`add_ips`/`remove_ips` + set/remove semantics Confirmed; remaining triads and scalar `set_*` names **Corroborated (non-official)** — the `qualysdk` `manage_ag` call schema (read directly from source) lists this exact union of bare + `set_*` names, independently matching the XSOAR pack. Note `network_id` is **absent** from the edit set, reinforcing that network is create-time only |
 | Delete | POST | `delete` | `id` | SIMPLE_RETURN | Confirmed |
 | Legacy V1 list | GET | `/msp/asset_group_list.php` | — | V1 XML | legacy — superseded by 2.0; formal deprecation status `Unverified` |
 
@@ -116,7 +126,7 @@ Support** subscription feature; Global Default Network is `network_id=0`.
 | Update (rename) | POST | `update` | `id`, `name` | Confirmed |
 | Assign appliance to network | POST | `/api/2.0/fo/appliance/` `assign_network_id` | `appliance_id`, `network_id`; one network per appliance; Managers only | Confirmed |
 | Remove appliance from network | — | re-assign to another network / default | `Unverified` (no explicit un-assign action found) |
-| Delete network | — | **No API delete found** (UI-only delete exists with conflict report + ~1h cleanup) | Confirmed absence at API level (`Unverified` residual) |
+| Delete network | — | **No API delete exists.** The official action enumeration for `/api/2.0/fo/network/` is `list` and `create|update` only. A UI-only delete exists (conflict report + ~1h cleanup) | **Confirmed absence** |
 
 - *Overlapping IPs:* same IP in different networks = separate host identity per network
   (this is the feature's purpose). A network without an appliance cannot be scanned.
@@ -158,7 +168,7 @@ Doc section: Scans → Appliances. Path `/api/2.0/fo/appliance/`.
 | Update virtual | POST | `update` | `id`, `name`, `comment`, `polling_interval` (60–3600, default 180), `set_vlans`, `set_routes`, `set_tags`/`add_tags`/`remove_tags`, `enable_ipv6`. **`set_vlans`/`set_routes` are authoritative replace** — the value passed becomes the entire list and `""` deletes all records; there are **no** `add_vlans`/`remove_vlans` parameters. Formats: VLAN `<VLAN_ID>|<IPv4>|<NETMASK>|<VLAN_NAME>|ipv6_static\|ipv6_auto|<IPv6>` (skipped IPv4 attributes need an empty space placeholder), route `<IP>|<NETMASK>|<GATEWAY>|<NAME>`; comma-separated for multiple; up to 4094 each. Requires the "VLANs and static routes" subscription feature | SIMPLE_RETURN | Confirmed (replace semantics now confirmed) |
 | Update physical | POST | `/api/2.0/fo/appliance/physical/` `update` | `id`, `name`, `polling_interval`, `comment`, `set_vlans`, tags | SIMPLE_RETURN | Confirmed |
 | Delete virtual | POST | `delete` | `id`; virtual only; fails while scans run; side effects: removed from asset groups, dependent schedules deactivated | SIMPLE_RETURN | Confirmed |
-| Replace appliance | — | **UI-only wizard** (config transfer incl. VLANs/routes/heartbeat) | — | Confirmed UI-only |
+| Replace appliance | POST | `/api/2.0/fo/appliance/replace_iscanner/` `action=replace` | `old_scaner_name` *(sic — Quick Reference typo, verify spelling)*, `new_scanner_name`, `do_not_copy_settings={0|1}`, `do_not_remove_new_scanner_from_objects={0|1}`, `echo_request` | SIMPLE_RETURN | **Confirmed — reverses the earlier "UI-only" finding.** A replace API does exist |
 | Assign to network | POST | `assign_network_id` | `appliance_id`, `network_id`; Managers only | SIMPLE_RETURN | Confirmed |
 
 **Lifecycle separation (as required by the task):**
@@ -195,7 +205,7 @@ after activation. The resource must treat `activation_code` as Computed + Sensit
 | Network assignment | part of resource (separate call) | attribute `network_id` on `qualys_virtual_scanner` | — | — | P1 | un-assign mechanics |
 | Readiness wait | validation operation | optional `wait_for_online` timeout on resource / standalone helper | — | — | P2 | polling interval etiquette |
 | Physical appliance mgmt | deferred | update-only; no create/delete API | — | — | deferred | — |
-| Replace appliance | unsupported (UI-only) | document runbook | — | — | — | — |
+| Replace appliance | imperative operation | not a resource (it is a migration action, not desired state) — expose as a helper; Terraform models the *replacement* appliance declaratively | — | transfers config, removes old appliance from objects unless suppressed | P3 | — |
 
 ---
 
@@ -225,10 +235,23 @@ Doc section: Scans → Option Profiles. **Two parallel API surfaces:**
 | Behaviour | **`load_balancer`** (not `load_balancer_detection`), **`enable_dissolvable_agent`** (not `dissolvable_agent`), `test_authentication`, `allow_on_host_script_execution` (10.39.1+) |
 | Map settings | `perform_live_host_sweep`, `disable_dns_traffic`, `map_overall_performance`, `map_external_scanners`, `map_scanner_appliances`, `map_netblock_size`, `basic_information_gathering` (**a Map setting, not a scan setting**) |
 
-Still missing API names (`Unverified`, and each is a core resource field — see doc 08):
-the Vulnerability Detection Complete/Custom toggle and its custom-search-list-ID
-companion; the per-technology authentication toggles (Windows/Unix/Oracle/...); the
-password brute-force level parameter.
+**All previously-missing parameter names are now Confirmed** from the official Quick
+Reference — full list in **[doc 11](11-verified-parameter-reference.md) §1**. The gap
+closers:
+
+- `vulnerability_detection={complete|custom|runtime}` (note the third value `runtime`)
+  with `custom_search_list_ids`, `custom_search_list_title`, `exclude_search_list_ids`
+- `password_brute_forcing_system={minimal|limited|standard|exhaustive}` and
+  `password_brute_forcing_custom`
+- **Authentication is a list, not per-technology booleans:** `authentication={value1,value2}`,
+  plus `authentication_least_privilege=Unix`, `test_authentication`, and the system-auth
+  trio (`include_system_auth`, `use_system_auth_on_duplicate`, `use_user_auth_on_duplicate`)
+- `enable_additional_certificate_detection={0|1}`, `basic_host_information_checks`,
+  `oval_checks`, `all_qrdi_checks`, `scan_intensity={normal|medium|low|minimum}`
+- **`action=update` accepts every create parameter** (*"For other parameters see Create
+  VM Option Profile"*) — so `default` and `global` are updatable and nothing is
+  documented as immutable
+- A third profile family exists alongside `/vm/` and `/pc/`: `/option_profile/pci/`
 
 - **Managed lifecycle is viable — option profiles need not be read-only.** The viable
   Terraform schema is the *field-level* create/update/delete surface (form params),
@@ -239,15 +262,12 @@ password brute-force level parameter.
   fallback of Vulnerability Detection to "Complete" → these fields must be
   `ignore_changes`-style suppressed or write-only in the schema.
 - *Stable identifier:* numeric profile ID (in `BASIC_INFO/ID`).
-- *Default designation:* settable at **create** via `default={0|1}`; read back as
-  `IS_DEFAULT`/`DEFAULT_FLAG`. **Coupling hazard:** marking a profile default also
-  forces it global, so `default` and `global` are *not* independent booleans — modelling
-  them independently will produce perpetual drift. Whether `default` is honoured on
-  `update` is `Unverified`.
-- *Mutability:* `title` **is** mutable (the canonical update example is a title change),
-  so it must not be ForceNew. No option-profile field is documented as immutable —
-  **no ForceNew is currently justified by evidence**; `global`/`owner` mutability is
-  `Unverified`.
+- *Default designation:* settable via `default={0|1}` on **both create and update**.
+  **Coupling hazard remains:** marking a profile default also forces it global, so
+  `default` and `global` are not independent booleans — modelling them independently
+  will produce perpetual drift.
+- *Mutability:* `title` is mutable, and `update` accepts the full create parameter set,
+  so **no option-profile field is ForceNew** on current evidence.
 
 | Classification | Terraform mapping | Import | Destructive | Priority | Unresolved |
 |---|---|---|---|---|---|
@@ -290,8 +310,8 @@ Doc section: Scans → Schedules. Path `/api/2.0/fo/schedule/scan/` (PC variant
 
 | Operation | Method | Action | Key params | Status |
 |---|---|---|---|---|
-| List | GET/POST | `list` | `id`, `show_notifications`, `scan_type` (e.g. `perimeter`), `show_cloud_details` | Confirmed — `SCHEDULE_SCAN_LIST_OUTPUT` / `schedule_scan_list_output.dtd`. An `active`/`is_active` filter and the pagination model are `Unverified` |
-| Create | POST | `create` | `scan_title`, `option_id|option_title`, `active=0|1`; targets/scanners as scan launch (`ip`, `asset_group_ids`, `target_from=tags` + tag params, `iscanner_name`, `priority`); recurrence: `occurrence=daily|weekly|monthly`, `frequency_days`, `frequency_weeks`+`weekdays` (numeric 0–6, 0=Sunday), `frequency_months` + (`day_of_month` XOR `day_of_week`+`week_of_month`), **`recurrence`** = number of occurrences after which the schedule deactivates itself; time: **`start_date` (MM/DD/YYYY)**, `start_hour` 0–23, `start_minute`, `time_zone_code`, `observe_dst=yes|no`; duration cap (**not** an end date): `end_after` (hours, 0–119)+`end_after_mins`, `pause_after_hours` (1–119)+`pause_after_mins`, `resume_in_days` (1–9)+`resume_in_hours`; notifications: `before_notify=1`+`before_notify_unit` (`hours|days|minutes`)+`before_notify_time`, `after_notify=1`+`after_notify_message`, `recipient_group_ids` (distribution-group IDs, only valid with a notify flag) | Confirmed. **There is no `end_date` parameter.** `before_notify_message` and `client_id`/`client_name` on *create* remain `Unverified` |
+| List | GET/POST | `list` | `id`, **`active={0|1}`**, `show_notifications`, `client_id`, `client_name`, `echo_request` (also `scan_type`, `show_cloud_details`) | Confirmed — `SCHEDULE_SCAN_LIST_OUTPUT` / `schedule_scan_list_output.dtd`. The `active` filter is now confirmed; pagination model still `Unverified` |
+| Create | POST | `create` | `scan_title`, `option_id|option_title`, `active=0|1`; targets/scanners as scan launch (`ip`, `asset_group_ids`, `target_from=tags` + tag params, `iscanner_name`, `priority`); recurrence: `occurrence=daily|weekly|monthly`, `frequency_days` (1–365), `frequency_weeks` (1–52) + **`weekdays={sunday|monday|…|saturday}` — NAMED days**, `frequency_months` (1–12) + (`day_of_month` 1–31 XOR `day_of_week` **0–6 numeric, 0=Sunday** + `week_of_month={first|second|third|fourth|last}`), **`recurrence`** = number of occurrences after which the schedule deactivates itself; time: **`start_date`**, `start_hour` 0–23, `start_minute` 0–59, `time_zone_code`, `observe_dst=yes|no`; duration cap (**not** an end date): `end_after` (0–119)+`end_after_mins` (0–59), `pause_after_hours` (1–119)+`pause_after_mins` (0–59), `resume_in_days` (1–9)+`resume_in_hours` (0–23); notifications: `before_notify`+`before_notify_unit` (`days|hours|minutes`)+`before_notify_time`+**`before_notify_message`**, `after_notify`+`after_notify_message`, `recipient_group_ids`; also `fqdn`, `runtime_http_header`, EC2 (`connector_name`, `connector_uuid`, `ec2_endpoint`, `ec2_only_classic`), **`client_id`/`client_name`** | Confirmed. **There is no `end_date` parameter.** ⚠️ **`weekdays` takes day *names* while `day_of_week` takes 0–6 — two different encodings in one API** |
 | Update | POST | `update` | `id`, `echo_request`, `client_id`, `client_name`, + fields. **Time changes are gated:** any change to the start time requires `set_start_time=1` **plus all five** of `start_date`, `start_hour`, `start_minute`, `time_zone_code`, `observe_dst` sent together — update is not a field-by-field PATCH for this group | Confirmed |
 | Delete | POST | `delete` | `id` | Confirmed |
 | Enable/disable | POST | `update` with `active=0|1` | — | Confirmed |
@@ -437,7 +457,7 @@ AdminBastion, HashiCorp; Azure Key Vault at least for Palo Alto records (10.1).
 | `optionprofile` | `create`, `update`, `get`, `search` confirmed; `delete` confirmed via guide TOC | resource `qualys_was_option_profile` | P2 |
 | `webappauthrecord` | `create` confirmed (form/server/Selenium/OAuth2); `get` masks secrets without view-permissions; update/delete/search pattern-confirmed | resource `qualys_was_auth_record` (write-only secrets) | P2 |
 | `wasscan` | `launch`, `search`, `status`, `download` confirmed. **`cancel/was/wasscan/<id>` confirmed** — takes optional boolean `cancelWithResults` to retain partial results; supported for single and *child* scans only (not parent scans), and recommended only after ~20 minutes in Running status. **`delete/was/wasscan` confirmed** as a *filtered bulk* delete (`<filters><Criteria field="id" operator="IN">` with comma-separated IDs) | imperative operation | P3 |
-| `wasscanschedule` | **Full CRUD confirmed** — Count, Search, Get Details, Create (single web app), Create (multiple), Update, Delete, Activate, Download (iCalendar). **Recurrence element model still `Unverified`**: UI semantics are known (one-time; daily every N days; weekly every N weeks + selected weekdays; monthly every N months by date *or* by day-of-week-of-week; start time/date/timezone; ends after N occurrences) but the XSD element names are not. **Do not copy the VM/FO `<SCHEDULE>` DTD shape — that is a different API family** | resource (pending element-name verification) `qualys_was_scan_schedule` | P2–P3 |
+| `wasscanschedule` | **Full CRUD confirmed** (count, search, get, create single + multiple, update, activate, delete, download-iCalendar) **and the element model is now confirmed** — `name`, `target.webApp.id` / `target.webApps.id` / `target.tags.id` (+`target.tags.included.option={ALL\|ANY}`), `type={DISCOVERY\|VULNERABILITY}`, `profile.id`, `startDate`, `timeZone`, **`occurrenceType={ONCE\|DAILY\|WEEKLY\|MONTHLY}`**, `notification`, `reschedule`, plus optional scanner/auth/proxy/cancel options. See [doc 11](11-verified-parameter-reference.md) §8. Only the per-occurrence frequency sub-elements (every N days/weeks) remain `Unverified` | resource `qualys_was_scan_schedule` | P2–P3 |
 | `report` / report templates | `create`, `get` (status), `download` confirmed; search template endpoint confirmed; delete pattern-confirmed | imperative operation + data source | P3 |
 | report schedules | **No v3 API — UI-only.** However Qualys announced (13 Apr 2026) **new V4 API endpoints for schedule and report management, explicitly covering scheduled reports**, with V3 endpoints unchanged. V4 paths/schemas `Unverified` (`/qps/rest/4.0/...` inferred, not confirmed) | deferred — re-scope once V4 reference docs are available | deferred |
 | `optionprofile` delete | `delete/was/optionprofile/<id>` present in the WAS API guide TOC ("Delete an Option Profile"); literal path not printed on a retrieved page | — | — |
@@ -453,14 +473,15 @@ WAS 4.5 with both `Accept` and `Content-Type: application/json`. Pagination:
 
 | Capability | Operation | Status |
 |---|---|---|
-| Tag CRUD | `create/search/get/update/delete/count /am/tag` | Confirmed |
+| Tag CRUD | `create/search/get/update/delete/count /am/tag` (with and without `/<id>`), plus **`evaluate/am/tag/<id>`** to re-evaluate a dynamic tag | Confirmed |
+| Host-asset activation | **`activate/am/hostasset[/<id>]?module=QWEB_VM` or `?module=QWEB_PC`** — how an asset is activated into the VM or PC module; `delete/am/hostasset` also exists | Confirmed (newly surfaced) |
 | Static tags | `ruleType` omitted/STATIC | Confirmed |
 | Dynamic tags | `ruleType`: GROOVY, OS_REGEX, NETWORK_RANGE, NAME_CONTAINS, INSTALLED_SOFTWARE, OPEN_PORTS, VULN_EXIST, ASSET_SEARCH, GLOBAL_ASSET_VIEW + `ruleText` | Confirmed (`CLOUD_ASSET` `Unverified`) |
 | Hierarchy | `parentTagId` on create; `children.set.TagSimple[]`; **never add and remove children in one call** | Confirmed |
 | Assign tags to host assets | `POST /qps/rest/2.0/update/am/hostasset` with `tags.add.TagSimple{id}` / `tags.remove`; bulk via Criteria `id IN` | Confirmed |
 | `update/am/asset` variant | static tags only — **dynamic tags rejected** on add/remove/set | Confirmed |
-| List assets by tag | `search/am/hostasset` Criteria `tagName`/`tagId EQUALS` | Confirmed |
-| Untagged-asset discovery | **Negation is supported on the gateway surface**: `POST gateway.<pod>.apps.qualys.com/rest/2.0/search/am/asset` accepts QQL with `not tags.name:"X"` (official worked example combines positive and negated tag predicates). `NOT_EQUALS` is documented as an operator for `tags.name`. **Client-side set difference is therefore not required for "assets lacking tag X"** | Confirmed (gateway QQL negation). `NOT_EQUALS` against `tagName` on the *classic* `/qps/rest/2.0/search/am/hostasset` endpoint is `Unverified` (community reports boolean-operator limits there); a "has zero tags at all" predicate is `Unverified` and still needs client-side computation |
+| List assets by tag | `search/am/hostasset` Criteria `tagName`/`tagId EQUALS`. Full documented filter set: `qwebHostId`, `id`, `name`, `created`, `updated`, `tagName`, `tagId`, **`lastVulnScan`**, `lastComplianceScan`, `informationGatheredUpdated`, `os`, `dnsHostName`, `netbiosName`, `netbiosNetworkID`, `trackingMethod`, `port`, `installedSoftware` | Confirmed (`lastVulnScan` now confirmed) |
+| Untagged-asset discovery | **Negation is supported on the gateway surface**: `POST gateway.<pod>.apps.qualys.com/rest/2.0/search/am/asset` accepts QQL with `not tags.name:"X"`. `NOT_EQUALS` is documented as an operator for `tags.name`. Additionally the qps filter language **does have a `NONE` operator** — the Quick Reference documents WAS filters `webApp.tags` *with `operator="NONE"`* and `lastScan` *with `operation="NONE"`*, i.e. "has no tags at all" is expressible there. **Client-side set difference is therefore not required for "assets lacking tag X"** | Confirmed (gateway QQL negation; `NONE` operator exists in qps filters). Whether `NONE`/`NOT_EQUALS` applies to `tagName` on the *classic* `/qps/rest/2.0/search/am/hostasset` endpoint specifically is still `Unverified` |
 | WAS webapp tag assignment | `TagList` on `webapp` create/update; WAS search supports `webApp.tags.id` / `webapp.tags.name` | Confirmed |
 | **Cross-module tag identity** | **Now Confirmed — one subscription-wide tag tree.** (a) *VMDR*: tags are chosen from the same tree that AssetView/CSAM manages — *"a benefit of the tag tree is that you can assign any tag in the tree to a scan or report"*, and *"All users can see all tags in the subscription and can choose tags for their scans and reports"*, so `tag_set_include`/`tag_set_by=id` on scan/report launch resolve against tags created by `create/am/tag`. (b) *WAS*: *"Tags are defined through the CyberSecurity Asset Management (CSAM) application"* — WAS does not have a private tag namespace, and its `TagList` carries the same numeric tag `id`. **Caveat to carry forward:** the AM&T API v2 guide lists its own supported modules as VM, PC, SCA, CERTVIEW, CLOUDVIEW (WAS absent) — this reads as the scope of the *AM API surface* rather than a namespace split, since the WAS-side docs independently source their tags from CSAM, but no single official sentence asserts the full round trip in one breath | **Confirmed** for both (a) and (b), with the `modules`-list caveat noted |
 

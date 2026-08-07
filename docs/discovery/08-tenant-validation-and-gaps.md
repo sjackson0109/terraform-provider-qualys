@@ -45,7 +45,8 @@ Confirmed-absent (documented nowhere; community evidence corroborates absence):
 3. **Network delete** at API level (UI delete exists).
 4. **Host asset/IP delete** (purge is the only API-side removal; official article
    000003463).
-5. **Scanner appliance replace** — UI wizard only.
+5. ~~**Scanner appliance replace** — UI wizard only.~~ **Withdrawn** — a replace API
+   exists (`/api/2.0/fo/appliance/replace_iscanner/`); see "Reversed by the third pass".
 6. **Physical appliance create/delete** — only `physical/?action=update` exists.
 7. **"Launch now" for scan schedules** — no such action (only report schedules have it).
 8. **Remediation / compliance-policy report template CRUD** — template APIs cover
@@ -106,41 +107,81 @@ doc 03; `Corroborated (non-official)` where noted):
 - **Option-profile API versions 4.0 / 5.0 / 7.0** exist (10.36 and 10.39.1); V2 is not
   the only generation.
 
+### Closed by the third pass (official Quick Reference PDF supplied directly)
+
+See **[doc 11](11-verified-parameter-reference.md)** for the full parameter lists.
+
+- **Every missing VM option-profile parameter name** — `vulnerability_detection`
+  (`complete|custom|runtime`), the custom/exclude search-list IDs,
+  `password_brute_forcing_system|_custom`, `authentication={value1,value2}` (a **list**,
+  not per-technology booleans), `enable_additional_certificate_detection`,
+  `scan_intensity`, and the system-auth trio. **`update` accepts every create
+  parameter**, so `default`/`global` are updatable and nothing is ForceNew.
+- **Asset-group parameters are now officially Confirmed** (previously *Corroborated*),
+  including that `business_impact`'s tail value is **`none`** (not "Minor"), and that
+  no `set_network_id`/`set_owner` exists — network and owner are create-time only.
+- **The `asset/ip/?action=update` conflict is resolved**: bare names are *selectors*,
+  `new_*` names are *setters*. The provider must write via `new_*`.
+- **Purge parameters officially Confirmed**, plus the documented rule that
+  `compliance_enabled=1` alongside `data_scope` purges both data types regardless.
+- **Excluded-hosts change history endpoint found**:
+  `/api/2.0/fo/asset/excluded_ip/history/`; and `action={add|remove|remove_all}` with
+  `dg_names`/`network_id` on the excluded-IP endpoint.
+- **Network has no delete** — confirmed from the official action enumeration
+  (`list`, `create|update` only).
+- **Scan schedule gaps all closed**: `start_date`, `recurrence`,
+  **`before_notify_message`**, `client_id`/`client_name` on create, and the
+  **`active={0|1}` list filter**. ⚠️ Correction: `weekdays` takes **day names**
+  (`sunday`…`saturday`), while `day_of_week` takes **0–6** — two encodings in one API.
+- **WAS `wasscanschedule` element model confirmed** (`startDate`, `timeZone`,
+  `occurrenceType={ONCE|DAILY|WEEKLY|MONTHLY}`, target/profile/scanner elements),
+  unblocking that resource apart from the per-occurrence frequency sub-elements.
+- **Tagging**: `lastVulnScan` filter confirmed; `evaluate/am/tag` and
+  `activate/am/hostasset?module=QWEB_VM|QWEB_PC` newly surfaced; a **`NONE` operator
+  exists** in the qps filter language.
+
+### Reversed by the third pass
+
+- **Appliance replacement IS an API operation** — `/api/2.0/fo/appliance/replace_iscanner/`
+  with `action=replace`, `old_scaner_name` *(sic)*, `new_scanner_name`,
+  `do_not_copy_settings`, `do_not_remove_new_scanner_from_objects`. Previously recorded
+  as UI-only.
+- `polling_interval` range is **60–360** per the Quick Reference, conflicting with a UI
+  help page's 60–3600. Treat 60–360 as authoritative for the API; verify on a tenant.
+
 ### Still `Unverified` (bolded items gate design decisions)
 
+- **`asset/ip/?action=update` setter names: `new_owner`/`new_ud1…` (official docs) vs
+  bare `owner`/`ud1…` (working third-party SDK).** A direct conflict between two
+  otherwise reliable sources — gates `qualys_ip_registration` updates entirely. Settle
+  empirically: send one spelling, then read back via `asset/host/?action=list` and
+  confirm the value actually changed. See the callout in doc 03 §1.
 - **CIDR notation acceptance on `asset/ip/?action=add`** — no Qualys source affirms or
-  denies it; only the Restricted IPs endpoint documents CIDR. Mitigation is
-  version-proof: accept CIDR in config, normalise to hyphenated ranges on the wire.
+  denies it; only the Restricted IPs endpoint documents CIDR. The earlier
+  counter-signal (a third-party type hint accepting `IPv4Network`) is now **withdrawn**:
+  reading that library's source shows it converts *responses* — Qualys returns
+  `IP`/`IP_RANGE` with hyphenated ranges, which the client turns into network objects
+  via `summarize_address_range`. That is output convenience, not input support, and its
+  own docstrings say "a host IP range is specified with a hyphen". Evidence now points
+  to **hyphenated ranges only on input**. Mitigation is version-proof either way: accept
+  CIDR in config, normalise to `first-last` on the wire, normalise returned ranges back
+  for diff suppression.
 - **Numeric error code for "object not found"** on `edit`/`delete`, and the full v2
   error-code table. Only `WARNING` code 1980 (truncation) is grounded; 1901 (invalid
   parameter) is single-source non-official; 1905 exists but its meaning is not grounded.
   **Note also that some VM/PA calls return HTTP 200 on error** — the provider must parse
   `CODE`/`TEXT` rather than branch on HTTP status. Until this closes, implement
   not-found detection as a list-by-id returning an empty set, not a code match.
-- **VM option profile: the Vulnerability Detection Complete/Custom toggle and its
-  custom-search-list-ID companion; the per-technology authentication toggles
-  (Windows/Unix/Oracle/…); the password brute-force level parameter.** All are core
-  resource fields with no discoverable API name.
-- **Whether `default`/`global` are accepted on option-profile `update`**, and whether
-  any option-profile field is genuinely immutable (no ForceNew is currently justified).
-- **WAS `WasScanSchedule` recurrence element model** — CRUD is confirmed but the XSD
-  element names are not, so the schedule resource's schema cannot be written yet.
-  Explicitly do **not** reuse the VM/FO `<SCHEDULE>` DTD shape.
 - `NOT_EQUALS` against `tagName` on the classic `/qps/rest/2.0/search/am/hostasset`
   endpoint (confirmed for `tags.name` on the gateway surface only); and any predicate
   for "assets with no tags at all", which still needs client-side computation.
-- Asset group: `set_owner_user_id`/`set_network_id` appear not to exist (treat owner and
-  network as create-time); `business_impact` enum tail ("Minor" vs "none") disputed
-  between sources.
+- Scan-schedule list pagination model (no `truncation_limit`/`id_min` surfaced).
 - `tag_set_by` on purge; a third-party reference to `/api/5.0/fo/asset/host/?action=purge`
   that could not be corroborated.
-- `before_notify_message`; `client_id`/`client_name` on schedule *create*; scan-schedule
-  list pagination model and whether an `active` filter exists.
 - Option-profile 2.0 → 4.0/5.0/7.0 field and encoding delta; the 2.0 → 3.0 report delta;
   WAS V4 schedule/report paths and schemas.
 - Report types beyond vulnerability/compliance accepting `use_tags`; a report-specific
   concurrency cap (likely none distinct from the default-2 per-API limit).
-- Excluded-hosts change-history endpoint path; excluded-IP `remove` params.
 - Full per-service-level API limits table (only Standard 300/3600s + concurrency 2 are
   grounded); CloudView's rate-limit regime; the complete platform hostname table
   (UK1/AU1/KSA1/EU3 unconfirmed, and a `.co.uk` vs `.uk` conflict for UK1) — mitigated

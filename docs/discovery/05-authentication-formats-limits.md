@@ -63,6 +63,27 @@ SYSTEM URL through an HTTP fetch. DTD URLs are recorded in the matrix as schema
 | Per-API overrides | No separate rate/concurrency tier found for Host List Detection; its override is **pagination only** (`truncation_limit`, default 1,000, e.g. 10000) | Confirmed |
 | Truncation limits | Host list & detection default page 1,000 (`truncation_limit` raisable, e.g. 10000); auth records fixed 1,000 | Confirmed |
 
+### Operational details observed in a working third-party client
+
+Read directly from the `qualysdk` source (`base/call_api.py`) — `Corroborated
+(non-official)`, but these are behaviours a real client had to handle:
+
+- **`X-RateLimit-ToWait-Sec` is not always present on the first limited response.**
+  The client re-issues the request specifically to obtain the header, commenting that
+  Qualys *"sometimes only includes this header when the rate limit is reached and
+  retried"*. A retry loop that requires the header on the first 409/429 will stall.
+- **429 occurs in practice beyond the gateway.** The client's error path excludes
+  `429` (and `414`) from generic failure handling across *all* modules, including
+  `vmdr`, `was`, `tagging` and `cloudview` — so the provider should treat 409 **and**
+  429 as limit signals on every family rather than assuming one per family.
+- **Limit breaches can arrive as a 409 whose meaning is only in the body** — the client
+  special-cases a 409 whose `SIMPLE_RETURN/RESPONSE/TEXT` contains *"This API cannot be
+  run again for another…"*. Reinforces the parse-`CODE`/`TEXT` rule above.
+- **Some modules return no rate-limit headers at all** (Patch Management, as of the
+  client's 12-2024 note), so header-driven pacing needs a no-header fallback.
+- Errors surface consistently at `SIMPLE_RETURN/RESPONSE/TEXT` for XML modules; HTML
+  error bodies also occur and must not be fed to the XML path.
+
 ### Retry policy the provider must implement (endpoint-safe)
 
 1. On 409 with `X-RateLimit-ToWait-Sec`: wait that value (+ jitter), then retry —
