@@ -23,6 +23,7 @@ as a **separate API-family source** and is never used to infer VMDR endpoint beh
 | 07 | [API version selection](07-api-version-selection.md) | Per-capability API version recommendation |
 | 08 | [Tenant validation & gaps](08-tenant-validation-and-gaps.md) | Endpoints requiring tenant validation; capabilities with no official documentation found |
 | 09 | [Revised MVP sequence](09-mvp-sequence.md) | Revised MVP sequence based on actual supported API dependencies |
+| 10 | [Onboarding workbook schema](10-onboarding-workbook-schema.md) | Companion: XLSX workbook columns implied by the confirmed API surface (explicit network declaration; no secrets) |
 
 ## Method and evidence policy
 
