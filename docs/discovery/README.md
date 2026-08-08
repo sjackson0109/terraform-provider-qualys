@@ -1,6 +1,8 @@
 # Qualys API Capability Discovery — Expanded (Phase 0)
 
-**Status:** Discovery only — no provider code has been changed in this phase.
+**Status:** Discovery complete; implementation underway. See
+[Implementation status](#implementation-status) below for what has been built
+against these findings.
 **Branch:** `claude/qualys-api-discovery-expansion-l9a7y4`
 **Date:** 2026-08-06
 
@@ -105,3 +107,49 @@ snippets). Consequences:
   (see the Networks sections of docs 03 and 06).
 - XML parsing in the eventual implementation must be secure: **no remote DTD
   retrieval; external entity and external DTD resolution disabled** (see doc 05).
+
+## Implementation status
+
+Phases 0–3 of the sequence in [doc 09](09-mvp-sequence.md) are implemented.
+
+| Discovery finding | Where it landed |
+|---|---|
+| Secure XML parsing; never fetch DTDs | `vmdr/xml.go` |
+| Parse `CODE`/`TEXT`, not HTTP status | `vmdr/errors.go` |
+| EULA failure is its own diagnostic | `vmdr/errors.go` (`ErrEULANotAccepted`) |
+| 409/429 split; honour `X-RateLimit-ToWait-Sec` | `vmdr/client.go`, `qps/client.go` |
+| Never repeat creates or destructive calls | `request.nonIdempotent` |
+| Per-capability API versions + EOS warnings | `vmdr/version.go` |
+| Truncation continuation, never to a foreign host | `vmdr/pagination.go` |
+| `OBJECT_NOT_FOUND` also means out-of-scope | `qps/client.go`, surfaced as a warning |
+| Asset group create/edit parameter asymmetry | `vmdr/assetgroup.go` |
+| `new_*` setters vs bare selectors | `vmdr/ip.go` |
+| Purge is async and needs a host selector | `vmdr/ip.go` |
+| Activation code disappears after activation | `provider/resource_virtual_scanner.go` |
+| `ACTIVE` is a four-valued enum | `vmdr/scanschedule.go` |
+| `set_start_time` gates the whole time group | `vmdr/scanschedule.go` |
+| `weekdays` names vs `day_of_week` numbers | `provider/resource_scan_schedule.go` |
+| Custom detection silently falls back | rejected at plan time |
+| Default option profile is also global | rejected at plan time |
+| Credentials are write-only; vaults preferred | `provider/resource_auth_record.go` |
+| One tag tree across VM, AssetView and WAS | single `qualys_asset_tag` |
+| CIDR accepted, hyphenated ranges on the wire | `vmdr/ipset.go` + set hashing |
+
+Still not implemented, and why:
+
+- **WAS resources** (Phase 4) — the `qps` client is in place and used for
+  tagging, so these are additive. The `wasscanschedule` recurrence sub-elements
+  remain `Unverified` (doc 08).
+- **Report resources** — report *schedules* have no create/update/delete API at
+  all; report launches are jobs, not configuration.
+- **CloudView → Connector v3 migration** — the existing `qualys_gcp_connector`
+  still uses the deprecated CloudView path.
+- **Policy Compliance** — out of scope pending a decision; the `/pc/` endpoints
+  are parallel variants the client already handles.
+
+The `Unverified` items in [doc 08](08-tenant-validation-and-gaps.md) that still
+gate work are the newer-generation schemas (scan v3.0, schedule v5.0, option
+profile v4.0–v6.0, detection v5.0), the VM/PA numeric error-code table, and
+whether `ips` accepts CIDR. None blocks what is built: the client normalises
+CIDR either way, and not-found detection uses an empty-list read rather than a
+code match.
