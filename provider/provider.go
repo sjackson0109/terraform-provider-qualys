@@ -72,6 +72,7 @@ func Provider() *schema.Provider {
 			"qualys_vm_option_profile":  resourceVMOptionProfile(),
 			"qualys_network":            resourceNetwork(),
 			"qualys_ip_registration":    resourceIPRegistration(),
+			"qualys_scan_schedule":      resourceScanSchedule(),
 		},
 
 		ConfigureContextFunc: providerConfigure,
