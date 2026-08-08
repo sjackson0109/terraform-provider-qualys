@@ -184,27 +184,16 @@ func (c *Client) SearchWASOptionProfiles(ctx context.Context, filters *Filters) 
 }
 
 func decodeWASOptionProfiles(raw json.RawMessage) ([]*WASOptionProfile, error) {
-	if len(raw) == 0 {
-		return nil, nil
-	}
-
-	var list []wasOptionProfileData
-	if err := json.Unmarshal(raw, &list); err == nil {
-		out := make([]*WASOptionProfile, 0, len(list))
-		for _, d := range list {
-			if d.OptionProfile != nil {
-				out = append(out, d.OptionProfile.toProfile())
-			}
+	items := decodeListOrSingle(raw)
+	out := make([]*WASOptionProfile, 0, len(items))
+	for _, item := range items {
+		var d wasOptionProfileData
+		if err := json.Unmarshal(item, &d); err != nil {
+			return nil, fmt.Errorf("qualys qps: decoding WAS option profile data: %w", err)
 		}
-		return out, nil
+		if d.OptionProfile != nil {
+			out = append(out, d.OptionProfile.toProfile())
+		}
 	}
-
-	var one wasOptionProfileData
-	if err := json.Unmarshal(raw, &one); err != nil {
-		return nil, fmt.Errorf("qualys qps: decoding WAS option profile data: %w", err)
-	}
-	if one.OptionProfile == nil {
-		return nil, nil
-	}
-	return []*WASOptionProfile{one.OptionProfile.toProfile()}, nil
+	return out, nil
 }

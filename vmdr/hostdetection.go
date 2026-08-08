@@ -70,6 +70,11 @@ type HostDetectionFilter struct {
 	VMScanDateBefore string
 	VMScanDateAfter  string
 
+	// TruncationLimit caps records per page; zero uses the server default.
+	// Every page is followed regardless, so this only tunes page size. Like
+	// the identical field on AssetGroupFilter and HostFilter, this is
+	// deliberately a client-level knob only: no data source exposes it in a
+	// Terraform schema, so a caller reaches it through this package directly.
 	TruncationLimit int
 }
 

@@ -45,6 +45,43 @@ func TestListDomainsDecodesNetblockRanges(t *testing.T) {
 	}
 }
 
+// The one confirmed sample of this endpoint's output has no RESPONSE/WARNING
+// wrapper, but every sibling asset/* list endpoint in this family does
+// truncate large results that way. ListDomains must follow it when present
+// rather than silently returning a partial list.
+func TestListDomainsFollowsTruncation(t *testing.T) {
+	var calls int
+	c, srv := testClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		_ = r.ParseForm()
+		if r.Form.Get("id_min") == "" {
+			fmt.Fprint(w, `<DOMAIN_LIST><RESPONSE>
+			  <WARNING><CODE>1980</CODE><TEXT>truncated</TEXT>
+			    <URL>https://x/api/2.0/fo/asset/domain/?action=list&amp;id_min=2</URL>
+			  </WARNING>
+			</RESPONSE>
+			<DOMAIN><DOMAIN_NAME>a.example.com</DOMAIN_NAME><DOMAIN_ID>1</DOMAIN_ID></DOMAIN>
+			</DOMAIN_LIST>`)
+			return
+		}
+		fmt.Fprint(w, `<DOMAIN_LIST>
+		  <DOMAIN><DOMAIN_NAME>b.example.com</DOMAIN_NAME><DOMAIN_ID>2</DOMAIN_ID></DOMAIN>
+		</DOMAIN_LIST>`)
+	}))
+	defer srv.Close()
+
+	domains, err := c.ListDomains(context.Background())
+	if err != nil {
+		t.Fatalf("ListDomains: %v", err)
+	}
+	if len(domains) != 2 {
+		t.Fatalf("got %d domains, want 2 across both pages", len(domains))
+	}
+	if calls != 2 {
+		t.Errorf("calls = %d, want 2", calls)
+	}
+}
+
 func TestListDomainsSendsNoFilterParams(t *testing.T) {
 	var gotQuery string
 	c, srv := testClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

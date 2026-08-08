@@ -38,6 +38,29 @@ type domainListOutput struct {
 			} `xml:"RANGE"`
 		} `xml:"NETBLOCK"`
 	} `xml:"DOMAIN"`
+
+	// Response is a pointer because the one confirmed sample of this
+	// endpoint's output (the official "List Domain" documentation page) has
+	// DOMAIN directly under the DOMAIN_LIST root, with no enclosing RESPONSE
+	// element at all — unlike every other asset/* list output in this client
+	// (HOST_LIST_OUTPUT, ASSET_GROUP_LIST_OUTPUT, ...), which wraps its list
+	// and WARNING truncation marker in RESPONSE. Since that is the dominant
+	// convention across the rest of this exact API family, and the sample
+	// may simply be a documentation example that omits it, this field is
+	// decoded defensively: present, warning() reports it and listAll follows
+	// the truncation; absent (matching the confirmed sample), it decodes to
+	// nil and warning() reports no truncation, which is a no-op change from
+	// the single-request behaviour this had before.
+	Response *struct {
+		Warning *warning `xml:"WARNING"`
+	} `xml:"RESPONSE"`
+}
+
+func (o *domainListOutput) warning() *warning {
+	if o.Response == nil {
+		return nil
+	}
+	return o.Response.Warning
 }
 
 func (o *domainListOutput) domains() []*Domain {
@@ -64,17 +87,24 @@ func (o *domainListOutput) domains() []*Domain {
 	return out
 }
 
-// ListDomains returns every registered domain. No filter parameters are
-// confirmed for this endpoint, so none are sent.
+// ListDomains returns every registered domain, following truncation if the
+// response reports it. No filter parameters are confirmed for this
+// endpoint, so none are sent.
 func (c *Client) ListDomains(ctx context.Context) ([]*Domain, error) {
-	var out domainListOutput
-	if err := c.do(ctx, request{
+	var all []*Domain
+	err := c.listAll(ctx, request{
 		capability: capAssetDomain,
 		path:       "asset/domain/",
 		action:     "list",
 		method:     "GET",
-	}, &out); err != nil {
+	},
+		func() paginated { return new(domainListOutput) },
+		func(p paginated) error {
+			all = append(all, p.(*domainListOutput).domains()...)
+			return nil
+		}, 0)
+	if err != nil {
 		return nil, err
 	}
-	return out.domains(), nil
+	return all, nil
 }

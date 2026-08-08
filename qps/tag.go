@@ -219,29 +219,16 @@ func (c *Client) SearchTags(ctx context.Context, filters *Filters) ([]*Tag, erro
 // decodeTags handles the two shapes the portal API uses for `data`: a single
 // object for get/create, and a list for search.
 func decodeTags(raw json.RawMessage) ([]*Tag, error) {
-	if len(raw) == 0 {
-		return nil, nil
-	}
-
-	// Try the list shape first: [{"Tag": {...}}, ...]
-	var list []tagData
-	if err := json.Unmarshal(raw, &list); err == nil {
-		out := make([]*Tag, 0, len(list))
-		for _, d := range list {
-			if d.Tag != nil {
-				out = append(out, d.Tag.toTag())
-			}
+	items := decodeListOrSingle(raw)
+	out := make([]*Tag, 0, len(items))
+	for _, item := range items {
+		var d tagData
+		if err := json.Unmarshal(item, &d); err != nil {
+			return nil, fmt.Errorf("qualys qps: decoding tag data: %w", err)
 		}
-		return out, nil
+		if d.Tag != nil {
+			out = append(out, d.Tag.toTag())
+		}
 	}
-
-	// Fall back to the single-object shape: {"Tag": {...}}
-	var one tagData
-	if err := json.Unmarshal(raw, &one); err != nil {
-		return nil, fmt.Errorf("qualys qps: decoding tag data: %w", err)
-	}
-	if one.Tag == nil {
-		return nil, nil
-	}
-	return []*Tag{one.Tag.toTag()}, nil
+	return out, nil
 }

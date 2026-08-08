@@ -30,15 +30,28 @@ func resourceWASOptionProfile() *schema.Resource {
 				Type:        schema.TypeString,
 				Required:    true,
 			},
+			// These seven fields are Optional+Computed, not just Optional. The
+			// create encoder (qps.CreateWASOptionProfile) omits any of them left
+			// unset so Qualys can apply its own server-side default; without
+			// Computed, Terraform would expect the post-apply state to match the
+			// config-implied zero value and fail every create that omits one of
+			// them with "Provider produced inconsistent result after apply".
+			// Computed also means an unconfigured field's value survives from
+			// state into the next plan, so a later update (which sends every
+			// field unconditionally, see qps.UpdateWASOptionProfile) sends the
+			// real prior value rather than a zero value that would blank out or
+			// get rejected for the two enum fields below.
 			"max_crawl_requests": {
 				Description: "Maximum number of requests the crawler issues during a scan.",
 				Type:        schema.TypeInt,
 				Optional:    true,
+				Computed:    true,
 			},
 			"performance": {
 				Description: "Scan performance level.",
 				Type:        schema.TypeString,
 				Optional:    true,
+				Computed:    true,
 				ValidateFunc: validation.StringInSlice([]string{
 					qps.WASPerformanceLow, qps.WASPerformanceMedium, qps.WASPerformanceHigh,
 				}, false),
@@ -49,26 +62,31 @@ func resourceWASOptionProfile() *schema.Resource {
 					"validated client-side; an invalid value is rejected by the API at apply time.",
 				Type:     schema.TypeString,
 				Optional: true,
+				Computed: true,
 			},
 			"timeout_error_threshold": {
 				Description: "Number of timeout errors tolerated before the scan engine backs off.",
 				Type:        schema.TypeInt,
 				Optional:    true,
+				Computed:    true,
 			},
 			"unexpected_error_threshold": {
 				Description: "Number of unexpected errors tolerated before the scan engine backs off.",
 				Type:        schema.TypeInt,
 				Optional:    true,
+				Computed:    true,
 			},
 			"detect_credit_card_numbers": {
 				Description: "Flag credit card numbers found in application responses as sensitive content.",
 				Type:        schema.TypeBool,
 				Optional:    true,
+				Computed:    true,
 			},
 			"detect_social_security_numbers": {
 				Description: "Flag social security numbers found in application responses as sensitive content.",
 				Type:        schema.TypeBool,
 				Optional:    true,
+				Computed:    true,
 			},
 		},
 	}
