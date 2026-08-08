@@ -2,10 +2,12 @@ package provider
 
 import (
 	"fmt"
+	"regexp"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 
 	"github.com/form3tech-oss/terraform-provider-qualys/cloudview/gcp"
+	"github.com/form3tech-oss/terraform-provider-qualys/qps"
 	"github.com/form3tech-oss/terraform-provider-qualys/vmdr"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
@@ -15,6 +17,7 @@ import (
 // one client with mode switches.
 type clients struct {
 	vmdr *vmdr.Client
+	qps  *qps.Client
 	gcp  *gcp.ConnectorService
 }
 
@@ -102,4 +105,16 @@ func setAll(d *schema.ResourceData, values map[string]interface{}) error {
 		}
 	}
 	return nil
+}
+
+// hexColour matches a six-digit hex colour, the form the tagging API documents.
+var hexColour = regexp.MustCompile(`^#[0-9A-Fa-f]{6}$`)
+
+func qpsClient(meta interface{}) (*qps.Client, error) {
+	c, ok := meta.(*clients)
+	if !ok || c.qps == nil {
+		return nil, fmt.Errorf("qualys: the portal (qps) API client is not configured; " +
+			"set `base_url`, `username` and `password` on the provider")
+	}
+	return c.qps, nil
 }

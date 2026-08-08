@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/form3tech-oss/terraform-provider-qualys/cloudview/gcp"
+	"github.com/form3tech-oss/terraform-provider-qualys/qps"
 	"github.com/form3tech-oss/terraform-provider-qualys/vmdr"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -58,11 +59,13 @@ func Provider() *schema.Provider {
 		DataSourcesMap: map[string]*schema.Resource{
 			"qualys_gcp_connector": dataSourceGCPConnector(),
 			"qualys_asset_groups":  dataSourceAssetGroups(),
+			"qualys_asset_tags":    dataSourceAssetTags(),
 		},
 
 		ResourcesMap: map[string]*schema.Resource{
 			"qualys_gcp_connector": resourceGCPConnector(),
 			"qualys_asset_group":   resourceAssetGroup(),
+			"qualys_asset_tag":     resourceAssetTag(),
 		},
 
 		ConfigureContextFunc: providerConfigure,
@@ -89,8 +92,22 @@ func providerConfigure(_ context.Context, d *schema.ResourceData) (interface{}, 
 		return nil, diag.FromErr(err)
 	}
 
+	qpsClient, err := qps.NewClient(qps.Config{
+		BaseURL:     baseURL,
+		Username:    username,
+		Password:    password,
+		UserAgent:   "terraform-provider-qualys",
+		Concurrency: d.Get("concurrency").(int),
+		MaxRetries:  d.Get("max_retries").(int),
+		Logger:      log.New(os.Stderr, "", log.LstdFlags),
+	})
+	if err != nil {
+		return nil, diag.FromErr(err)
+	}
+
 	return &clients{
 		vmdr: vmdrClient,
+		qps:  qpsClient,
 		// The CloudView client is retained for the existing GCP connector
 		// resource until it is migrated to the Connector v3 API.
 		gcp: gcp.NewService(baseURL, username, password),
