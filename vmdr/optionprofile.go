@@ -29,24 +29,17 @@ type VMOptionProfile struct {
 	ScanTCPPortsAdditional string
 	ScanUDPPorts           string
 	ScanUDPPortsAdditional string
-	ThreeWayHandshake      bool
 
 	ScanDeadHosts        bool
 	CloseVulnOnDeadHosts bool
 	PurgeHostData        bool
 
 	ScanOverallPerformance string
-	ScanIntensity          string
 	ScanPacketDelay        string
 	ScanParallelScaling    bool
-	ScanExternalScanners   string
-	ScanScannerAppliances  string
-	ScanTotalProcess       string
-	ScanHTTPProcess        string
 
 	VulnerabilityDetection string
 	CustomSearchListIDs    []string
-	ExcludeSearchListIDs   []string
 
 	PasswordBruteForcingSystem string
 
@@ -59,10 +52,13 @@ type VMOptionProfile struct {
 	EnableDissolvableAgent         bool
 	TestAuthentication             bool
 
-	Authentication           []string
-	IncludeSystemAuth        bool
-	UseSystemAuthOnDuplicate bool
-	UseUserAuthOnDuplicate   bool
+	Authentication []string
+
+	// Write-only settings — three_way_handshake, scan_intensity, the scanner
+	// process/thread tuning, exclude_search_list_ids and the system-auth trio —
+	// have no counterpart in the documented list output, so this read-side type
+	// deliberately does not carry them. Advertising fields that are always zero
+	// invites callers to trust values that were never read.
 }
 
 // VMOptionProfileInput is the desired state of a profile.

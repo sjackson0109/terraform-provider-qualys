@@ -153,9 +153,16 @@ func (c *Client) UpdateTag(ctx context.Context, id string, in TagInput) error {
 	// clearing an attribute in configuration would never take effect and the
 	// resource would diff forever.
 	//
-	// ruleType is the exception. Sending an empty rule type is not meaningful —
-	// a static tag simply has none — and the API rejects it, so it is omitted
-	// when unset.
+	// Two exceptions:
+	//
+	// ruleType — an empty rule type is not meaningful (a static tag simply has
+	// none) and the API rejects it, so it is omitted when unset.
+	//
+	// parentTagId — omitting it keeps the old parent, and no payload for
+	// "detach from parent" has been verified against the API, so an update
+	// cannot express re-rooting at all. Rather than accept input it would
+	// silently ignore, UpdateTag does not carry the parent; the resource marks
+	// parent_tag_id ForceNew and moving a tag recreates it.
 	tag := map[string]interface{}{
 		"name":     in.Name,
 		"ruleText": in.RuleText,
@@ -163,9 +170,6 @@ func (c *Client) UpdateTag(ctx context.Context, id string, in TagInput) error {
 	}
 	if strings.TrimSpace(in.RuleType) != "" {
 		tag["ruleType"] = in.RuleType
-	}
-	if strings.TrimSpace(in.Parent) != "" {
-		tag["parentTagId"] = in.Parent
 	}
 
 	return c.call(ctx, http.MethodPost, "/qps/rest/2.0/update/am/tag/"+id,

@@ -213,6 +213,11 @@ func (c *Client) ListHosts(ctx context.Context, filter HostFilter) ([]*HostAsset
 	if filter.TruncationLimit > 0 {
 		params.Set("truncation_limit", fmt.Sprint(filter.TruncationLimit))
 	}
+	// The list defaults to details=Basic, which omits OWNER and COMMENTS —
+	// fields this client's HostAsset exposes. Full detail keeps them populated,
+	// matching ListAppliances (output_mode=full) and ListAssetGroups
+	// (show_attributes=All).
+	params.Set("details", "All")
 
 	var all []*HostAsset
 	err := c.listAll(ctx, request{

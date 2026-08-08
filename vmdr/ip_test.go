@@ -128,6 +128,10 @@ func TestListHostsSupportsStaleFilter(t *testing.T) {
 	if form.Get("no_vm_scan_since") != "2025-06-01" {
 		t.Errorf("no_vm_scan_since = %q", form.Get("no_vm_scan_since"))
 	}
+	// Basic detail omits OWNER and COMMENTS, which HostAsset exposes.
+	if form.Get("details") != "All" {
+		t.Errorf("details = %q, want All", form.Get("details"))
+	}
 	if len(hosts) != 1 || hosts[0].IP != "10.0.0.1" {
 		t.Errorf("hosts = %+v", hosts)
 	}

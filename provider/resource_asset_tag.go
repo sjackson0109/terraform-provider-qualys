@@ -36,9 +36,13 @@ func resourceAssetTag() *schema.Resource {
 				Required:    true,
 			},
 			"parent_tag_id": {
-				Description: "ID of the parent tag. Omit for a tag at the root of the tree.",
-				Type:        schema.TypeString,
-				Optional:    true,
+				Description: "ID of the parent tag. Omit for a tag at the root of the tree.\n\n" +
+					"Changing this forces replacement: the update API keeps the old parent " +
+					"when the field is omitted and no detach payload is verified, so an " +
+					"in-place move cannot be expressed reliably.",
+				Type:     schema.TypeString,
+				Optional: true,
+				ForceNew: true,
 			},
 			"rule_type": {
 				Description: "Evaluation rule for a dynamic tag. Omit for a static tag.",
@@ -93,6 +97,11 @@ func resourceAssetTag() *schema.Resource {
 // resourceAssetTagCustomizeDiff catches rule/rule_text mismatches at plan time
 // rather than letting the API reject them at apply time.
 func resourceAssetTagCustomizeDiff(ctx context.Context, d *schema.ResourceDiff, meta interface{}) error {
+	// Values fed from other resources are unknown at plan time and read as "";
+	// validating them now would fail configs that become valid at apply.
+	if !d.NewValueKnown("rule_type") || !d.NewValueKnown("rule_text") {
+		return nil
+	}
 	ruleType := d.Get("rule_type").(string)
 	ruleText := d.Get("rule_text").(string)
 

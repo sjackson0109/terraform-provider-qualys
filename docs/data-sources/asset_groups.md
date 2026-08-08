@@ -15,7 +15,7 @@ scans, schedules and reports.
 
 ```terraform
 data "qualys_asset_groups" "web" {
-  title_regex = "web"
+  title_contains = "web"
 }
 
 output "web_group_ids" {
@@ -31,7 +31,7 @@ output "web_group_ids" {
 - **id** (String) The ID of this resource.
 - **ids** (Set of String) Restrict the lookup to these asset group IDs.
 - **network_ids** (Set of String)
-- **title_regex** (String) Filter results to groups whose title contains this substring (case-insensitive). Applied client-side, after the API call.
+- **title_contains** (String) Filter results to groups whose title contains this substring (case-insensitive). Applied client-side, after the API call.
 
 ### Read-Only
 

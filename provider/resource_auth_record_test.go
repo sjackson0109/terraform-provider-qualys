@@ -69,3 +69,20 @@ func TestUnixRecordHasNoWindowsAttributes(t *testing.T) {
 		t.Error("domain_type belongs to Windows records only")
 	}
 }
+
+// unknownValue is the sentinel the SDK uses for values not known until apply
+// (hcl2shim.UnknownVariableValue, which is internal to the SDK).
+const unknownValue = "74D93920-ED26-11E3-AC10-0800200C9A66"
+
+// password = random_password.x.result is unknown at first plan and reads as "".
+// The credential check must wait for apply rather than failing a valid config.
+func TestAuthRecordAllowsUnknownCredentialAtPlanTime(t *testing.T) {
+	err := diffFor(t, resourceUnixAuthRecord(), map[string]interface{}{
+		"title":    "linux-scan",
+		"username": "scanner",
+		"password": unknownValue,
+	})
+	if err != nil {
+		t.Fatalf("a computed password must not fail the plan: %v", err)
+	}
+}

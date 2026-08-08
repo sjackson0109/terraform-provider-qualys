@@ -27,6 +27,7 @@ resource "qualys_scan_schedule" "nightly_web" {
   occurrence     = "daily"
   frequency_days = 1
 
+  start_date     = "01/15/2026"
   start_hour     = 2
   start_minute   = 30
   time_zone_code = "US-NY"
@@ -78,6 +79,7 @@ API requires.
 ### Required
 
 - **occurrence** (String) How often the scan repeats. One of `daily`, `weekly`, `monthly`.
+- **start_date** (String) Date of the first run, as `MM/DD/YYYY`. Required because the API only accepts the schedule time as a complete group.
 - **start_hour** (Number) 0–23.
 - **start_minute** (Number) 0–59.
 - **time_zone_code** (String) Qualys timezone code, for example `US-NY`.
@@ -110,7 +112,6 @@ API requires.
 - **recipient_group_ids** (Set of String) Qualys distribution group IDs to notify.
 - **recurrence** (Number) Stop after this many occurrences.
 - **scanner_names** (Set of String) Named scanner appliances to scan from.
-- **start_date** (String) Date of the first run, as `MM/DD/YYYY`.
 - **tag_exclude_ids** (Set of String)
 - **tag_include_ids** (Set of String) Asset tag IDs to scan. Switches the schedule to tag-based targeting.
 - **tag_include_selector** (String) Whether an asset must match `all` or `any` of the included tags. Defaults to `any`.

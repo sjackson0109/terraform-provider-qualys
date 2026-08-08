@@ -43,9 +43,11 @@ type ScanSchedule struct {
 	OptionProfileID    string
 	OptionProfileTitle string
 
-	// Targets
+	// Targets. The list output reports asset groups by title, so reads populate
+	// AssetGroupTitles; AssetGroupIDs is an input-side field for create/update.
 	IPs                []string
 	AssetGroupIDs      []string
+	AssetGroupTitles   []string
 	TargetFromTags     bool
 	TagSetInclude      []string
 	TagSetExclude      []string
@@ -153,10 +155,6 @@ type scheduleScanListOutput struct {
 				ID    string `xml:"ID"`
 			} `xml:"OPTION_PROFILE"`
 
-			Processing struct {
-				Occurrence string `xml:"OCCURRENCE"`
-			} `xml:"PROCESSING_PRIORITY"`
-
 			Schedule struct {
 				StartDateUTC string `xml:"START_DATE_UTC"`
 				StartHour    string `xml:"START_HOUR"`
@@ -182,8 +180,11 @@ type scheduleScanListOutput struct {
 			} `xml:"SCHEDULE"`
 
 			Target struct {
-				IPs           string `xml:"IP_SET>IP"`
-				AssetGroupIDs string `xml:"ASSET_GROUP_TITLE_LIST>ASSET_GROUP_TITLE"`
+				// IP_SET carries repeated IP and IP_RANGE elements; the shared ipSet
+				// type collects them all. A plain string here would silently keep
+				// only the last element.
+				IPSet            *ipSet   `xml:"IP_SET"`
+				AssetGroupTitles []string `xml:"ASSET_GROUP_TITLE_LIST>ASSET_GROUP_TITLE"`
 			} `xml:"TARGET"`
 		} `xml:"SCHEDULE_SCAN_LIST>SCAN"`
 		Warning *warning `xml:"WARNING"`
@@ -213,6 +214,9 @@ func (o *scheduleScanListOutput) schedules() []*ScanSchedule {
 		sched.FrequencyWeeks, _ = strconv.Atoi(strings.TrimSpace(s.Schedule.Weekly.FrequencyWeeks))
 		sched.FrequencyMonths, _ = strconv.Atoi(strings.TrimSpace(s.Schedule.Monthly.FrequencyMonths))
 		sched.DayOfMonth, _ = strconv.Atoi(strings.TrimSpace(s.Schedule.Monthly.DayOfMonth))
+		sched.DayOfWeek, _ = strconv.Atoi(strings.TrimSpace(s.Schedule.Monthly.DayOfWeek))
+		sched.IPs = s.Target.IPSet.entries()
+		sched.AssetGroupTitles = trimAll(s.Target.AssetGroupTitles)
 
 		switch {
 		case sched.FrequencyDays > 0:
@@ -322,8 +326,16 @@ func scheduleParams(in ScanScheduleInput) (url.Values, error) {
 		p.Set("recurrence", strconv.Itoa(in.Recurrence))
 	}
 
-	// Time
-	setIfNotEmpty(p, "start_date", in.StartDate)
+	// Time. The API treats the five time fields as a unit — an update must send
+	// set_start_time=1 with all of them, and an incomplete group is rejected or
+	// silently ignored. Requiring start_date here is what lets UpdateScanSchedule
+	// honestly claim it always sends the complete group.
+	if strings.TrimSpace(in.StartDate) == "" {
+		return nil, fmt.Errorf("qualys vmdr: start_date is required (MM/DD/YYYY); the API " +
+			"only accepts the schedule time as a complete group of start_date, start_hour, " +
+			"start_minute, time_zone_code and observe_dst")
+	}
+	p.Set("start_date", in.StartDate)
 	p.Set("start_hour", strconv.Itoa(in.StartHour))
 	p.Set("start_minute", strconv.Itoa(in.StartMinute))
 	setIfNotEmpty(p, "time_zone_code", in.TimeZoneCode)

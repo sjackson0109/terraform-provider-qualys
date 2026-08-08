@@ -226,11 +226,15 @@ func (c *Client) UpdateAssetGroup(ctx context.Context, id string, in AssetGroupI
 	params.Set("set_location", in.Location)
 	setIfNotEmpty(params, "set_business_impact", in.BusinessImpact)
 	params.Set("set_default_appliance_id", in.DefaultApplianceID)
-	setIfNotEmpty(params, "set_cvss_enviro_cdp", in.CVSSEnviroCDP)
-	setIfNotEmpty(params, "set_cvss_enviro_td", in.CVSSEnviroTD)
-	setIfNotEmpty(params, "set_cvss_enviro_cr", in.CVSSEnviroCR)
-	setIfNotEmpty(params, "set_cvss_enviro_ir", in.CVSSEnviroIR)
-	setIfNotEmpty(params, "set_cvss_enviro_ar", in.CVSSEnviroAR)
+	// The CVSS fields are sent even when empty. Omitting an empty one would keep
+	// the old value server-side, so clearing the attribute in configuration
+	// would never propagate — while state records the cleared value and reports
+	// convergence that has not happened.
+	params.Set("set_cvss_enviro_cdp", in.CVSSEnviroCDP)
+	params.Set("set_cvss_enviro_td", in.CVSSEnviroTD)
+	params.Set("set_cvss_enviro_cr", in.CVSSEnviroCR)
+	params.Set("set_cvss_enviro_ir", in.CVSSEnviroIR)
+	params.Set("set_cvss_enviro_ar", in.CVSSEnviroAR)
 
 	ips, err := FormatIPSet(in.IPs)
 	if err != nil {

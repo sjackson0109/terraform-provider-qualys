@@ -153,3 +153,28 @@ func TestAssignApplianceToNetworkIsASeparateAction(t *testing.T) {
 		t.Errorf("form = %v", form)
 	}
 }
+
+// A VLAN or route field containing the wire format's own separators would split
+// into extra fields and misconfigure the appliance rather than fail cleanly.
+func TestVLANFieldsRejectWireDelimiters(t *testing.T) {
+	c, srv := testClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Error("a delimiter-carrying VLAN must not reach the API")
+	}))
+	defer srv.Close()
+
+	err := c.UpdateAppliance(context.Background(), "1", ApplianceUpdate{
+		SetVLANs: true,
+		VLANs:    []VLAN{{ID: "10", IP: "10.0.0.5", Netmask: "255.255.255.0", Name: "corp,dmz"}},
+	})
+	if err == nil {
+		t.Fatal("expected an error for a VLAN name containing ','")
+	}
+
+	err = c.UpdateAppliance(context.Background(), "1", ApplianceUpdate{
+		SetRoutes: true,
+		Routes:    []StaticRoute{{IP: "10.0.0.0", Netmask: "255.0.0.0", Gateway: "10.0.0.1", Name: "a|b"}},
+	})
+	if err == nil {
+		t.Fatal("expected an error for a route name containing '|'")
+	}
+}

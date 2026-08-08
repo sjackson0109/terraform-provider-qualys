@@ -62,7 +62,7 @@ letting Terraform recreate it — otherwise you will end up with a duplicate tag
 
 - **color** (String) Display colour as a hex triplet, for example `#FF0000`.
 - **id** (String) The ID of this resource.
-- **parent_tag_id** (String) ID of the parent tag. Omit for a tag at the root of the tree.
+- **parent_tag_id** (String) ID of the parent tag. Omit for a tag at the root of the tree. Changing this forces replacement — the update API cannot express an in-place move.
 - **rule_text** (String) Expression evaluated for a dynamic tag. Required when `rule_type` selects a dynamic rule.
 - **rule_type** (String) Evaluation rule for a dynamic tag. Omit for a static tag. One of `STATIC`, `GROOVY`, `OS_REGEX`, `NETWORK_RANGE`, `NAME_CONTAINS`, `INSTALLED_SOFTWARE`, `OPEN_PORTS`, `VULN_EXIST`, `ASSET_SEARCH`, `GLOBAL_ASSET_VIEW`.
 

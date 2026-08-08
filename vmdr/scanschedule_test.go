@@ -202,3 +202,48 @@ func TestListParsesActiveAndRecurrence(t *testing.T) {
 		t.Errorf("weekdays = %v", s.Weekdays)
 	}
 }
+
+// The five time fields are a required-together group; a schedule without a
+// start date cannot be encoded at all, matching the schema's Required flag.
+func TestScheduleParamsRequireStartDate(t *testing.T) {
+	in := baseSchedule()
+	in.StartDate = ""
+	if _, err := scheduleParams(in); err == nil {
+		t.Fatal("expected an error: the API only accepts the time as a complete group")
+	}
+}
+
+// The list output reports targets; a plain-string mapping would keep only the
+// last IP element and drop ranges entirely.
+func TestListParsesTargets(t *testing.T) {
+	c, srv := testClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `<SCHEDULE_SCAN_LIST_OUTPUT><RESPONSE><SCHEDULE_SCAN_LIST>
+		  <SCAN>
+		    <ID>160642</ID><ACTIVE>1</ACTIVE><TITLE>nightly</TITLE>
+		    <TARGET>
+		      <IP_SET><IP>10.0.0.5</IP><IP>10.0.0.9</IP><IP_RANGE>10.1.0.0-10.1.0.255</IP_RANGE></IP_SET>
+		      <ASSET_GROUP_TITLE_LIST><ASSET_GROUP_TITLE>prod-web</ASSET_GROUP_TITLE></ASSET_GROUP_TITLE_LIST>
+		    </TARGET>
+		    <SCHEDULE>
+		      <START_HOUR>2</START_HOUR><START_MINUTE>0</START_MINUTE>
+		      <MONTHLY frequency_months="1" day_of_week="3" week_of_month="second"/>
+		    </SCHEDULE>
+		  </SCAN>
+		</SCHEDULE_SCAN_LIST></RESPONSE></SCHEDULE_SCAN_LIST_OUTPUT>`)
+	}))
+	defer srv.Close()
+
+	s, err := c.GetScanSchedule(context.Background(), "160642")
+	if err != nil {
+		t.Fatalf("GetScanSchedule: %v", err)
+	}
+	if len(s.IPs) != 3 {
+		t.Errorf("IPs = %v; all IP and IP_RANGE elements must survive decoding", s.IPs)
+	}
+	if len(s.AssetGroupTitles) != 1 || s.AssetGroupTitles[0] != "prod-web" {
+		t.Errorf("AssetGroupTitles = %v", s.AssetGroupTitles)
+	}
+	if s.DayOfWeek != 3 || s.WeekOfMonth != "second" {
+		t.Errorf("day-in-week recurrence not decoded: %+v", s)
+	}
+}
