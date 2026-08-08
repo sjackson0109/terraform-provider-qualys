@@ -225,6 +225,17 @@ See **[doc 11](11-verified-parameter-reference.md)** for the full parameter list
   `time_zone_code` stays a free-text string on `qualys_scan_schedule` (unvalidated
   client-side, exactly like `bruteforce_option` on `qualys_was_option_profile`) rather
   than being checked against a guessed enum.
+- **Domain V2 (`/api/2.0/fo/asset/domain/`) add/update/delete parameter names.**
+  The family's existence, Basic-auth-only/Manager-role requirements, and the
+  `list` output shape are confirmed (a fresh search surfaced the official "List
+  Domain" page's sample XML: `DOMAIN_LIST`/`DOMAIN` with `DOMAIN_NAME`,
+  `DOMAIN_ID`, `NETWORK`, `NETBLOCK`/`RANGE`/`START`/`END`). Searches for the
+  write-side pages ("Update Domain", "Manage Your Domains") surfaced only that
+  `domain` and `netblock` parameters exist, not a complete reference — direct
+  fetches of docs.qualys.com are blocked in this environment (see the research
+  constraint in this document's header), so the pages themselves could not be
+  read. **Gates the write side of `qualys_domain`** — `data.qualys_domains`
+  (read-only) is built; a resource is not, until this closes.
 - Tagging: `CLOUD_ASSET` ruleType; `lastVulnScan` hostasset filter.
 - V2 user API existence (`/api/2.0/fo/user/` — third-party claim only).
 - Formal deprecation status of `/msp/scheduled_scans.php`, `/msp/user.php`,

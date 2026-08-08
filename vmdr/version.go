@@ -36,6 +36,7 @@ const (
 	capAssetHost      capability = "asset/host"
 	capAssetGroup     capability = "asset/group"
 	capAssetExcluded  capability = "asset/excluded_ip"
+	capAssetDomain    capability = "asset/domain"
 	capHostDetection  capability = "asset/host/vm/detection"
 	capNetwork        capability = "network"
 	capAppliance      capability = "appliance"
@@ -66,6 +67,7 @@ var pinnedVersions = map[capability]apiVersion{
 	capAssetHost:      v2_0, // migrating -> 5.0 (schema not yet documented)
 	capAssetGroup:     v2_0,
 	capAssetExcluded:  v2_0,
+	capAssetDomain:    v2_0,
 	capHostDetection:  v2_0, // migrating -> 5.0 (schema not yet documented)
 	capNetwork:        v2_0,
 	capAppliance:      v2_0,
