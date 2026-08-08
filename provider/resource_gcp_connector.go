@@ -65,7 +65,7 @@ func resourceGCPConnectorCreate(ctx context.Context, d *schema.ResourceData, met
 		WithCredentialsJSON(d.Get("gcp_credentials_json").(string)).
 		WithProjectId(d.Get("project_id").(string))
 
-	service := meta.(*gcp.ConnectorService)
+	service := gcpService(meta)
 	connector, err := service.Create(opt)
 	if err != nil {
 		return diag.FromErr(err)
@@ -79,7 +79,7 @@ func resourceGCPConnectorCreate(ctx context.Context, d *schema.ResourceData, met
 func resourceGCPConnectorRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	log.Printf("[DEBUG] Reading gcp connector %q ", d.Id())
 
-	service := meta.(*gcp.ConnectorService)
+	service := gcpService(meta)
 	connector, err := service.Get(d.Id())
 	if err != nil {
 		d.SetId("")
@@ -98,7 +98,7 @@ func resourceGCPConnectorUpdate(ctx context.Context, d *schema.ResourceData, met
 		WithCredentialsJSON(d.Get("gcp_credentials_json").(string)).
 		WithProjectId(d.Get("project_id").(string))
 
-	service := meta.(*gcp.ConnectorService)
+	service := gcpService(meta)
 	err := service.Update(d.Id(), opt)
 	if err != nil {
 		return diag.FromErr(err)
@@ -110,7 +110,7 @@ func resourceGCPConnectorUpdate(ctx context.Context, d *schema.ResourceData, met
 func resourceGCPConnectorDelete(_ context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	log.Printf("[DEBUG] Delete qualys connector %s", d.Id())
 
-	service := meta.(*gcp.ConnectorService)
+	service := gcpService(meta)
 	return diag.FromErr(service.Delete([]string{d.Id()}))
 }
 

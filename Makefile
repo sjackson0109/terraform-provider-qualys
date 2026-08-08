@@ -3,7 +3,7 @@ GOFMT_FILES?=$$(find . -name '*.go' |grep -v vendor)
 default: build test
 
 test: fmtcheck
-	go test -v . ./provider
+	go test ./... 
 
 build-only:
 	@go install
@@ -28,6 +28,8 @@ vet:
 		exit 1; \
 	fi
 
+# Regenerating docs downloads the Terraform CLI. Where that is unavailable the
+# files under docs/ are maintained by hand; prefer generated output on conflict.
 docs:
 	tfplugindocs generate
 
