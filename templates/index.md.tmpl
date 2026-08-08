@@ -7,23 +7,72 @@ description: |-
 ---
 # {{.ProviderShortName}} Provider
 
-A Terraform provider for creating [Qualys](https://www.qualys.com/) connectors.
-
-This provider currently only supports the GCP connector.
+Manage [Qualys](https://www.qualys.com/) VMDR configuration with Terraform: asset
+groups, asset tags, vulnerability search lists and VM scan option profiles.
 
 ## Example Usage
 
 ```terraform
 provider "qualys" {
-    # Can also be provided via QUALYS_URL
-    base_url = var.base_url
+  # Your subscription's platform API server. Required — there is no safe default.
+  # Find it under Help > About in the Qualys UI, or at
+  # https://www.qualys.com/platform-identification/
+  # Can also be provided via QUALYS_URL
+  base_url = var.base_url
 
-    # Can also be provided by QUALYS_USERNAME
-    username = var.username
+  # Can also be provided via QUALYS_USERNAME
+  username = var.username
 
-    # Can also be provided by QUALYS_PASSWORD
-    password = var.password
+  # Can also be provided via QUALYS_PASSWORD
+  password = var.password
 }
 ```
+
+## Choosing the right `base_url`
+
+Qualys hosts subscriptions on several platforms, each with its own API hostname
+(`qualysapi.qualys.com`, `qualysapi.qg2.apps.qualys.com`, `qualysapi.qualys.eu`
+and others). The provider will not guess: pointing at the wrong platform would
+send your credentials to it. Set `base_url` explicitly.
+
+## Authentication
+
+The provider authenticates with HTTP Basic authentication, which every Qualys
+API accepts.
+
+Some subscriptions can additionally enable JWT bearer authentication (via
+OpenID Connect or Qualys' own token endpoint), but it is opt-in per subscription
+and must be activated by Qualys Support. The provider does not require it.
+
+### The EULA trap
+
+An API-only account — one with no UI access — stays inactive until the Qualys
+EULA has been accepted, and **every** API call fails until then. If a brand-new
+service account fails everything with an authorisation error, this is the most
+likely cause. The provider detects it and says so explicitly.
+
+## API limits
+
+Qualys enforces per-subscription concurrency and rate limits. The provider
+self-limits to the documented default of two concurrent calls per API, and waits
+for the interval Qualys reports before retrying a blocked call.
+
+Raising `concurrency` above the limit Qualys has actually granted your
+subscription produces `HTTP 409` responses, not faster runs.
+
+Destructive operations are never retried automatically, whatever `max_retries`
+is set to: a blocked response does not prove the operation did not take effect,
+and repeating a purge or delete on that assumption is not safe.
+
+## API versions and deprecation
+
+Qualys versions each API independently and runs an explicit deprecation
+programme: a superseded version reaches End of Support six months after its
+replacement ships, and End of Life six months after that.
+
+The provider pins an API version per capability and logs a one-time warning when
+it uses a capability that Qualys has since published a newer version for. Those
+warnings appear in `TF_LOG` output — they are worth reading, because they are the
+early notice of an endpoint that will eventually be decommissioned.
 
 {{ .SchemaMarkdown | trimspace }}
