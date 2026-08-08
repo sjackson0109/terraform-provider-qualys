@@ -86,6 +86,7 @@ func Provider() *schema.Provider {
 			"qualys_auth_record_unix":    resourceUnixAuthRecord(),
 			"qualys_web_application":     resourceWebApplication(),
 			"qualys_was_option_profile":  resourceWASOptionProfile(),
+			"qualys_was_auth_record":     resourceWASAuthRecord(),
 		},
 
 		ConfigureContextFunc: providerConfigure,

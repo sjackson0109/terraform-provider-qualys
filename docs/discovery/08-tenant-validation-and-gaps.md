@@ -208,13 +208,23 @@ See **[doc 11](11-verified-parameter-reference.md)** for the full parameter list
 - WAS: `delete/was/optionprofile`, `cancel|delete/was/wasscan`, full `wasscanschedule`
   CRUD + recurrence fields, WAS report-schedule API, per-endpoint JWT support, current
   guide version numbers.
-- **`webappauthrecord` field names.** The operation set (create/get/update/delete/
-  search) and the fact that secrets are masked on read are confirmed, and the record
-  is known to come in form/server/Selenium/OAuth2 flavours, but no source obtained
-  during discovery prints the actual field names for any of them (e.g. the
-  `formRecord` credential fields). **Gates `qualys_was_auth_record` entirely** — build
-  it once the WAS API User Guide or a tenant probe closes this, not from an assumed
-  shape.
+- ~~**`webappauthrecord` field names.**~~ **Closed (Corroborated, non-official) —
+  `qualys_was_auth_record` is now built.** A fourth research pass reached
+  `raw.githubusercontent.com` (docs.qualys.com and cdn2.qualys.com remain
+  egress-blocked in this environment) and pulled the data-class source of an
+  independent open-source Qualys API client (`0x41424142/qualysdk`), which agrees
+  with this discovery's earlier derived-reference summary: a `formRecord` or
+  `serverRecord` sub-object with `type`, `sslOnly`, `authVault`, and a `fields` list
+  of `{name, value, secured}` entries (class name `WebAppAuthFormRecordField`,
+  wrapped in the same `"set"` idiom already used for tag associations); server
+  credentials ride the same `fields` list under the names `username`/`password`/
+  `domain`. Two independent sources agreeing is the same evidence bar this
+  discovery already accepted for the asset-group `set_*`/`add_*`/`remove_*` triads,
+  so it is applied consistently here. **Still not built:** Selenium script and
+  OAuth2 record sub-types (`grantType`, `accessTokenUrl`, `clientId`,
+  `clientSecret`, `seleniumScript`, …) — same two sources name these fields too,
+  but they were left out of this pass to keep the shipped surface verifiable in one
+  sitting. Verify the whole resource against a live tenant before depending on it.
 - **`time_zone_code_list.php` output field names.** The endpoint's existence and its
   DTD name (`time_zone_code_list.dtd`) are confirmed (doc 03 §8), and it is the source
   of the `time_zone_code` values `qualys_scan_schedule` accepts. Three research passes
