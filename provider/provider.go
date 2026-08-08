@@ -2,7 +2,11 @@ package provider
 
 import (
 	"context"
+	"log"
+	"os"
+
 	"github.com/form3tech-oss/terraform-provider-qualys/cloudview/gcp"
+	"github.com/form3tech-oss/terraform-provider-qualys/vmdr"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
@@ -14,28 +18,51 @@ func Provider() *schema.Provider {
 				Type:        schema.TypeString,
 				Required:    true,
 				DefaultFunc: schema.EnvDefaultFunc("QUALYS_USERNAME", ""),
-				Description: "The BasicAuth username to connect to Qualys API.",
+				Description: "Username for the Qualys API.",
 			},
 			"password": {
 				Type:        schema.TypeString,
 				Required:    true,
+				Sensitive:   true,
 				DefaultFunc: schema.EnvDefaultFunc("QUALYS_PASSWORD", ""),
-				Description: "The BasicAuth password to connect to Qualys API.",
+				Description: "Password for the Qualys API.",
 			},
 			"base_url": {
 				Type:        schema.TypeString,
-				Optional:    true,
+				Required:    true,
 				DefaultFunc: schema.EnvDefaultFunc("QUALYS_URL", ""),
-				Description: "The Qualys Base API URL",
+				Description: "Qualys API server URL for your subscription's platform, for " +
+					"example `https://qualysapi.qualys.com`. Qualys hosts subscriptions on " +
+					"several platforms with different hostnames; find yours under Help > About " +
+					"in the Qualys UI, or at https://www.qualys.com/platform-identification/. " +
+					"This must be set explicitly — there is no safe default, and pointing at " +
+					"the wrong platform sends your credentials to it.",
+			},
+			"concurrency": {
+				Type:     schema.TypeInt,
+				Optional: true,
+				Description: "Maximum concurrent API calls. Defaults to 2, matching the " +
+					"documented per-subscription default. Raise this only if Qualys has " +
+					"raised the limit for your subscription; exceeding it causes HTTP 409 " +
+					"responses rather than faster runs.",
+			},
+			"max_retries": {
+				Type:     schema.TypeInt,
+				Optional: true,
+				Description: "How many times to retry a call blocked by an API rate or " +
+					"concurrency limit. Defaults to 4. Destructive operations are never " +
+					"retried automatically regardless of this setting.",
 			},
 		},
 
 		DataSourcesMap: map[string]*schema.Resource{
 			"qualys_gcp_connector": dataSourceGCPConnector(),
+			"qualys_asset_groups":  dataSourceAssetGroups(),
 		},
 
 		ResourcesMap: map[string]*schema.Resource{
 			"qualys_gcp_connector": resourceGCPConnector(),
+			"qualys_asset_group":   resourceAssetGroup(),
 		},
 
 		ConfigureContextFunc: providerConfigure,
@@ -46,17 +73,26 @@ func providerConfigure(_ context.Context, d *schema.ResourceData) (interface{}, 
 	username := d.Get("username").(string)
 	password := d.Get("password").(string)
 	baseURL := d.Get("base_url").(string)
-	return gcp.NewService(baseURL, username, password), []diag.Diagnostic{}
-}
 
-func combineErrors(errs ...error) diag.Diagnostics {
-	var diags diag.Diagnostics
-
-	for _, e := range errs {
-		if e == nil {
-			diags = append(diags, diag.FromErr(e)...)
-		}
+	vmdrClient, err := vmdr.NewClient(vmdr.Config{
+		BaseURL:     baseURL,
+		Username:    username,
+		Password:    password,
+		UserAgent:   "terraform-provider-qualys",
+		Concurrency: d.Get("concurrency").(int),
+		MaxRetries:  d.Get("max_retries").(int),
+		// Warnings about deprecated API versions and limit waits go to the
+		// Terraform log so an operator sees them in TF_LOG output.
+		Logger: log.New(os.Stderr, "", log.LstdFlags),
+	})
+	if err != nil {
+		return nil, diag.FromErr(err)
 	}
 
-	return diags
+	return &clients{
+		vmdr: vmdrClient,
+		// The CloudView client is retained for the existing GCP connector
+		// resource until it is migrated to the Connector v3 API.
+		gcp: gcp.NewService(baseURL, username, password),
+	}, nil
 }
