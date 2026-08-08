@@ -208,6 +208,13 @@ See **[doc 11](11-verified-parameter-reference.md)** for the full parameter list
 - WAS: `delete/was/optionprofile`, `cancel|delete/was/wasscan`, full `wasscanschedule`
   CRUD + recurrence fields, WAS report-schedule API, per-endpoint JWT support, current
   guide version numbers.
+- **`webappauthrecord` field names.** The operation set (create/get/update/delete/
+  search) and the fact that secrets are masked on read are confirmed, and the record
+  is known to come in form/server/Selenium/OAuth2 flavours, but no source obtained
+  during discovery prints the actual field names for any of them (e.g. the
+  `formRecord` credential fields). **Gates `qualys_was_auth_record` entirely** — build
+  it once the WAS API User Guide or a tenant probe closes this, not from an assumed
+  shape.
 - Tagging: `CLOUD_ASSET` ruleType; `lastVulnScan` hostasset filter.
 - V2 user API existence (`/api/2.0/fo/user/` — third-party claim only).
 - Formal deprecation status of `/msp/scheduled_scans.php`, `/msp/user.php`,
