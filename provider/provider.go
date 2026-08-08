@@ -87,6 +87,7 @@ func Provider() *schema.Provider {
 			"qualys_web_application":     resourceWebApplication(),
 			"qualys_was_option_profile":  resourceWASOptionProfile(),
 			"qualys_was_auth_record":     resourceWASAuthRecord(),
+			"qualys_was_scan_schedule":   resourceWASScanSchedule(),
 		},
 
 		ConfigureContextFunc: providerConfigure,
