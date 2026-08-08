@@ -78,11 +78,24 @@ host detections (data source) ─→ stale-asset review ─→ purge (imperative
     imperative launch/fetch helpers; excluded IPs resource.
 16. Deferred backlog: report-template CRUD resources, `qualys_user`, KB helper.
 
-## Parallel track — CloudView migration
+## Parallel track — deprecation removal (product decision: deprecated items are dropped)
 
-17. Track the announced CloudView-connector deprecation; design
-    `qualys_gcp_connector` v2 on Connector v3 (`/qps/rest/3.0/.../am/gcpassetdataconnector`)
-    with a state-migration path, keeping the current resource working meanwhile.
+17. **Re-point `qualys_gcp_connector` from CloudView v1 to Connector v3**
+    (`/qps/rest/3.0/create|run|delete/am/gcpassetdataconnector`), with a state-migration
+    path for existing users. CloudView v1 is a dead end — new GCP connectors can only
+    be created from the Connectors application — so this is a migration, not a
+    dual-support exercise.
+18. **Do not build on legacy generations.** Consequences of the same decision:
+    - `/msp/*.php` endpoints are used **only** where they are the sole surface. Today
+      that is: `report_template_list.php` (the only template listing) and
+      `time_zone_code_list.php` (reference data). Both are read-only helpers.
+    - `qualys_user` (V1 `/msp/user.php`) stays **deferred/out of scope** rather than
+      becoming a legacy-generation resource.
+    - `/msp/scheduled_scans.php` and scheduled maps are **not implemented**.
+    - `/msp/asset_group_list.php` is not used — the 2.0 asset-group API supersedes it.
+
+    Where a legacy endpoint is unavoidable, it is isolated behind its own client so it
+    can be deleted cleanly when Qualys retires it.
 
 ## Explicitly out of the MVP (no API support — doc 08)
 

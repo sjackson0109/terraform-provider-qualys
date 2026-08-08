@@ -25,7 +25,7 @@ global VMDR version. "V1" = legacy `/msp/*.php`; "V2" = `/api/2.0/fo/`; "v3" =
 | Time zone codes | V1 helper | **V1** | reference data only |
 | Tags / tagging | qps 2.0 (`am/tag`) — current per CSAM 2.16; CSAM gateway = inventory reads only | **qps 2.0** for tag CRUD + host tagging; gateway CSAM APIs **not** selected (read-only inventory, JWT, different host) | official guidance keeps tag management on qps 2.0 |
 | WAS | qps 3.0 | **qps 3.0** | JSON preferred (WAS ≥4.5) for client simplicity; XML fallback |
-| Cloud connectors (GCP, existing) | CloudView v1 (deprecated) vs Connector v3 (`qps/rest/3.0/.../am/gcpassetdataconnector`) | **maintain CloudView v1 now; plan migration to Connector v3** | official deprecation announced; new GCP connectors already restricted to the Connectors app; migration is a tracked follow-up (doc 09) |
+| Cloud connectors (GCP, existing) | CloudView v1 (deprecated) vs Connector v3 (`qps/rest/3.0/.../am/gcpassetdataconnector`) | **Connector v3** — migrate off CloudView v1 | **Product decision: deprecated items are being removed.** New GCP connectors are already restricted to the Connectors application, so CloudView v1 is a dead end. The existing `qualys_gcp_connector` resource is re-pointed at Connector v3 with a state-migration path (doc 09) |
 
 **Minimum-release implications:** Domain bulk delete ≥10.25; EC2 scan
 `ec2_instance_ids` behaviours ≥10.16; option-profile import/export ≥8.10; schedule

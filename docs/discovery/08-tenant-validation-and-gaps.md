@@ -29,11 +29,14 @@ clear diagnostics rather than raw API errors:
 | **JWT bearer auth on `/api/2.0/fo/`** | **opt-in per subscription** (OpenID Connect API authentication or native `/auth/oauth` — both require Qualys Support activation). Probe by attempting a token and falling back to Basic; never assume tokens work |
 | WAS V4 schedule/report APIs | announced Apr 2026 — availability on the tenant must be probed before use |
 
-Recommended pattern: a `provider helper` "tenant capability probe" that runs cheap
-list calls (`network?action=list`, `appliance?action=list`, WAS `count/was/webapp`,
-`search/am/tag` with limit 1) and caches which families/features are live, plus a
-`validation operation` mode for the onboarding workbook (validate network IDs,
-scanner names, option-profile IDs, tag IDs, template IDs before apply).
+Recommended pattern: a `provider helper` "tenant capability probe". Start with
+**`GET /qps/rest/portal/version`**, which returns installed Portal and per-module
+versions (WAS, VM, CA, FIM…) — it feature-gates without touching customer data and is
+cheaper than probing each family. Fall back to minimal list calls
+(`network?action=list`, `appliance?action=list`, `search/am/tag` limit 1) for the
+FO-family features that the version endpoint does not cover, cache the result, and add a
+`validation operation` mode for the onboarding workbook (validate network IDs, scanner
+names, option-profile IDs, tag IDs, template IDs before apply).
 
 ## Deliverable 9 — Capabilities for which official API documentation could not be found
 
@@ -167,7 +170,10 @@ See **[doc 11](11-verified-parameter-reference.md)** for the full parameter list
   CIDR in config, normalise to `first-last` on the wire, normalise returned ranges back
   for diff suppression.
 - **Numeric error code for "object not found"** on `edit`/`delete`, and the full v2
-  error-code table. Only `WARNING` code 1980 (truncation) is grounded; 1901 (invalid
+  error-code table — **still open for the VMDR FO family only.** The qps families
+  (WAS, AM/tagging) are now solved: `ServiceResponse/responseCode` returns
+  **`OBJECT_NOT_FOUND`**, with the caveat that an out-of-scope object returns the same
+  code as a deleted one, so a permissions fault can look like a deletion. Only `WARNING` code 1980 (truncation) is grounded; 1901 (invalid
   parameter) is single-source non-official; 1905 exists but its meaning is not grounded.
   **Note also that some VM/PA calls return HTTP 200 on error** — the provider must parse
   `CODE`/`TEXT` rather than branch on HTTP status. Until this closes, implement

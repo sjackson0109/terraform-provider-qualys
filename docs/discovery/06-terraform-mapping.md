@@ -22,9 +22,11 @@ Deliverables 4, 5 and 6. Grounded in the per-operation classifications of doc 03
 | `qualys_was_option_profile` | `.../was/optionprofile` | full CRUD incl. delete | P2 |
 | `qualys_was_auth_record` | `.../was/webappauthrecord` | secrets masked on read → write-only | P2 |
 | `qualys_was_scan_schedule` | `.../was/wasscanschedule` | CRUD confirmed (9 ops); **recurrence element names still `Unverified`** — schema cannot be written until they are, and the VM/FO `<SCHEDULE>` DTD must not be reused | P2–P3 |
-| `qualys_gcp_connector` (existing) | CloudView `/cloudview-api/rest/v1/gcp/connectors` | **deprecated API family — plan migration to Connector v3** | maintain |
+| `qualys_gcp_connector` (existing) | **Connector v3** `/qps/rest/3.0/.../am/gcpassetdataconnector` | migrate off the deprecated CloudView v1 path (product decision: deprecated items are removed); state migration required for existing users | migrate |
 | `qualys_report_template_scan` / `_patch` | `/api/2.0/fo/report/template/scan|patch/` | XML-body schemas; deferred until schema effort justified | deferred |
-| `qualys_user` | `/msp/user.php` (V1) | Basic-only, activation flow, clear-param semantics | deferred |
+| ~~`qualys_user`~~ | `/msp/user.php` (V1) | **Out of scope** — legacy generation, and deprecated items are not being built on | dropped |
+| `qualys_was_dns_override` | `/qps/rest/3.0/.../was/dnsoverriderecord` | staging-host resolution for WAS scans | P3 |
+| `qualys_was_search_list` / `qualys_was_parameter_set` | `.../was/searchlist`, `.../was/parameter` | referenced by WAS option profiles | P3 |
 
 **Scan authentication approach (task question):** support **both** — resources that
 create/manage records with write-only credential arguments (preferred with vault

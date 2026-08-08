@@ -238,6 +238,104 @@ so a `NONE` operator does exist in the qps filter language.
 Also confirmed: `cancel/was/wasscan/<id>`, `download/was/wasscan/<id>` (3.0 and a 2.0
 variant), `status/was/wasscan/<id>`.
 
+## 9. WAS API — wider surface
+
+Source: a compiled reference derived from the WAS API documentation tree
+(`docs.qualys.com/en/was/api/...`), supplied for this discovery. It is a **derived
+secondary source**, not the official guide, so items below are
+`Corroborated (non-official)` unless the Quick Reference independently confirms them —
+and where the two disagree, the Quick Reference wins (see the conflicts at the end).
+
+### Objects beyond those already inventoried
+
+| Object | Base path | Operations |
+|---|---|---|
+| Catalog (discovered/candidate assets not yet promoted to WebApps) | `/qps/rest/3.0/<op>/was/catalog[/<id>]` | count, search, get, update (single + bulk by filter), delete |
+| Finding | `/qps/rest/3.0/<op>/was/finding[/<id>]` | count, search, get, **ignore**, **activate**, **updateSeverity**, **restoreSeverity**, **retest**, retest status |
+| DNS override record | `/qps/rest/3.0/<op>/was/dnsoverriderecord[/<id>]` | count, search, get, create, update, delete |
+| Search lists / parameter sets | `/qps/rest/3.0/<op>/was/searchlist`, `.../was/parameter` | same CRUD pattern |
+| Report template | `/qps/rest/3.0/<op>/was/report/template[/<id>]` | count, search, get |
+| Burp import | `/qps/rest/3.0/import/was/burp/<webapp_id>` | multipart upload of a Burp XML export; imported issues surface with `findingType=BURP` |
+
+WebApp also exposes **`purge/was/webapp/<id>`** and a `removeFromSubscription` flag on
+delete, plus `swaggerFile` (OpenAPI upload), `progressiveScanning`, malware
+monitoring/notification/scheduling, `config.defaultAuthRecord`, `config.cancelScansAt`,
+`crawlingScripts` (Selenium), and custom `attributes` (key/value, filterable via
+`field="attributes"` + `name="..."`).
+
+WAS option profile fields: `maxCrawlRequests`, performance (`LOW|MEDIUM|HIGH`),
+`bruteforceOption`, `timeoutErrorThreshold`, `unexpectedErrorThreshold`,
+`sensitiveContent.creditCardNumber`, `sensitiveContent.socialSecurityNumber`.
+
+Finding filters: `id`, `qid`, `webApp.id`/`webApp.tags`, `url`, `severity`,
+`status={NEW|ACTIVE|REOPENED|FIXED|PROTECTED}`,
+`type={VULNERABILITY|SENSITIVE_CONTENT|INFORMATION_GATHERED}`,
+`findingType={QUALYS|MANUAL|BURP}`, `firstDetectedDate`, `lastDetectedDate`,
+`isIgnored`, `cvssV3.base`, `cwe`.
+
+Scan status values: `SUBMITTED`, `RUNNING`, `FINISHED`, `TIME_LIMIT_EXCEEDED`,
+`SCAN_NOT_LAUNCHED`, `SCANNER_NOT_AVAILABLE`, `ERROR`, `CANCELED`.
+Scan `type`: `VULNERABILITY`, `DISCOVERY`, `SCA`.
+
+### qps error model — closes not-found detection for this family
+
+`ServiceResponse/responseCode` values, with
+`responseErrorDetails/errorMessage` + `errorResolution` on failure:
+
+| `responseCode` | Meaning |
+|---|---|
+| `SUCCESS` | completed normally |
+| `INVALID_REQUEST` | malformed payload, bad field, or feature not enabled for the subscription |
+| `UNAUTHORIZED` / `INSUFFICIENT_PERMISSION` | bad credentials, expired token, or missing WAS asset permission |
+| **`OBJECT_NOT_FOUND`** | the `<id>` does not exist **or is not in the caller's scope** |
+| `LIMIT_EXCEEDED` | report storage limit, or API rate/concurrency limit |
+
+**This is the not-found signal for the qps families (WAS and AM/tagging)** — the
+provider can map `OBJECT_NOT_FOUND` to "remove from state". Note the scope caveat: an
+object that exists but is outside the caller's scope returns the same code, so a
+permissions problem can masquerade as a deletion. The equivalent for the VMDR FO family
+is still missing (see below).
+
+### Pagination detail
+
+Beyond `hasMoreRecords`/`lastId`, search calls accept a `<preferences>` block:
+`startFromOffset` (default 1), `startFromId`, `limitResults` (default 100, **max 1000**).
+Filter operators: `EQUALS`, `NOT EQUALS`, `CONTAINS`, `GREATER`, `LESSER`, `IN`, `NONE`
+— not every operator is valid on every field.
+
+### Useful for the tenant capability probe
+
+- **`GET /qps/rest/portal/version`** returns installed Portal and per-module versions
+  (WAS, VM, CA, FIM…). This is a better probe primitive than the cheap-list calls
+  proposed in doc 08 — it feature-gates without touching customer data.
+- `X-Powered-By` response header (`Qualys:<POD_ID>:<SUB_UUID>:<USER_UUID>`) can be
+  enabled by Qualys Support for per-subscription call tracing.
+
+### ⚠️ Conflicts with the Quick Reference — Quick Reference treated as authoritative
+
+1. **"Scan again"** — the derived reference gives `POST /launch/was/wasscan/<id>`; the
+   Quick Reference gives **`/qps/rest/3.0/scanagain/was/scan/{scanId}`**, and `qualysdk`
+   independently implements `scanagain/was/scan/{scanId}`. Two independent sources beat
+   one; use `scanagain`, but verify on a tenant.
+2. **Token auth endpoint** — the derived reference gives `/auth/oidc` with
+   `client_id`/`client_secret`/`grant_type=client_credentials`; earlier official
+   material gives `/auth/oauth` and the gateway `/auth`. These may be different flows
+   (OIDC client-credentials vs Qualys-native) rather than a contradiction. `Unverified`
+   — resolve before implementing token auth for WAS.
+3. **Schedule deactivate** — the derived reference gives a dedicated
+   `/deactivate/was/wasscanschedule/<id>`; the Quick Reference shows activate via
+   `update`/`activate` and lists a "Deactivate an existing schedule" heading. Both
+   plausibly exist. `Unverified`.
+
+### Still open for WAS
+
+The **per-occurrence recurrence sub-elements** remain unresolved. The derived reference
+describes only "an `occurrence` block supporting daily/weekly/monthly patterns (mirrors
+the `malwareScheduling` occurrence structure)" — that names the block but not the
+every-N-days/weeks/months fields inside it. `occurrenceType={ONCE|DAILY|WEEKLY|MONTHLY}`,
+`startDate` and `timeZone` are confirmed (§8); the frequency fields still need the
+official WAS guide or a tenant probe.
+
 ## Still not answered by the Quick Reference
 
 The Quick Reference contains **no error/response code table and no API-limit numbers** —
