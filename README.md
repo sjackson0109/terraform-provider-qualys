@@ -10,9 +10,28 @@ A Terraform provider for [Qualys](https://www.qualys.com/) VMDR configuration.
 | `qualys_asset_tag` | Static and dynamic asset tags, shared across VM, AssetView and WAS |
 | `qualys_static_search_list` | Explicit sets of vulnerability QIDs |
 | `qualys_vm_option_profile` | VM scan behaviour: ports, detection depth, performance, authentication |
+| `qualys_network` | Qualys networks, for overlapping IP space |
+| `qualys_ip_registration` | Registers addresses with the subscription and enables them for scanning |
+| `qualys_scan_schedule` | Recurring VM scans |
 | `qualys_gcp_connector` | CloudView GCP connector (see *Deprecation* below) |
 
-Data sources: `qualys_asset_groups`, `qualys_asset_tags`, `qualys_gcp_connector`.
+Data sources: `qualys_asset_groups`, `qualys_asset_tags`, `qualys_networks`,
+`qualys_host_assets`, `qualys_gcp_connector`.
+
+### Operations the provider deliberately does not model
+
+Some Qualys operations are jobs rather than configuration, and modelling them as
+resources would misrepresent them:
+
+- **Launching a scan or report** produces a run with no stable identity;
+  re-running creates a new one rather than updating the old. Use
+  `qualys_scan_schedule` for recurring scans.
+- **Purging host data** is destructive and irreversible. It is available as an
+  opt-in on `qualys_ip_registration` destroy, not as a resource of its own.
+
+Some objects also cannot be deleted through the API at all — networks and
+registered IP addresses among them. Those resources warn on destroy and explain
+what remains, rather than failing or pretending to have removed something.
 
 Full documentation is under [`docs/`](docs/), with runnable configuration in
 [`examples/`](examples/).
