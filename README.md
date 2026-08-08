@@ -13,10 +13,11 @@ A Terraform provider for [Qualys](https://www.qualys.com/) VMDR configuration.
 | `qualys_network` | Qualys networks, for overlapping IP space |
 | `qualys_ip_registration` | Registers addresses with the subscription and enables them for scanning |
 | `qualys_scan_schedule` | Recurring VM scans |
+| `qualys_virtual_scanner` | Virtual scanner appliances, exporting the activation code for VM deployment |
 | `qualys_gcp_connector` | CloudView GCP connector (see *Deprecation* below) |
 
 Data sources: `qualys_asset_groups`, `qualys_asset_tags`, `qualys_networks`,
-`qualys_host_assets`, `qualys_gcp_connector`.
+`qualys_host_assets`, `qualys_scanner_appliances`, `qualys_gcp_connector`.
 
 ### Operations the provider deliberately does not model
 

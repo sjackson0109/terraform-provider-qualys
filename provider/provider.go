@@ -57,11 +57,12 @@ func Provider() *schema.Provider {
 		},
 
 		DataSourcesMap: map[string]*schema.Resource{
-			"qualys_gcp_connector": dataSourceGCPConnector(),
-			"qualys_asset_groups":  dataSourceAssetGroups(),
-			"qualys_asset_tags":    dataSourceAssetTags(),
-			"qualys_networks":      dataSourceNetworks(),
-			"qualys_host_assets":   dataSourceHostAssets(),
+			"qualys_gcp_connector":      dataSourceGCPConnector(),
+			"qualys_asset_groups":       dataSourceAssetGroups(),
+			"qualys_asset_tags":         dataSourceAssetTags(),
+			"qualys_networks":           dataSourceNetworks(),
+			"qualys_host_assets":        dataSourceHostAssets(),
+			"qualys_scanner_appliances": dataSourceScannerAppliances(),
 		},
 
 		ResourcesMap: map[string]*schema.Resource{
@@ -73,6 +74,7 @@ func Provider() *schema.Provider {
 			"qualys_network":            resourceNetwork(),
 			"qualys_ip_registration":    resourceIPRegistration(),
 			"qualys_scan_schedule":      resourceScanSchedule(),
+			"qualys_virtual_scanner":    resourceVirtualScanner(),
 		},
 
 		ConfigureContextFunc: providerConfigure,
