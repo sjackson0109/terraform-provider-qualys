@@ -29,13 +29,17 @@ type WebAppInput struct {
 	TagIDs []string
 }
 
+// tagSimpleList is the wire shape the portal API uses under both "set" and
+// "list" for a tag association: {"TagSimple": [...]}. Named once and reused
+// rather than declared inline at each use site, so a future field addition
+// (a count, a cursor) only needs to change in one place.
+type tagSimpleList struct {
+	TagSimple []tagSimple `json:"TagSimple"`
+}
+
 type webAppTagList struct {
-	Set *struct {
-		TagSimple []tagSimple `json:"TagSimple"`
-	} `json:"set,omitempty"`
-	List *struct {
-		TagSimple []tagSimple `json:"TagSimple"`
-	} `json:"list,omitempty"`
+	Set  *tagSimpleList `json:"set,omitempty"`
+	List *tagSimpleList `json:"list,omitempty"`
 }
 
 type webAppWire struct {
@@ -71,9 +75,7 @@ func webAppInputToWire(in WebAppInput) *webAppWire {
 	for _, id := range in.TagIDs {
 		simples = append(simples, tagSimple{ID: json.Number(id)})
 	}
-	w.Tags = &webAppTagList{Set: &struct {
-		TagSimple []tagSimple `json:"TagSimple"`
-	}{TagSimple: simples}}
+	w.Tags = &webAppTagList{Set: &tagSimpleList{TagSimple: simples}}
 	return w
 }
 
@@ -157,27 +159,16 @@ func (c *Client) SearchWebApps(ctx context.Context, filters *Filters) ([]*WebApp
 }
 
 func decodeWebApps(raw json.RawMessage) ([]*WebApp, error) {
-	if len(raw) == 0 {
-		return nil, nil
-	}
-
-	var list []webAppData
-	if err := json.Unmarshal(raw, &list); err == nil {
-		out := make([]*WebApp, 0, len(list))
-		for _, d := range list {
-			if d.WebApp != nil {
-				out = append(out, d.WebApp.toWebApp())
-			}
+	items := decodeListOrSingle(raw)
+	out := make([]*WebApp, 0, len(items))
+	for _, item := range items {
+		var d webAppData
+		if err := json.Unmarshal(item, &d); err != nil {
+			return nil, fmt.Errorf("qualys qps: decoding web application data: %w", err)
 		}
-		return out, nil
+		if d.WebApp != nil {
+			out = append(out, d.WebApp.toWebApp())
+		}
 	}
-
-	var one webAppData
-	if err := json.Unmarshal(raw, &one); err != nil {
-		return nil, fmt.Errorf("qualys qps: decoding web application data: %w", err)
-	}
-	if one.WebApp == nil {
-		return nil, nil
-	}
-	return []*WebApp{one.WebApp.toWebApp()}, nil
+	return out, nil
 }

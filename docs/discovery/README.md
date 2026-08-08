@@ -139,6 +139,7 @@ the well-grounded part of Phase 4.
 | Scan schedule / VM option profile lookup for existing objects | `provider/data_source_scan_schedules.go`, `provider/data_source_option_profiles.go` |
 | Stale-asset review input (host last-scan time) | `vmdr/hostdetection.go`, `provider/data_source_host_detections.go` |
 | Report template lookup (legacy V1 list, deliberately isolated) | `vmdr/reporttemplate.go` (`request.rawEndpoint`/`legacyEndpoint`), `provider/data_source_report_templates.go` |
+| Domain + netblock lookup (read-only; write parameters unconfirmed) | `vmdr/domain.go`, `provider/data_source_domains.go` |
 
 Still not implemented, and why:
 
@@ -157,6 +158,10 @@ Still not implemented, and why:
   naming its XML output fields (unlike the sibling `report_template_list.php`,
   where a fresh search did). `time_zone_code` stays an unvalidated free-text
   field on `qualys_scan_schedule`; see doc 08.
+- **`qualys_domain`** (write side) — the Domain V2 API's existence, auth
+  requirements and list output are confirmed, and `data.qualys_domains`
+  covers the read side, but no source names the add/update/delete request
+  parameters; see doc 08.
 - **Report resources** — report *schedules* have no create/update/delete API at
   all; report launches are jobs, not configuration.
 - **CloudView → Connector v3 migration** — the existing `qualys_gcp_connector`

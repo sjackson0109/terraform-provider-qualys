@@ -26,6 +26,12 @@ resource "qualys_was_option_profile" "standard" {
 }
 ```
 
+## Server-side defaults
+
+Every field below except `name` is optional and computed: leaving one unset
+lets Qualys apply its own default rather than forcing a specific value, and
+`terraform plan` reflects whatever Qualys assigned after the first apply.
+
 ## A note on `bruteforce_option`
 
 The accepted values for `bruteforce_option` are not confirmed against
