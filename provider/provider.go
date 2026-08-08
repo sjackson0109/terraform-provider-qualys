@@ -60,6 +60,8 @@ func Provider() *schema.Provider {
 			"qualys_gcp_connector": dataSourceGCPConnector(),
 			"qualys_asset_groups":  dataSourceAssetGroups(),
 			"qualys_asset_tags":    dataSourceAssetTags(),
+			"qualys_networks":      dataSourceNetworks(),
+			"qualys_host_assets":   dataSourceHostAssets(),
 		},
 
 		ResourcesMap: map[string]*schema.Resource{
@@ -68,6 +70,8 @@ func Provider() *schema.Provider {
 			"qualys_asset_tag":          resourceAssetTag(),
 			"qualys_static_search_list": resourceStaticSearchList(),
 			"qualys_vm_option_profile":  resourceVMOptionProfile(),
+			"qualys_network":            resourceNetwork(),
+			"qualys_ip_registration":    resourceIPRegistration(),
 		},
 
 		ConfigureContextFunc: providerConfigure,

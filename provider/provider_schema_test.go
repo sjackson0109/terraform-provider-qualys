@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -52,5 +53,46 @@ func TestAssetGroupIsImportable(t *testing.T) {
 	r := Provider().ResourcesMap["qualys_asset_group"]
 	if r == nil || r.Importer == nil {
 		t.Error("qualys_asset_group must be importable so existing groups can be adopted")
+	}
+}
+
+// Two resources model objects the Qualys API cannot delete. Their destroy must
+// warn rather than fail (which would make them un-destroyable) or silently
+// succeed (which would imply the object is gone).
+func TestResourcesWithNoDeleteAPIAreDocumented(t *testing.T) {
+	for _, name := range []string{"qualys_network", "qualys_ip_registration"} {
+		r := Provider().ResourcesMap[name]
+		if r == nil {
+			t.Errorf("%s is not registered", name)
+			continue
+		}
+		if !strings.Contains(r.Description, "does not") {
+			t.Errorf("%s must document that destroy does not remove the object in Qualys", name)
+		}
+	}
+}
+
+// Registering an address is not reversible through the API, so the address set
+// and its network cannot be changed in place.
+func TestIPRegistrationForcesReplacementOnIdentity(t *testing.T) {
+	r := Provider().ResourcesMap["qualys_ip_registration"]
+	if r == nil {
+		t.Fatal("qualys_ip_registration is not registered")
+	}
+	for _, attr := range []string{"ips", "network_id"} {
+		if s := r.Schema[attr]; s == nil || !s.ForceNew {
+			t.Errorf("%s must be ForceNew: the API cannot un-register an address", attr)
+		}
+	}
+}
+
+// Purging is destructive and irreversible, so it must be opt-in.
+func TestPurgeOnDestroyDefaultsOff(t *testing.T) {
+	s := Provider().ResourcesMap["qualys_ip_registration"].Schema["purge_on_destroy"]
+	if s == nil {
+		t.Fatal("purge_on_destroy is not defined")
+	}
+	if s.Default != false {
+		t.Error("purge_on_destroy must default to false; purging deletes vulnerability history")
 	}
 }
