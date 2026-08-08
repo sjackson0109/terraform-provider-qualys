@@ -126,6 +126,11 @@ type request struct {
 	params url.Values
 	// method defaults to POST. Reads may use GET.
 	method string
+	// rawEndpoint overrides capability/path version-prefixed URL building
+	// entirely, for the handful of legacy /msp/*.php endpoints that predate
+	// /api/<version>/fo/ and are kept only because they are the sole surface
+	// for what they return (doc 09 §18). Use legacyEndpoint to build one.
+	rawEndpoint string
 	// nonIdempotent marks a call whose repetition is unsafe: creates (which would
 	// duplicate the object or orphan one outside state) and destructive actions
 	// such as delete and purge. Such calls are never retried automatically once
@@ -146,7 +151,10 @@ type request struct {
 func (c *Client) do(ctx context.Context, req request, out interface{}) error {
 	c.warnIfDeprecated(req.capability)
 
-	endpoint := c.endpoint(req.capability, req.path)
+	endpoint := req.rawEndpoint
+	if endpoint == "" {
+		endpoint = c.endpoint(req.capability, req.path)
+	}
 
 	form := url.Values{}
 	for k, vs := range req.params {
@@ -257,6 +265,13 @@ func (c *Client) roundTrip(ctx context.Context, method, endpoint string, form ur
 func (c *Client) endpoint(cap capability, path string) string {
 	v := versionFor(cap)
 	return fmt.Sprintf("%s/api/%s/fo/%s", c.baseURL.String(), v, strings.TrimLeft(path, "/"))
+}
+
+// legacyEndpoint builds the full URL for a V1 /msp/*.php script. These predate
+// the versioned /api/<version>/fo/ family entirely and are not subject to its
+// version selection or deprecation warnings.
+func (c *Client) legacyEndpoint(script string) string {
+	return fmt.Sprintf("%s/msp/%s", c.baseURL.String(), strings.TrimLeft(script, "/"))
 }
 
 func (c *Client) warnIfDeprecated(cap capability) {

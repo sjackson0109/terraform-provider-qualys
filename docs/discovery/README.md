@@ -138,6 +138,7 @@ the well-grounded part of Phase 4.
 | WAS web application + option profile CRUD | `qps/webapp.go`, `qps/wasoptionprofile.go`, `provider/resource_web_application.go`, `provider/resource_was_option_profile.go` |
 | Scan schedule / VM option profile lookup for existing objects | `provider/data_source_scan_schedules.go`, `provider/data_source_option_profiles.go` |
 | Stale-asset review input (host last-scan time) | `vmdr/hostdetection.go`, `provider/data_source_host_detections.go` |
+| Report template lookup (legacy V1 list, deliberately isolated) | `vmdr/reporttemplate.go` (`request.rawEndpoint`/`legacyEndpoint`), `provider/data_source_report_templates.go` |
 
 Still not implemented, and why:
 
@@ -151,6 +152,11 @@ Still not implemented, and why:
   (doc 11 §8), but the per-occurrence frequency sub-elements (every N
   days/weeks/months) remain `Unverified`, and a schedule resource cannot omit
   its own recurrence.
+- **`data.qualys_time_zone_codes`** — the endpoint (`time_zone_code_list.php`)
+  and its DTD name are confirmed, but three research passes found no source
+  naming its XML output fields (unlike the sibling `report_template_list.php`,
+  where a fresh search did). `time_zone_code` stays an unvalidated free-text
+  field on `qualys_scan_schedule`; see doc 08.
 - **Report resources** — report *schedules* have no create/update/delete API at
   all; report launches are jobs, not configuration.
 - **CloudView → Connector v3 migration** — the existing `qualys_gcp_connector`

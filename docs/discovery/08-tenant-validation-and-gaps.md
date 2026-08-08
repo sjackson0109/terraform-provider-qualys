@@ -215,6 +215,16 @@ See **[doc 11](11-verified-parameter-reference.md)** for the full parameter list
   `formRecord` credential fields). **Gates `qualys_was_auth_record` entirely** — build
   it once the WAS API User Guide or a tenant probe closes this, not from an assumed
   shape.
+- **`time_zone_code_list.php` output field names.** The endpoint's existence and its
+  DTD name (`time_zone_code_list.dtd`) are confirmed (doc 03 §8), and it is the source
+  of the `time_zone_code` values `qualys_scan_schedule` accepts. Three research passes
+  (this discovery's original pass, plus two fresh web searches specifically for this
+  gap) found no page or sample output naming its XML fields — unlike the sibling
+  `report_template_list.php`, whose fields a fresh search *did* surface (doc 11-style
+  evidence: official page + sample XML). **Gates `data.qualys_time_zone_codes`** —
+  `time_zone_code` stays a free-text string on `qualys_scan_schedule` (unvalidated
+  client-side, exactly like `bruteforce_option` on `qualys_was_option_profile`) rather
+  than being checked against a guessed enum.
 - Tagging: `CLOUD_ASSET` ruleType; `lastVulnScan` hostasset filter.
 - V2 user API existence (`/api/2.0/fo/user/` — third-party claim only).
 - Formal deprecation status of `/msp/scheduled_scans.php`, `/msp/user.php`,
