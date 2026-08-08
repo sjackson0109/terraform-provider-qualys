@@ -91,6 +91,11 @@ func TestUpdateAssetGroupIsAuthoritative(t *testing.T) {
 	if _, present := form["set_domains"]; !present {
 		t.Error("set_domains must be sent even when empty so members can be cleared")
 	}
+	// The same applies to the CVSS scalars: omitting an empty one would keep the
+	// old rating server-side while state records the cleared value.
+	if _, present := form["set_cvss_enviro_cdp"]; !present {
+		t.Error("set_cvss_enviro_cdp must be sent even when empty so it can be cleared")
+	}
 }
 
 func TestUpdateAssetGroupDoesNotAttemptNetworkChange(t *testing.T) {

@@ -31,7 +31,7 @@ func dataSourceAssetGroups() *schema.Resource {
 				Optional: true,
 				Elem:     &schema.Schema{Type: schema.TypeString},
 			},
-			"title_regex": {
+			"title_contains": {
 				Description: "Filter results to groups whose title contains this substring " +
 					"(case-insensitive). Applied client-side, after the API call.",
 				Type:     schema.TypeString,
@@ -78,7 +78,7 @@ func dataSourceAssetGroupsRead(ctx context.Context, d *schema.ResourceData, meta
 		return diag.FromErr(err)
 	}
 
-	if needle := strings.ToLower(d.Get("title_regex").(string)); needle != "" {
+	if needle := strings.ToLower(d.Get("title_contains").(string)); needle != "" {
 		filtered := groups[:0]
 		for _, g := range groups {
 			if strings.Contains(strings.ToLower(g.Title), needle) {

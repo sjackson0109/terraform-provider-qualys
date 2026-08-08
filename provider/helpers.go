@@ -3,6 +3,7 @@ package provider
 import (
 	"fmt"
 	"regexp"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 
@@ -142,4 +143,21 @@ func ipSetSchema(description string, required bool) *schema.Schema {
 func hashNormalizedIP(v interface{}) int {
 	s, _ := v.(string)
 	return schema.HashString(vmdr.NormalizeIPEntry(s))
+}
+
+// noWireDelimiters rejects values containing the characters the appliance API
+// uses as field and entry separators. A VLAN or route field containing ',' or
+// '|' would split into extra fields on the wire and misconfigure the
+// appliance's networking; the client validates too, but failing at plan time is
+// kinder than at apply.
+func noWireDelimiters(v interface{}, key string) ([]string, []error) {
+	s, ok := v.(string)
+	if !ok {
+		return nil, []error{fmt.Errorf("%s must be a string", key)}
+	}
+	if strings.ContainsAny(s, ",|") {
+		return nil, []error{fmt.Errorf(
+			"%s must not contain ',' or '|'; the Qualys API uses them as separators", key)}
+	}
+	return nil, nil
 }

@@ -38,6 +38,7 @@ resource "qualys_scan_schedule" "weekly_tagged" {
   frequency_weeks = 1
   weekdays        = ["saturday"]
 
+  start_date     = "01/17/2026"
   start_hour     = 23
   start_minute   = 0
   time_zone_code = "US-NY"

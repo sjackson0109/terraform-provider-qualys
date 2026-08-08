@@ -114,8 +114,10 @@ var notFoundPhrases = []string{
 	"not found",
 	"does not exist",
 	"no such",
-	"unknown id",
-	"invalid id",
+	// "invalid id" and "unknown id" are deliberately absent: those are
+	// parameter-validation messages, not assertions that the object is gone.
+	// Matching them would remove a live resource from state over a malformed
+	// request, and the next apply would create a duplicate.
 }
 
 func (e *Error) isNotFound() bool {

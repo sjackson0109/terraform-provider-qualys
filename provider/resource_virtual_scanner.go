@@ -77,10 +77,10 @@ func resourceVirtualScanner() *schema.Resource {
 				Optional: true,
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
-						"vlan_id": {Type: schema.TypeString, Required: true},
-						"ip":      {Type: schema.TypeString, Required: true},
-						"netmask": {Type: schema.TypeString, Required: true},
-						"name":    {Type: schema.TypeString, Required: true},
+						"vlan_id": {Type: schema.TypeString, Required: true, ValidateFunc: noWireDelimiters},
+						"ip":      {Type: schema.TypeString, Required: true, ValidateFunc: noWireDelimiters},
+						"netmask": {Type: schema.TypeString, Required: true, ValidateFunc: noWireDelimiters},
+						"name":    {Type: schema.TypeString, Required: true, ValidateFunc: noWireDelimiters},
 					},
 				},
 			},
@@ -91,10 +91,10 @@ func resourceVirtualScanner() *schema.Resource {
 				Optional: true,
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
-						"ip":      {Type: schema.TypeString, Required: true},
-						"netmask": {Type: schema.TypeString, Required: true},
-						"gateway": {Type: schema.TypeString, Required: true},
-						"name":    {Type: schema.TypeString, Required: true},
+						"ip":      {Type: schema.TypeString, Required: true, ValidateFunc: noWireDelimiters},
+						"netmask": {Type: schema.TypeString, Required: true, ValidateFunc: noWireDelimiters},
+						"gateway": {Type: schema.TypeString, Required: true, ValidateFunc: noWireDelimiters},
+						"name":    {Type: schema.TypeString, Required: true, ValidateFunc: noWireDelimiters},
 					},
 				},
 			},

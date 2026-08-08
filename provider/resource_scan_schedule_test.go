@@ -15,6 +15,7 @@ func validSchedule() map[string]interface{} {
 		"use_default_scanner": true,
 		"occurrence":          "daily",
 		"frequency_days":      1,
+		"start_date":          "01/15/2026",
 		"start_hour":          2,
 		"start_minute":        30,
 		"time_zone_code":      "US-NY",

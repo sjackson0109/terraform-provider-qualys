@@ -181,9 +181,13 @@ func resourceScanSchedule() *schema.Resource {
 
 			// Time
 			"start_date": {
-				Description: "Date of the first run, as `MM/DD/YYYY`.",
-				Type:        schema.TypeString,
-				Optional:    true,
+				Description: "Date of the first run, as `MM/DD/YYYY`.\n\n" +
+					"Required because the Qualys API only accepts the schedule time as a " +
+					"complete group — start date, hour, minute, timezone and DST flag " +
+					"together — and an update omitting any of them is rejected or silently " +
+					"ignored.",
+				Type:     schema.TypeString,
+				Required: true,
 			},
 			"start_hour": {
 				Type:         schema.TypeInt,

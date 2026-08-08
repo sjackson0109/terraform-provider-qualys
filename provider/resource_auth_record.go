@@ -86,6 +86,13 @@ func resourceAuthRecord(recordType vmdr.AuthRecordType, label string, extra map[
 		Schema: s,
 
 		CustomizeDiff: func(ctx context.Context, d *schema.ResourceDiff, meta interface{}) error {
+			// A value fed from another resource (password = random_password.x.result
+			// is the canonical case) is unknown at plan time and reads as "". The
+			// check must wait for apply in that case, or a perfectly valid first
+			// plan fails.
+			if !d.NewValueKnown("password") || !d.NewValueKnown("vault_id") {
+				return nil
+			}
 			// A record with neither a password nor a vault cannot authenticate.
 			// The API accepts it, and the scan then silently falls back to
 			// unauthenticated — worse than an error, because the scan still

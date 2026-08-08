@@ -218,8 +218,12 @@ func (e *Error) Is(target error) bool {
 func (c *Client) call(ctx context.Context, method, path string, body interface{}, out *ServiceResponse, nonIdempotent bool) error {
 	var payload []byte
 	if body != nil {
+		// The portal API nests the request under a ServiceRequest key:
+		// {"ServiceRequest": {...}}. Marshalling the body bare produces a payload
+		// the real service ignores, so the wrapper is applied here, once, rather
+		// than trusting every caller to remember it.
 		var err error
-		payload, err = json.Marshal(body)
+		payload, err = json.Marshal(map[string]interface{}{"ServiceRequest": body})
 		if err != nil {
 			return fmt.Errorf("qualys qps: encoding request: %w", err)
 		}
@@ -237,14 +241,12 @@ func (c *Client) call(ctx context.Context, method, path string, body interface{}
 			continue
 		}
 
-		var sr ServiceResponse
-		// A body that will not decode is still worth reporting with its status.
-		_ = json.Unmarshal(respBody, &sr)
+		sr := decodeServiceResponse(respBody)
 
-		apiErr := classify(status, &sr, respBody, path)
+		apiErr := classify(status, sr, respBody, path)
 		if apiErr == nil {
 			if out != nil {
-				*out = sr
+				*out = *sr
 			}
 			return nil
 		}
@@ -284,11 +286,11 @@ func (c *Client) roundTrip(ctx context.Context, method, path string, payload []b
 	}
 
 	// JSON on both sides. The portal APIs default to XML and switch to JSON only
-	// when both headers are present, so both are always set.
+	// when both headers are present, so both are always set — including on GET
+	// and body-less POST calls, where omitting Content-Type would flip the
+	// response back to XML.
 	req.Header.Set("Accept", "application/json")
-	if payload != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
+	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Requested-With", c.cfg.UserAgent)
 	req.Header.Set("User-Agent", c.cfg.UserAgent)
 	req.SetBasicAuth(c.cfg.Username, c.cfg.Password)
@@ -304,6 +306,26 @@ func (c *Client) roundTrip(ctx context.Context, method, path string, payload []b
 		return resp.StatusCode, nil, resp.Header, err
 	}
 	return resp.StatusCode, b, resp.Header, nil
+}
+
+// decodeServiceResponse unwraps a portal API body.
+//
+// The documented shape nests the payload under a ServiceResponse key:
+// {"ServiceResponse": {"responseCode": ...}}. The bare shape is also accepted,
+// so a response that arrives unwrapped still decodes instead of presenting as
+// an empty responseCode — which classify would report as a failure even on a
+// 200. A body that decodes as neither is left zeroed and reported with its
+// HTTP status.
+func decodeServiceResponse(body []byte) *ServiceResponse {
+	var outer struct {
+		ServiceResponse ServiceResponse `json:"ServiceResponse"`
+	}
+	if err := json.Unmarshal(body, &outer); err == nil && outer.ServiceResponse.ResponseCode != "" {
+		return &outer.ServiceResponse
+	}
+	var sr ServiceResponse
+	_ = json.Unmarshal(body, &sr)
+	return &sr
 }
 
 func classify(status int, sr *ServiceResponse, raw []byte, path string) error {

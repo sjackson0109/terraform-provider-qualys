@@ -223,6 +223,10 @@ type VLAN struct {
 	Name    string
 }
 
+func (v VLAN) validate() error {
+	return checkDelimiters("vlan", v.ID, v.IP, v.Netmask, v.Name)
+}
+
 func (v VLAN) encode() string {
 	return strings.Join([]string{v.ID, v.IP, v.Netmask, v.Name}, "|")
 }
@@ -235,8 +239,26 @@ type StaticRoute struct {
 	Name    string
 }
 
+func (r StaticRoute) validate() error {
+	return checkDelimiters("static route", r.IP, r.Netmask, r.Gateway, r.Name)
+}
+
 func (r StaticRoute) encode() string {
 	return strings.Join([]string{r.IP, r.Netmask, r.Gateway, r.Name}, "|")
+}
+
+// checkDelimiters rejects field values containing the wire format's own
+// separators. The API takes VLANs and routes as pipe-delimited fields joined by
+// commas; a name containing either character would split into extra fields and
+// misconfigure the appliance's networking rather than fail cleanly.
+func checkDelimiters(kind string, fields ...string) error {
+	for _, f := range fields {
+		if strings.ContainsAny(f, ",|") {
+			return fmt.Errorf("qualys vmdr: %s field %q must not contain ',' or '|'; "+
+				"the API uses those as field separators", kind, f)
+		}
+	}
+	return nil
 }
 
 // UpdateAppliance applies configuration to an appliance.
@@ -263,6 +285,9 @@ func (c *Client) UpdateAppliance(ctx context.Context, id string, up ApplianceUpd
 	if up.SetVLANs {
 		encoded := make([]string, 0, len(up.VLANs))
 		for _, v := range up.VLANs {
+			if err := v.validate(); err != nil {
+				return err
+			}
 			encoded = append(encoded, v.encode())
 		}
 		params.Set("set_vlans", strings.Join(encoded, ","))
@@ -270,6 +295,9 @@ func (c *Client) UpdateAppliance(ctx context.Context, id string, up ApplianceUpd
 	if up.SetRoutes {
 		encoded := make([]string, 0, len(up.Routes))
 		for _, r := range up.Routes {
+			if err := r.validate(); err != nil {
+				return err
+			}
 			encoded = append(encoded, r.encode())
 		}
 		params.Set("set_routes", strings.Join(encoded, ","))

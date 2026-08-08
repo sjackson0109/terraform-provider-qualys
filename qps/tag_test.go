@@ -37,8 +37,8 @@ func TestCreateTagSendsJSONEnvelope(t *testing.T) {
 		gotContentType = r.Header.Get("Content-Type")
 		b, _ := io.ReadAll(r.Body)
 		_ = json.Unmarshal(b, &gotBody)
-		fmt.Fprint(w, `{"responseCode":"SUCCESS","count":1,
-		  "data":[{"Tag":{"id":12345,"name":"prod","ruleType":"STATIC"}}]}`)
+		fmt.Fprint(w, `{"ServiceResponse":{"responseCode":"SUCCESS","count":1,
+		  "data":[{"Tag":{"id":12345,"name":"prod","ruleType":"STATIC"}}]}}`)
 	}))
 	defer srv.Close()
 
@@ -56,16 +56,22 @@ func TestCreateTagSendsJSONEnvelope(t *testing.T) {
 	if gotAccept != "application/json" || gotContentType != "application/json" {
 		t.Errorf("Accept=%q Content-Type=%q; both are required for JSON", gotAccept, gotContentType)
 	}
-	if _, ok := gotBody["data"]; !ok {
-		t.Errorf("request body missing data envelope: %v", gotBody)
+	// The portal API requires the request nested under a ServiceRequest key;
+	// a bare {"data": ...} payload is ignored by the real service.
+	sreq, ok := gotBody["ServiceRequest"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("request body missing the ServiceRequest wrapper: %v", gotBody)
+	}
+	if _, ok := sreq["data"]; !ok {
+		t.Errorf("ServiceRequest missing data envelope: %v", sreq)
 	}
 }
 
 func TestObjectNotFoundIsRecognised(t *testing.T) {
 	c, srv := testClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
-		fmt.Fprint(w, `{"responseCode":"OBJECT_NOT_FOUND",
-		  "responseErrorDetails":{"errorMessage":"No Tag found for id 999"}}`)
+		fmt.Fprint(w, `{"ServiceResponse":{"responseCode":"OBJECT_NOT_FOUND",
+		  "responseErrorDetails":{"errorMessage":"No Tag found for id 999"}}}`)
 	}))
 	defer srv.Close()
 
@@ -78,7 +84,7 @@ func TestObjectNotFoundIsRecognised(t *testing.T) {
 func TestUnauthorizedIsRecognised(t *testing.T) {
 	c, srv := testClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
-		fmt.Fprint(w, `{"responseCode":"UNAUTHORIZED"}`)
+		fmt.Fprint(w, `{"ServiceResponse":{"responseCode":"UNAUTHORIZED"}}`)
 	}))
 	defer srv.Close()
 
@@ -94,20 +100,23 @@ func TestSearchFollowsIDCursor(t *testing.T) {
 
 	c, srv := testClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		pages++
-		var req ServiceRequest
+		var wrapped struct {
+			ServiceRequest ServiceRequest `json:"ServiceRequest"`
+		}
 		b, _ := io.ReadAll(r.Body)
-		_ = json.Unmarshal(b, &req)
+		_ = json.Unmarshal(b, &wrapped)
+		req := wrapped.ServiceRequest
 
 		if pages == 1 {
-			fmt.Fprint(w, `{"responseCode":"SUCCESS","count":1,"hasMoreRecords":"true","lastId":100,
-			  "data":[{"Tag":{"id":100,"name":"a"}}]}`)
+			fmt.Fprint(w, `{"ServiceResponse":{"responseCode":"SUCCESS","count":1,"hasMoreRecords":"true","lastId":100,
+			  "data":[{"Tag":{"id":100,"name":"a"}}]}}`)
 			return
 		}
 		if req.Filters != nil {
 			secondCriteria = req.Filters.Criteria
 		}
-		fmt.Fprint(w, `{"responseCode":"SUCCESS","count":1,"hasMoreRecords":"false",
-		  "data":[{"Tag":{"id":101,"name":"b"}}]}`)
+		fmt.Fprint(w, `{"ServiceResponse":{"responseCode":"SUCCESS","count":1,"hasMoreRecords":"false",
+		  "data":[{"Tag":{"id":101,"name":"b"}}]}}`)
 	}))
 	defer srv.Close()
 
@@ -144,8 +153,8 @@ func TestSearchFollowsIDCursor(t *testing.T) {
 
 func TestSearchRefusesPartialResultsOnRunaway(t *testing.T) {
 	c, srv := testClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprint(w, `{"responseCode":"SUCCESS","count":1,"hasMoreRecords":"true","lastId":1,
-		  "data":[{"Tag":{"id":1,"name":"a"}}]}`)
+		fmt.Fprint(w, `{"ServiceResponse":{"responseCode":"SUCCESS","count":1,"hasMoreRecords":"true","lastId":1,
+		  "data":[{"Tag":{"id":1,"name":"a"}}]}}`)
 	}))
 	defer srv.Close()
 
@@ -160,7 +169,7 @@ func TestSearchRefusesPartialResultsOnRunaway(t *testing.T) {
 // a configuration that omits the attribute.
 func TestRootTagParentNormalisesToEmpty(t *testing.T) {
 	c, srv := testClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprint(w, `{"responseCode":"SUCCESS","data":[{"Tag":{"id":5,"name":"root","parentTagId":0}}]}`)
+		fmt.Fprint(w, `{"ServiceResponse":{"responseCode":"SUCCESS","data":[{"Tag":{"id":5,"name":"root","parentTagId":0}}]}}`)
 	}))
 	defer srv.Close()
 
@@ -215,7 +224,7 @@ func TestUpdateTagSendsClearedFields(t *testing.T) {
 	c, srv := testClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		b, _ := io.ReadAll(r.Body)
 		_ = json.Unmarshal(b, &body)
-		fmt.Fprint(w, `{"responseCode":"SUCCESS"}`)
+		fmt.Fprint(w, `{"ServiceResponse":{"responseCode":"SUCCESS"}}`)
 	}))
 	defer srv.Close()
 
@@ -223,7 +232,8 @@ func TestUpdateTagSendsClearedFields(t *testing.T) {
 		t.Fatalf("UpdateTag: %v", err)
 	}
 
-	data, _ := body["data"].(map[string]interface{})
+	sreq, _ := body["ServiceRequest"].(map[string]interface{})
+	data, _ := sreq["data"].(map[string]interface{})
 	tag, _ := data["Tag"].(map[string]interface{})
 	if tag == nil {
 		t.Fatalf("no Tag in payload: %v", body)
@@ -235,5 +245,41 @@ func TestUpdateTagSendsClearedFields(t *testing.T) {
 	// rejects it, so it is omitted rather than sent blank.
 	if _, present := tag["ruleType"]; present {
 		t.Error("an empty ruleType should be omitted, not sent")
+	}
+}
+
+// The documented response shape nests under ServiceResponse; the bare shape is
+// tolerated too, so a service speaking either way decodes rather than failing
+// with an empty responseCode.
+func TestBareResponseShapeStillDecodes(t *testing.T) {
+	c, srv := testClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"responseCode":"SUCCESS","data":[{"Tag":{"id":7,"name":"x"}}]}`)
+	}))
+	defer srv.Close()
+
+	tag, err := c.GetTag(context.Background(), "7")
+	if err != nil {
+		t.Fatalf("GetTag: %v", err)
+	}
+	if tag.ID != "7" {
+		t.Errorf("ID = %q", tag.ID)
+	}
+}
+
+// GET and body-less POST calls must still send Content-Type: the portal API
+// only answers in JSON when both negotiation headers are present.
+func TestBodylessCallsStillNegotiateJSON(t *testing.T) {
+	var gotContentType string
+	c, srv := testClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotContentType = r.Header.Get("Content-Type")
+		fmt.Fprint(w, `{"ServiceResponse":{"responseCode":"SUCCESS","data":[{"Tag":{"id":7,"name":"x"}}]}}`)
+	}))
+	defer srv.Close()
+
+	if _, err := c.GetTag(context.Background(), "7"); err != nil {
+		t.Fatalf("GetTag: %v", err)
+	}
+	if gotContentType != "application/json" {
+		t.Errorf("Content-Type = %q on a GET; the response would come back as XML", gotContentType)
 	}
 }

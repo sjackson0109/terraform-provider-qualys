@@ -73,3 +73,16 @@ func TestAssetTagColourValidation(t *testing.T) {
 		t.Error("expected a non-hex colour to be rejected")
 	}
 }
+
+// rule_text fed from a computed attribute is unknown at plan time; validating
+// it as empty would fail a config that becomes valid at apply.
+func TestAssetTagAllowsUnknownRuleTextAtPlanTime(t *testing.T) {
+	err := diffFor(t, resourceAssetTag(), map[string]interface{}{
+		"name":      "linux",
+		"rule_type": "OS_REGEX",
+		"rule_text": unknownValue,
+	})
+	if err != nil {
+		t.Fatalf("an unknown rule_text must not fail the plan: %v", err)
+	}
+}

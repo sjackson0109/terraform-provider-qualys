@@ -1,10 +1,10 @@
 package vmdr
 
 import (
+	"bytes"
 	"encoding/xml"
 	"fmt"
 	"io"
-	"strings"
 )
 
 // maxResponseBytes caps how much of a response body we will decode. VMDR list
@@ -62,5 +62,5 @@ func decodeXML(r io.Reader, v interface{}) error {
 // whole (rather than streamed) because the error model needs to inspect a failed
 // body after a typed decode has already been attempted — see classifyResponse.
 func decodeXMLBytes(b []byte, v interface{}) error {
-	return decodeXML(strings.NewReader(string(b)), v)
+	return decodeXML(bytes.NewReader(b), v)
 }
