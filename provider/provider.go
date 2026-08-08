@@ -64,6 +64,7 @@ func Provider() *schema.Provider {
 			"qualys_host_assets":        dataSourceHostAssets(),
 			"qualys_scanner_appliances": dataSourceScannerAppliances(),
 			"qualys_vaults":             dataSourceVaults(),
+			"qualys_web_applications":   dataSourceWebApplications(),
 		},
 
 		ResourcesMap: map[string]*schema.Resource{
@@ -78,6 +79,8 @@ func Provider() *schema.Provider {
 			"qualys_virtual_scanner":     resourceVirtualScanner(),
 			"qualys_auth_record_windows": resourceWindowsAuthRecord(),
 			"qualys_auth_record_unix":    resourceUnixAuthRecord(),
+			"qualys_web_application":     resourceWebApplication(),
+			"qualys_was_option_profile":  resourceWASOptionProfile(),
 		},
 
 		ConfigureContextFunc: providerConfigure,

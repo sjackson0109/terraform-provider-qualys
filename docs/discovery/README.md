@@ -110,7 +110,8 @@ snippets). Consequences:
 
 ## Implementation status
 
-Phases 0–3 of the sequence in [doc 09](09-mvp-sequence.md) are implemented.
+Phases 0–3 of the sequence in [doc 09](09-mvp-sequence.md) are implemented, plus
+the well-grounded part of Phase 4.
 
 | Discovery finding | Where it landed |
 |---|---|
@@ -134,12 +135,20 @@ Phases 0–3 of the sequence in [doc 09](09-mvp-sequence.md) are implemented.
 | Credentials are write-only; vaults preferred | `provider/resource_auth_record.go` |
 | One tag tree across VM, AssetView and WAS | single `qualys_asset_tag` |
 | CIDR accepted, hyphenated ranges on the wire | `vmdr/ipset.go` + set hashing |
+| WAS web application + option profile CRUD | `qps/webapp.go`, `qps/wasoptionprofile.go`, `provider/resource_web_application.go`, `provider/resource_was_option_profile.go` |
 
 Still not implemented, and why:
 
-- **WAS resources** (Phase 4) — the `qps` client is in place and used for
-  tagging, so these are additive. The `wasscanschedule` recurrence sub-elements
-  remain `Unverified` (doc 08).
+- **`qualys_was_auth_record`** — `webappauthrecord` create/get/update/delete/search
+  are confirmed to exist and secrets are confirmed masked on read, but no source
+  obtained during discovery surfaces the actual field names for the
+  form/server/Selenium/OAuth2 credential payload. Per this discovery's evidence
+  policy, a credential-bearing resource is not built on a guessed wire schema;
+  see doc 08's `Unverified` list.
+- **`qualys_was_scan_schedule`** — the element model is otherwise confirmed
+  (doc 11 §8), but the per-occurrence frequency sub-elements (every N
+  days/weeks/months) remain `Unverified`, and a schedule resource cannot omit
+  its own recurrence.
 - **Report resources** — report *schedules* have no create/update/delete API at
   all; report launches are jobs, not configuration.
 - **CloudView → Connector v3 migration** — the existing `qualys_gcp_connector`
