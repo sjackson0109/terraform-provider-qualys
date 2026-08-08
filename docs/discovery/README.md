@@ -137,6 +137,7 @@ the well-grounded part of Phase 4.
 | CIDR accepted, hyphenated ranges on the wire | `vmdr/ipset.go` + set hashing |
 | WAS web application + option profile CRUD | `qps/webapp.go`, `qps/wasoptionprofile.go`, `provider/resource_web_application.go`, `provider/resource_was_option_profile.go` |
 | Scan schedule / VM option profile lookup for existing objects | `provider/data_source_scan_schedules.go`, `provider/data_source_option_profiles.go` |
+| Stale-asset review input (host last-scan time) | `vmdr/hostdetection.go`, `provider/data_source_host_detections.go` |
 
 Still not implemented, and why:
 

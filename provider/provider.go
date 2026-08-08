@@ -67,6 +67,7 @@ func Provider() *schema.Provider {
 			"qualys_web_applications":   dataSourceWebApplications(),
 			"qualys_scan_schedules":     dataSourceScanSchedules(),
 			"qualys_option_profiles":    dataSourceOptionProfiles(),
+			"qualys_host_detections":    dataSourceHostDetections(),
 		},
 
 		ResourcesMap: map[string]*schema.Resource{
