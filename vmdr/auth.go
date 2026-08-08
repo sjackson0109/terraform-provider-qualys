@@ -183,10 +183,11 @@ func (c *Client) CreateAuthRecord(ctx context.Context, t AuthRecordType, in Auth
 
 	var out simpleReturn
 	if err := c.do(ctx, request{
-		capability: capAuth,
-		path:       authPath(t),
-		action:     "create",
-		params:     params,
+		capability:    capAuth,
+		path:          authPath(t),
+		action:        "create",
+		params:        params,
+		nonIdempotent: true, // creating twice would duplicate the object
 	}, &out); err != nil {
 		return "", err
 	}
@@ -235,11 +236,11 @@ func (c *Client) DeleteAuthRecord(ctx context.Context, t AuthRecordType, id stri
 	params := url.Values{}
 	params.Set("ids", id)
 	return c.do(ctx, request{
-		capability:  capAuth,
-		path:        authPath(t),
-		action:      "delete",
-		params:      params,
-		destructive: true,
+		capability:    capAuth,
+		path:          authPath(t),
+		action:        "delete",
+		params:        params,
+		nonIdempotent: true,
 	}, nil)
 }
 

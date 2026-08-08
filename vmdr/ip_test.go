@@ -167,3 +167,44 @@ func TestNetworkCreateAndList(t *testing.T) {
 		t.Errorf("network = %+v", n)
 	}
 }
+
+// data_scope and friends narrow what is purged, not which hosts. Treating them
+// as selectors would let a filter-only input through as a subscription-wide
+// purge.
+func TestPurgeGuardCountsOnlyHostSelectors(t *testing.T) {
+	c, srv := testClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Error("purge was dispatched without a host selector")
+	}))
+	defer srv.Close()
+
+	for _, in := range []PurgeInput{
+		{DataScope: "vm"},
+		{ComplianceEnabled: true},
+		{OSPattern: ".*"},
+		{NoVMScanSince: "2020-01-01"},
+		{NetworkIDs: []string{"7343"}},
+	} {
+		if err := c.PurgeHosts(context.Background(), in); err == nil {
+			t.Errorf("expected an error for filter-only purge input %+v", in)
+		}
+	}
+}
+
+func TestPurgeAcceptsAHostSelector(t *testing.T) {
+	var dispatched bool
+	c, srv := testClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		dispatched = true
+		fmt.Fprint(w, `<BATCH_RETURN><RESPONSE><BATCH_LIST><BATCH>
+		  <TEXT>Hosts Queued for Purging</TEXT></BATCH></BATCH_LIST></RESPONSE></BATCH_RETURN>`)
+	}))
+	defer srv.Close()
+
+	if err := c.PurgeHosts(context.Background(), PurgeInput{
+		AssetGroupIDs: []string{"4021975"}, DataScope: "vm",
+	}); err != nil {
+		t.Fatalf("PurgeHosts: %v", err)
+	}
+	if !dispatched {
+		t.Error("a purge with a host selector should be dispatched")
+	}
+}

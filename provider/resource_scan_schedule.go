@@ -57,12 +57,7 @@ func resourceScanSchedule() *schema.Resource {
 			},
 
 			// Targets
-			"ips": {
-				Description: "Addresses, ranges or CIDR blocks to scan.",
-				Type:        schema.TypeSet,
-				Optional:    true,
-				Elem:        &schema.Schema{Type: schema.TypeString},
-			},
+			"ips": ipSetSchema("Addresses, ranges or CIDR blocks to scan.", false),
 			"asset_group_ids": {
 				Type:     schema.TypeSet,
 				Optional: true,
@@ -87,11 +82,7 @@ func resourceScanSchedule() *schema.Resource {
 				Default:      "any",
 				ValidateFunc: validation.StringInSlice([]string{"all", "any"}, false),
 			},
-			"exclude_ips": {
-				Type:     schema.TypeSet,
-				Optional: true,
-				Elem:     &schema.Schema{Type: schema.TypeString},
-			},
+			"exclude_ips": ipSetSchema("Addresses, ranges or CIDR blocks to exclude.", false),
 			"network_id": {
 				Description: "Qualys network to scan within. Declare this explicitly.",
 				Type:        schema.TypeString,
@@ -398,22 +389,33 @@ func resourceScanScheduleRead(ctx context.Context, d *schema.ResourceData, meta 
 		return diag.FromErr(err)
 	}
 
-	return diag.FromErr(setAll(d, map[string]interface{}{
-		"title":                s.Title,
-		"active":               s.Active.Enabled(),
-		"active_state":         int(s.Active),
-		"option_profile_title": s.OptionProfileTitle,
-		"occurrence":           s.Occurrence,
-		"frequency_days":       s.FrequencyDays,
-		"frequency_weeks":      s.FrequencyWeeks,
-		"frequency_months":     s.FrequencyMonths,
-		"day_of_month":         s.DayOfMonth,
-		"week_of_month":        s.WeekOfMonth,
-		"start_hour":           s.StartHour,
-		"start_minute":         s.StartMinute,
-		"time_zone_code":       s.TimeZoneCode,
-		"observe_dst":          s.ObserveDST,
-	}))
+	values := map[string]interface{}{
+		"title":            s.Title,
+		"active":           s.Active.Enabled(),
+		"active_state":     int(s.Active),
+		"occurrence":       s.Occurrence,
+		"frequency_days":   s.FrequencyDays,
+		"frequency_weeks":  s.FrequencyWeeks,
+		"frequency_months": s.FrequencyMonths,
+		"day_of_month":     s.DayOfMonth,
+		"week_of_month":    s.WeekOfMonth,
+		"start_hour":       s.StartHour,
+		"start_minute":     s.StartMinute,
+		"time_zone_code":   s.TimeZoneCode,
+		"observe_dst":      s.ObserveDST,
+	}
+
+	// option_profile_id and option_profile_title are alternatives (ExactlyOneOf).
+	// Refresh whichever one the configuration uses; writing both would give the
+	// unused attribute a value it never had and diff forever. On import neither is
+	// set, so the ID is used, being the stable identifier.
+	if d.Get("option_profile_title").(string) != "" {
+		values["option_profile_title"] = s.OptionProfileTitle
+	} else {
+		values["option_profile_id"] = s.OptionProfileID
+	}
+
+	return diag.FromErr(setAll(d, values))
 }
 
 func resourceScanScheduleUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {

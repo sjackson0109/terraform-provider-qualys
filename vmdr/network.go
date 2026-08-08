@@ -71,10 +71,11 @@ func (c *Client) CreateNetwork(ctx context.Context, name string) (string, error)
 
 	var out simpleReturn
 	if err := c.do(ctx, request{
-		capability: capNetwork,
-		path:       "network/",
-		action:     "create",
-		params:     params,
+		capability:    capNetwork,
+		path:          "network/",
+		action:        "create",
+		params:        params,
+		nonIdempotent: true, // creating twice would duplicate the object
 	}, &out); err != nil {
 		return "", err
 	}

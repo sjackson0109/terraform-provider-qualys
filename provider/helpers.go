@@ -118,3 +118,28 @@ func qpsClient(meta interface{}) (*qps.Client, error) {
 	}
 	return c.qps, nil
 }
+
+// ipSetSchema builds a set-of-IPs attribute whose membership is compared by
+// canonical address range rather than by the literal string.
+//
+// The Qualys API returns hyphenated ranges, while practitioners may write CIDR.
+// Without a custom hash, a config of "10.0.0.0/24" would never match the
+// "10.0.0.0-10.0.0.255" that Read stores, and the resource would diff forever.
+// Hashing the normalised form makes the two the same set element.
+func ipSetSchema(description string, required bool) *schema.Schema {
+	return &schema.Schema{
+		Description: description,
+		Type:        schema.TypeSet,
+		Optional:    !required,
+		Required:    required,
+		Elem:        &schema.Schema{Type: schema.TypeString},
+		Set:         hashNormalizedIP,
+	}
+}
+
+// hashNormalizedIP hashes an IP entry by its canonical range, so that CIDR and
+// the equivalent hyphenated range collide deliberately.
+func hashNormalizedIP(v interface{}) int {
+	s, _ := v.(string)
+	return schema.HashString(vmdr.NormalizeIPEntry(s))
+}

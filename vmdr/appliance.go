@@ -176,11 +176,11 @@ func (c *Client) CreateVirtualScanner(ctx context.Context, in VirtualScannerInpu
 
 	var out applianceCreateOutput
 	if err := c.do(ctx, request{
-		capability:  capAppliance,
-		path:        "appliance/",
-		action:      "create",
-		params:      params,
-		destructive: true, // consumes a licence; must not be repeated blindly
+		capability:    capAppliance,
+		path:          "appliance/",
+		action:        "create",
+		params:        params,
+		nonIdempotent: true, // consumes a QVSA licence; must not be repeated blindly
 	}, &out); err != nil {
 		return nil, err
 	}
@@ -292,11 +292,11 @@ func (c *Client) DeleteVirtualScanner(ctx context.Context, id string) error {
 	params := url.Values{}
 	params.Set("id", id)
 	return c.do(ctx, request{
-		capability:  capAppliance,
-		path:        "appliance/",
-		action:      "delete",
-		params:      params,
-		destructive: true,
+		capability:    capAppliance,
+		path:          "appliance/",
+		action:        "delete",
+		params:        params,
+		nonIdempotent: true,
 	}, nil)
 }
 

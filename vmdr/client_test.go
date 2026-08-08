@@ -159,7 +159,7 @@ func TestDestructiveCallIsNotRetried(t *testing.T) {
 	defer srv.Close()
 
 	err := c.do(context.Background(), request{
-		capability: capAssetHost, path: "asset/host/", action: "purge", destructive: true,
+		capability: capAssetHost, path: "asset/host/", action: "purge", nonIdempotent: true,
 	}, nil)
 	if err == nil {
 		t.Fatal("expected an error")
@@ -213,5 +213,62 @@ func TestContextCancellationIsHonoured(t *testing.T) {
 	defer cancel()
 	if err := c.do(ctx, request{capability: capAssetIP, path: "asset/ip/", action: "list"}, nil); err == nil {
 		t.Fatal("expected the cancelled context to abort the call")
+	}
+}
+
+// A create must never be re-sent after a transport failure. The server may have
+// processed the first attempt, so retrying would duplicate the object — and the
+// duplicate would be invisible to Terraform, which only records one ID.
+func TestCreateIsNotRetriedOnTransportError(t *testing.T) {
+	var calls int32
+	c, srv := testClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&calls, 1)
+		// Hang up mid-response to simulate a lost reply to a processed request.
+		hj, ok := w.(http.Hijacker)
+		if !ok {
+			t.Fatal("test server does not support hijacking")
+		}
+		conn, _, err := hj.Hijack()
+		if err != nil {
+			t.Fatalf("hijack: %v", err)
+		}
+		conn.Close()
+	}))
+	defer srv.Close()
+
+	err := c.do(context.Background(), request{
+		capability: capAssetGroup, path: "asset/group/", action: "add",
+		nonIdempotent: true,
+	}, nil)
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	if got := atomic.LoadInt32(&calls); got != 1 {
+		t.Errorf("create was sent %d times; a lost response must not cause a re-send", got)
+	}
+}
+
+// Idempotent calls may still be retried: repeating a list or an update with the
+// same parameters cannot create anything.
+func TestIdempotentCallIsRetriedOnTransportError(t *testing.T) {
+	var calls int32
+	c, srv := testClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if atomic.AddInt32(&calls, 1) == 1 {
+			hj, _ := w.(http.Hijacker)
+			conn, _, _ := hj.Hijack()
+			conn.Close()
+			return
+		}
+		fmt.Fprint(w, `<SIMPLE_RETURN><RESPONSE><TEXT>ok</TEXT></RESPONSE></SIMPLE_RETURN>`)
+	}))
+	defer srv.Close()
+
+	if err := c.do(context.Background(), request{
+		capability: capAssetGroup, path: "asset/group/", action: "edit",
+	}, nil); err != nil {
+		t.Fatalf("an idempotent call should recover: %v", err)
+	}
+	if got := atomic.LoadInt32(&calls); got != 2 {
+		t.Errorf("call count = %d, want 2", got)
 	}
 }

@@ -369,10 +369,11 @@ func (c *Client) CreateScanSchedule(ctx context.Context, in ScanScheduleInput) (
 
 	var out simpleReturn
 	if err := c.do(ctx, request{
-		capability: capScheduleScan,
-		path:       "schedule/scan/",
-		action:     "create",
-		params:     params,
+		capability:    capScheduleScan,
+		path:          "schedule/scan/",
+		action:        "create",
+		params:        params,
+		nonIdempotent: true, // creating twice would duplicate the object
 	}, &out); err != nil {
 		return "", err
 	}
@@ -411,11 +412,11 @@ func (c *Client) DeleteScanSchedule(ctx context.Context, id string) error {
 	params := url.Values{}
 	params.Set("id", id)
 	return c.do(ctx, request{
-		capability:  capScheduleScan,
-		path:        "schedule/scan/",
-		action:      "delete",
-		params:      params,
-		destructive: true,
+		capability:    capScheduleScan,
+		path:          "schedule/scan/",
+		action:        "delete",
+		params:        params,
+		nonIdempotent: true,
 	}, nil)
 }
 

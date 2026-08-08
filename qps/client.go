@@ -211,7 +211,11 @@ func (e *Error) Is(target error) bool {
 // path is the portion after the host, e.g. "/qps/rest/2.0/search/am/tag".
 // body may be nil for operations that take none. out, if non-nil, receives the
 // decoded ServiceResponse.
-func (c *Client) call(ctx context.Context, method, path string, body interface{}, out *ServiceResponse) error {
+// call issues a request. nonIdempotent marks creates and deletes, which must
+// never be repeated automatically: neither a transport error nor a limit
+// response proves the server did not process the request, and repeating a
+// create duplicates the object outside Terraform's knowledge.
+func (c *Client) call(ctx context.Context, method, path string, body interface{}, out *ServiceResponse, nonIdempotent bool) error {
 	var payload []byte
 	if body != nil {
 		var err error
@@ -224,7 +228,7 @@ func (c *Client) call(ctx context.Context, method, path string, body interface{}
 	for attempt := 0; ; attempt++ {
 		status, respBody, hdr, err := c.roundTrip(ctx, method, path, payload)
 		if err != nil {
-			if attempt >= c.cfg.MaxRetries {
+			if nonIdempotent || attempt >= c.cfg.MaxRetries {
 				return fmt.Errorf("qualys qps: %s: %w", path, err)
 			}
 			if waitErr := sleepCtx(ctx, backoff(attempt)); waitErr != nil {
@@ -246,7 +250,7 @@ func (c *Client) call(ctx context.Context, method, path string, body interface{}
 		}
 
 		var e *Error
-		if errors.As(apiErr, &e) && e.Is(ErrLimitExceeded) && attempt < c.cfg.MaxRetries {
+		if errors.As(apiErr, &e) && e.Is(ErrLimitExceeded) && attempt < c.cfg.MaxRetries && !nonIdempotent {
 			wait := waitFromHeaders(hdr)
 			if wait <= 0 {
 				wait = backoff(attempt)
@@ -347,7 +351,7 @@ func (c *Client) SearchAll(ctx context.Context, path string, filters *Filters, p
 		}
 
 		var resp ServiceResponse
-		if err := c.call(ctx, http.MethodPost, path, req, &resp); err != nil {
+		if err := c.call(ctx, http.MethodPost, path, req, &resp, false); err != nil {
 			return err
 		}
 		if len(resp.Data) > 0 {

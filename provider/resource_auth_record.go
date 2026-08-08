@@ -52,14 +52,10 @@ func resourceAuthRecord(recordType vmdr.AuthRecordType, label string, extra map[
 			Optional:     true,
 			RequiredWith: []string{"vault_id"},
 		},
-		"ips": {
-			Description: "Hosts this record applies to. Accepts addresses, ranges and CIDR " +
-				"blocks. Managed authoritatively: removing an entry stops the record " +
-				"applying to it.",
-			Type:     schema.TypeSet,
-			Optional: true,
-			Elem:     &schema.Schema{Type: schema.TypeString},
-		},
+		"ips": ipSetSchema("Hosts this record applies to. Accepts addresses, ranges and "+
+			"CIDR blocks; membership is compared by address range, so notation does not "+
+			"cause a diff. Managed authoritatively: removing an entry stops the record "+
+			"applying to it.", false),
 		"comments": {
 			Type:     schema.TypeString,
 			Optional: true,

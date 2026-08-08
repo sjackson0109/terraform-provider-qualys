@@ -113,6 +113,6 @@ func continuationRequest(req request, rawURL string) (request, error) {
 		}
 	}
 	// A continuation is always a read.
-	next.destructive = false
+	next.nonIdempotent = false
 	return next, nil
 }

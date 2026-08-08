@@ -187,10 +187,11 @@ func (c *Client) CreateAssetGroup(ctx context.Context, in AssetGroupInput) (stri
 
 	var out simpleReturn
 	err := c.do(ctx, request{
-		capability: capAssetGroup,
-		path:       "asset/group/",
-		action:     "add",
-		params:     params,
+		capability:    capAssetGroup,
+		path:          "asset/group/",
+		action:        "add",
+		params:        params,
+		nonIdempotent: true, // creating twice would duplicate the object
 	}, &out)
 	if err != nil {
 		return "", err
@@ -254,11 +255,11 @@ func (c *Client) DeleteAssetGroup(ctx context.Context, id string) error {
 	params := url.Values{}
 	params.Set("id", id)
 	return c.do(ctx, request{
-		capability:  capAssetGroup,
-		path:        "asset/group/",
-		action:      "delete",
-		params:      params,
-		destructive: true,
+		capability:    capAssetGroup,
+		path:          "asset/group/",
+		action:        "delete",
+		params:        params,
+		nonIdempotent: true,
 	}, nil)
 }
 

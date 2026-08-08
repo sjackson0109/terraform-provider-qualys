@@ -126,9 +126,15 @@ type request struct {
 	params url.Values
 	// method defaults to POST. Reads may use GET.
 	method string
-	// destructive marks a call whose repetition is unsafe. Such calls are never
-	// retried automatically after being dispatched; see do().
-	destructive bool
+	// nonIdempotent marks a call whose repetition is unsafe: creates (which would
+	// duplicate the object or orphan one outside state) and destructive actions
+	// such as delete and purge. Such calls are never retried automatically once
+	// dispatched — not on a transport error, and not on a limit response, since
+	// neither proves the server did not process the request.
+	//
+	// Updates are idempotent — the same parameters produce the same result — so
+	// they are safe to retry and are not marked.
+	nonIdempotent bool
 }
 
 // do executes req and decodes a successful response into out (which may be nil).
@@ -164,9 +170,9 @@ func (c *Client) do(ctx context.Context, req request, out interface{}) error {
 	for attempt := 0; ; attempt++ {
 		status, body, hdr, err := c.roundTrip(ctx, method, endpoint, form)
 		if err != nil {
-			// Transport failure. Safe to retry only for non-destructive calls,
-			// since we cannot tell whether the server processed the request.
-			if req.destructive || attempt >= c.cfg.MaxRetries {
+			// Transport failure. Safe to retry only for idempotent calls, since we
+			// cannot tell whether the server processed the request.
+			if req.nonIdempotent || attempt >= c.cfg.MaxRetries {
 				return fmt.Errorf("qualys vmdr: %s %s: %w", endpoint, req.action, err)
 			}
 			if waitErr := sleepCtx(ctx, backoff(attempt)); waitErr != nil {
@@ -186,9 +192,9 @@ func (c *Client) do(ctx context.Context, req request, out interface{}) error {
 		// Limit conditions are the only automatically retried failures.
 		var e *Error
 		if asError(apiErr, &e) && e.isRateLimited() && attempt < c.cfg.MaxRetries {
-			// Destructive calls are not retried even here: a 409 does not prove
+			// Non-idempotent calls are not retried even here: a 409 does not prove
 			// the call was rejected rather than merely blocked late.
-			if !req.destructive {
+			if !req.nonIdempotent {
 				wait := waitFromHeaders(hdr)
 				if wait <= 0 {
 					wait = backoff(attempt)

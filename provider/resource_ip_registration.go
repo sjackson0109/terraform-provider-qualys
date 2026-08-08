@@ -35,6 +35,7 @@ func resourceIPRegistration() *schema.Resource {
 				Required: true,
 				ForceNew: true,
 				Elem:     &schema.Schema{Type: schema.TypeString},
+				Set:      hashNormalizedIP,
 			},
 			"network_id": {
 				Description: "Qualys network these addresses belong to. Declare this " +

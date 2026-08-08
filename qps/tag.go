@@ -126,7 +126,7 @@ func (c *Client) CreateTag(ctx context.Context, in TagInput) (*Tag, error) {
 
 	var resp ServiceResponse
 	err := c.call(ctx, http.MethodPost, "/qps/rest/2.0/create/am/tag",
-		&ServiceRequest{Data: tagData{Tag: tagInputToWire(in)}}, &resp)
+		&ServiceRequest{Data: tagData{Tag: tagInputToWire(in)}}, &resp, true)
 	if err != nil {
 		return nil, err
 	}
@@ -147,20 +147,40 @@ func (c *Client) UpdateTag(ctx context.Context, id string, in TagInput) error {
 	if strings.TrimSpace(id) == "" {
 		return fmt.Errorf("qualys qps: tag id is required for update")
 	}
-	w := tagInputToWire(in)
+	// Update sends the managed fields unconditionally, including empty ones.
+	// The create encoder omits empty values (omitempty), which is right for
+	// create but wrong here: an omitted field leaves the old value in place, so
+	// clearing an attribute in configuration would never take effect and the
+	// resource would diff forever.
+	//
+	// ruleType is the exception. Sending an empty rule type is not meaningful —
+	// a static tag simply has none — and the API rejects it, so it is omitted
+	// when unset.
+	tag := map[string]interface{}{
+		"name":     in.Name,
+		"ruleText": in.RuleText,
+		"color":    in.Color,
+	}
+	if strings.TrimSpace(in.RuleType) != "" {
+		tag["ruleType"] = in.RuleType
+	}
+	if strings.TrimSpace(in.Parent) != "" {
+		tag["parentTagId"] = in.Parent
+	}
+
 	return c.call(ctx, http.MethodPost, "/qps/rest/2.0/update/am/tag/"+id,
-		&ServiceRequest{Data: tagData{Tag: w}}, nil)
+		&ServiceRequest{Data: map[string]interface{}{"Tag": tag}}, nil, false)
 }
 
 // DeleteTag removes a tag. Assets keep existing; only the association is lost.
 func (c *Client) DeleteTag(ctx context.Context, id string) error {
-	return c.call(ctx, http.MethodPost, "/qps/rest/2.0/delete/am/tag/"+id, nil, nil)
+	return c.call(ctx, http.MethodPost, "/qps/rest/2.0/delete/am/tag/"+id, nil, nil, true)
 }
 
 // GetTag returns one tag, or ErrNotFound.
 func (c *Client) GetTag(ctx context.Context, id string) (*Tag, error) {
 	var resp ServiceResponse
-	err := c.call(ctx, http.MethodGet, "/qps/rest/2.0/get/am/tag/"+id, nil, &resp)
+	err := c.call(ctx, http.MethodGet, "/qps/rest/2.0/get/am/tag/"+id, nil, &resp, false)
 	if err != nil {
 		return nil, err
 	}

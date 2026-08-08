@@ -181,3 +181,59 @@ func TestNewClientRejectsPlaintextAndMissingBaseURL(t *testing.T) {
 		t.Error("expected an error for a plaintext BaseURL")
 	}
 }
+
+// A create must not be re-sent after a transport failure: the server may have
+// processed it, and a retry would duplicate the tag.
+func TestCreateTagIsNotRetriedOnTransportError(t *testing.T) {
+	var calls int
+	c, srv := testClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		hj, ok := w.(http.Hijacker)
+		if !ok {
+			t.Fatal("test server does not support hijacking")
+		}
+		conn, _, err := hj.Hijack()
+		if err != nil {
+			t.Fatalf("hijack: %v", err)
+		}
+		conn.Close()
+	}))
+	defer srv.Close()
+
+	if _, err := c.CreateTag(context.Background(), TagInput{Name: "prod"}); err == nil {
+		t.Fatal("expected an error")
+	}
+	if calls != 1 {
+		t.Errorf("create was sent %d times; a lost response must not cause a re-send", calls)
+	}
+}
+
+// Update must send the fields it manages even when empty, or clearing an
+// attribute in configuration never reaches Qualys and the resource diffs forever.
+func TestUpdateTagSendsClearedFields(t *testing.T) {
+	var body map[string]interface{}
+	c, srv := testClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(b, &body)
+		fmt.Fprint(w, `{"responseCode":"SUCCESS"}`)
+	}))
+	defer srv.Close()
+
+	if err := c.UpdateTag(context.Background(), "12345", TagInput{Name: "prod", Color: ""}); err != nil {
+		t.Fatalf("UpdateTag: %v", err)
+	}
+
+	data, _ := body["data"].(map[string]interface{})
+	tag, _ := data["Tag"].(map[string]interface{})
+	if tag == nil {
+		t.Fatalf("no Tag in payload: %v", body)
+	}
+	if _, present := tag["color"]; !present {
+		t.Error("color was omitted from the update; the old value would survive server-side")
+	}
+	// ruleType is the exception: an empty rule type is not meaningful and the API
+	// rejects it, so it is omitted rather than sent blank.
+	if _, present := tag["ruleType"]; present {
+		t.Error("an empty ruleType should be omitted, not sent")
+	}
+}

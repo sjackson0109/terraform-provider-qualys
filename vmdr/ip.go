@@ -84,10 +84,11 @@ func (c *Client) AddIPs(ctx context.Context, in AddIPsInput) error {
 	setIfNotEmpty(params, "ag_title", in.AssetGroupTitle)
 
 	return c.do(ctx, request{
-		capability: capAssetIP,
-		path:       "asset/ip/",
-		action:     "add",
-		params:     params,
+		capability:    capAssetIP,
+		path:          "asset/ip/",
+		action:        "add",
+		params:        params,
+		nonIdempotent: true, // creating twice would duplicate the object
 	}, nil)
 }
 
@@ -285,16 +286,21 @@ func (c *Client) PurgeHosts(ctx context.Context, in PurgeInput) error {
 		params.Set("compliance_enabled", "1")
 	}
 
-	if len(params) == 0 {
-		return fmt.Errorf("qualys vmdr: purge requires a selector; " +
-			"an unselected purge would target the whole subscription")
+	// Guard on the selectors specifically, not on "any parameter". data_scope,
+	// compliance_enabled and os_pattern narrow *what* is purged from the selected
+	// hosts; they do not choose hosts. Counting them would let
+	// PurgeInput{DataScope: "vm"} through as a subscription-wide purge.
+	if len(in.IPs) == 0 && len(in.IDs) == 0 && len(in.AssetGroupIDs) == 0 {
+		return fmt.Errorf("qualys vmdr: purge requires a host selector (ips, ids or " +
+			"asset group ids); without one the request would target every host in the " +
+			"subscription")
 	}
 
 	return c.do(ctx, request{
-		capability:  capAssetHost,
-		path:        "asset/host/",
-		action:      "purge",
-		params:      params,
-		destructive: true,
+		capability:    capAssetHost,
+		path:          "asset/host/",
+		action:        "purge",
+		params:        params,
+		nonIdempotent: true,
 	}, nil)
 }

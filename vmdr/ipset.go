@@ -173,6 +173,18 @@ func NormalizeIPSet(entries []string) ([]string, error) {
 	return out, nil
 }
 
+// NormalizeIPEntry canonicalises one entry, converting CIDR to the hyphenated
+// range form the API returns. Invalid input is returned unchanged so callers
+// (notably set hashing, which cannot report an error) degrade to exact matching
+// rather than silently collapsing distinct values.
+func NormalizeIPEntry(s string) string {
+	r, err := parseIPEntry(s)
+	if err != nil {
+		return s
+	}
+	return r.String()
+}
+
 // IPSetsEqual reports whether two IP sets describe the same addresses, ignoring
 // notation and ordering.
 func IPSetsEqual(a, b []string) bool {

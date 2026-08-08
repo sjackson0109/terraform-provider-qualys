@@ -49,15 +49,11 @@ func resourceAssetGroup() *schema.Resource {
 				Optional: true,
 			},
 
-			"ips": {
-				Description: "IP addresses, hyphenated ranges, or CIDR blocks in this group. " +
-					"CIDR is accepted for convenience and converted to the hyphenated ranges " +
-					"the Qualys API expects, so `10.0.0.0/24` and `10.0.0.0-10.0.0.255` are " +
-					"equivalent and will not produce a permanent diff.",
-				Type:     schema.TypeSet,
-				Optional: true,
-				Elem:     &schema.Schema{Type: schema.TypeString},
-			},
+			"ips": ipSetSchema("IP addresses, hyphenated ranges, or CIDR blocks in this group. "+
+				"CIDR is accepted for convenience and converted to the hyphenated ranges "+
+				"the Qualys API expects. Set membership is compared by address range, so "+
+				"`10.0.0.0/24` and `10.0.0.0-10.0.0.255` are the same entry and neither "+
+				"produces a permanent diff.", false),
 			"domains": {
 				Type:     schema.TypeSet,
 				Optional: true,

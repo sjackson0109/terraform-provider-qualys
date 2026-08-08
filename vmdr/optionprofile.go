@@ -113,65 +113,88 @@ type VMOptionProfileInput struct {
 	UseUserAuthOnDuplicate   bool
 }
 
+// optionProfileOutput decodes the OPTION_PROFILES document.
+//
+// Unlike every other list in this package, the VM option-profile list is not
+// wrapped in a RESPONSE element: the documented root is OPTION_PROFILES with
+// OPTION_PROFILE children, the same shape the export action returns. Both
+// placements are accepted here so a nested response still decodes rather than
+// silently yielding zero profiles — which would make GetVMOptionProfile report
+// ErrNotFound and drop a live resource from state.
 type optionProfileOutput struct {
-	Profiles []struct {
-		BasicInfo struct {
-			ID        string `xml:"ID"`
-			GroupName string `xml:"GROUP_NAME"`
-			GroupType string `xml:"GROUP_TYPE"`
-			UserID    string `xml:"USER_ID"`
-			IsDefault string `xml:"IS_DEFAULT"`
-			IsGlobal  string `xml:"IS_GLOBAL"`
-			IsOffline string `xml:"IS_OFFLINE_SYNCABLE"`
-			UpdatedAt string `xml:"UPDATE_DATE"`
-		} `xml:"BASIC_INFO"`
+	Response struct {
+		Profiles []optionProfileEntry `xml:"OPTION_PROFILE"`
+	} `xml:"RESPONSE"`
 
-		Scan struct {
-			Ports struct {
-				TCPPorts struct {
-					Type       string `xml:"TCP_PORTS_TYPE"`
-					Additional string `xml:"TCP_PORTS_ADDITIONAL"`
-				} `xml:"TCP_PORTS"`
-				UDPPorts struct {
-					Type       string `xml:"UDP_PORTS_TYPE"`
-					Additional string `xml:"UDP_PORTS_ADDITIONAL"`
-				} `xml:"UDP_PORTS"`
-				ThreeWayHandshake string `xml:"STANDARD_SCAN"`
-			} `xml:"PORTS"`
+	Profiles []optionProfileEntry `xml:"OPTION_PROFILE"`
+}
 
-			ScanDeadHosts        string `xml:"SCAN_DEAD_HOSTS"`
-			CloseVulnOnDeadHosts string `xml:"CLOSE_VULNERABILITIES>CLOSE_VULN_ON_DEAD_HOSTS"`
-			PurgeHostData        string `xml:"CLOSE_VULNERABILITIES>PURGE_HOST_DATA"`
+type optionProfileEntry struct {
+	BasicInfo struct {
+		ID        string `xml:"ID"`
+		GroupName string `xml:"GROUP_NAME"`
+		GroupType string `xml:"GROUP_TYPE"`
+		UserID    string `xml:"USER_ID"`
+		IsDefault string `xml:"IS_DEFAULT"`
+		IsGlobal  string `xml:"IS_GLOBAL"`
+		IsOffline string `xml:"IS_OFFLINE_SYNCABLE"`
+		UpdatedAt string `xml:"UPDATE_DATE"`
+	} `xml:"BASIC_INFO"`
 
-			Performance struct {
-				OverallPerformance string `xml:"OVERALL_PERFORMANCE"`
-				PacketDelay        string `xml:"PACKET_DELAY"`
-				ParallelScaling    string `xml:"PARALLEL_SCALING"`
-			} `xml:"PERFORMANCE"`
+	Scan struct {
+		Ports struct {
+			TCPPorts struct {
+				Type       string `xml:"TCP_PORTS_TYPE"`
+				Additional string `xml:"TCP_PORTS_ADDITIONAL"`
+			} `xml:"TCP_PORTS"`
+			UDPPorts struct {
+				Type       string `xml:"UDP_PORTS_TYPE"`
+				Additional string `xml:"UDP_PORTS_ADDITIONAL"`
+			} `xml:"UDP_PORTS"`
+			ThreeWayHandshake string `xml:"STANDARD_SCAN"`
+		} `xml:"PORTS"`
 
-			VulnDetection struct {
-				Type              string   `xml:"CUSTOM_LIST>TYPE"`
-				CustomListIDs     []string `xml:"CUSTOM_LIST>CUSTOM>ID"`
-				DetectionType     string   `xml:"DETECTION_TYPE"`
-				BasicHostInfo     string   `xml:"BASIC_HOST_INFO_CHECKS"`
-				OVALChecks        string   `xml:"OVAL_CHECKS"`
-				AllQRDIChecks     string   `xml:"ALL_QRDI_CHECKS"`
-				PasswordBruteType string   `xml:"PASSWORD_BRUTE_FORCING>SYSTEM"`
-			} `xml:"VULNERABILITY_DETECTION"`
+		ScanDeadHosts        string `xml:"SCAN_DEAD_HOSTS"`
+		CloseVulnOnDeadHosts string `xml:"CLOSE_VULNERABILITIES>CLOSE_VULN_ON_DEAD_HOSTS"`
+		PurgeHostData        string `xml:"CLOSE_VULNERABILITIES>PURGE_HOST_DATA"`
 
-			Authentication       []string `xml:"AUTHENTICATION>TYPE"`
-			AdditionalCertDetect string   `xml:"ADDITIONAL_CERT_DETECTION"`
-			DissolvableAgent     string   `xml:"DISSOLVABLE_AGENT>DISSOLVABLE_AGENT_ENABLE"`
-			LoadBalancer         string   `xml:"LOAD_BALANCER_DETECTION"`
-			TestAuthentication   string   `xml:"TEST_AUTHENTICATION"`
-		} `xml:"SCAN"`
-	} `xml:"OPTION_PROFILE"`
+		Performance struct {
+			OverallPerformance string `xml:"OVERALL_PERFORMANCE"`
+			PacketDelay        string `xml:"PACKET_DELAY"`
+			ParallelScaling    string `xml:"PARALLEL_SCALING"`
+		} `xml:"PERFORMANCE"`
+
+		VulnDetection struct {
+			Type              string   `xml:"CUSTOM_LIST>TYPE"`
+			CustomListIDs     []string `xml:"CUSTOM_LIST>CUSTOM>ID"`
+			DetectionType     string   `xml:"DETECTION_TYPE"`
+			BasicHostInfo     string   `xml:"BASIC_HOST_INFO_CHECKS"`
+			OVALChecks        string   `xml:"OVAL_CHECKS"`
+			AllQRDIChecks     string   `xml:"ALL_QRDI_CHECKS"`
+			PasswordBruteType string   `xml:"PASSWORD_BRUTE_FORCING>SYSTEM"`
+		} `xml:"VULNERABILITY_DETECTION"`
+
+		Authentication       []string `xml:"AUTHENTICATION>TYPE"`
+		AdditionalCertDetect string   `xml:"ADDITIONAL_CERT_DETECTION"`
+		DissolvableAgent     string   `xml:"DISSOLVABLE_AGENT>DISSOLVABLE_AGENT_ENABLE"`
+		LoadBalancer         string   `xml:"LOAD_BALANCER_DETECTION"`
+		TestAuthentication   string   `xml:"TEST_AUTHENTICATION"`
+	} `xml:"SCAN"`
+}
+
+// entries returns the profiles from whichever placement the response used.
+func (o *optionProfileOutput) entries() []optionProfileEntry {
+	if len(o.Profiles) > 0 {
+		return o.Profiles
+	}
+	return o.Response.Profiles
 }
 
 func (o *optionProfileOutput) profiles() []*VMOptionProfile {
-	out := make([]*VMOptionProfile, 0, len(o.Profiles))
-	for i := range o.Profiles {
-		p := &o.Profiles[i]
+	entries := o.entries()
+	out := make([]*VMOptionProfile, 0, len(entries))
+	for i := range entries {
+		p := &entries[i]
 		out = append(out, &VMOptionProfile{
 			ID:       strings.TrimSpace(p.BasicInfo.ID),
 			Title:    p.BasicInfo.GroupName,
@@ -285,10 +308,11 @@ func (c *Client) CreateVMOptionProfile(ctx context.Context, in VMOptionProfileIn
 
 	var out simpleReturn
 	if err := c.do(ctx, request{
-		capability: capOptionProfile,
-		path:       "subscription/option_profile/vm/",
-		action:     "create",
-		params:     params,
+		capability:    capOptionProfile,
+		path:          "subscription/option_profile/vm/",
+		action:        "create",
+		params:        params,
+		nonIdempotent: true, // creating twice would duplicate the object
 	}, &out); err != nil {
 		return "", err
 	}
@@ -328,11 +352,11 @@ func (c *Client) DeleteVMOptionProfile(ctx context.Context, id string) error {
 	params := url.Values{}
 	params.Set("id", id)
 	return c.do(ctx, request{
-		capability:  capOptionProfile,
-		path:        "subscription/option_profile/vm/",
-		action:      "delete",
-		params:      params,
-		destructive: true,
+		capability:    capOptionProfile,
+		path:          "subscription/option_profile/vm/",
+		action:        "delete",
+		params:        params,
+		nonIdempotent: true,
 	}, nil)
 }
 
