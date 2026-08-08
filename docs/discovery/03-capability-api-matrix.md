@@ -491,6 +491,34 @@ WAS 4.5 with both `Accept` and `Content-Type: application/json`. Pagination:
 
 ---
 
+## 14a. Capability areas surfaced late — not yet inventoried in detail
+
+Source: compiled reference of the VM/PC API guide (derived secondary source). These are
+recorded so the inventory is not silently incomplete; none has been worked through to
+parameter level, and each needs its own pass before implementation.
+
+| Area | Endpoint / notes | Classification (provisional) |
+|---|---|---|
+| **VM remediation tickets** | `/api/2.0/fo/ticket/` — list, edit, delete, view deleted, get detail, and *set vulnerabilities to ignore on hosts* | data source + imperative; the ignore operation is relevant to the stale-asset subsystem |
+| Scan schedule run history | `/api/2.0/fo/scan/schedules/runhistory/?action=list` — up to 500 schedule IDs, 1–50 executions each; **not available for map/discovery schedules** | data source — useful for verifying schedules actually fire |
+| Static / dynamic search lists | `/api/2.0/fo/qid/search_list/{static\|dynamic}/` — full CRUD. **Direct dependency of option profiles** (`custom_search_list_ids`) | **resource** — promote to P1, since option profiles reference these by ID |
+| Restricted IPs | list/manage — IPs blocked from scanning regardless of targeting (a safety guardrail). Documented as accepting **CIDR** (`action=replace&ips=10.0.0.0/8`) | resource |
+| Virtual hosts | `/api/2.0/fo/asset/vhost/` — multiple hostnames on one IP, scoping scans per hostname | resource |
+| IPv6 mapping records | `/api/2.0/fo/asset/ip/v4_v6/` — list/add; IPv6 addresses are not stable scan targets the way IPv4 are | data source + resource |
+| Patch list | per-host patches relevant to detections (`host_id`, `output_format=xml`) | data source |
+| Cloud perimeter scan jobs | `/api/2.0/fo/scan/cloud/perimeter/job/` (v2.0–v4.0) — create/update/reset | deferred |
+| Cloud internal scan jobs | `/api/2.0/fo/scan/cloud/internal/job/` — Azure and GCP internal scans | deferred |
+| SCAP scans | `/api/2.0/fo/scan/scap/?action=list` — list only | deferred |
+| Containerized scanner appliances | create/list/update/delete — scanners as containers (Kubernetes/ephemeral) | **candidate resource** — may fit this product better than virtual appliances |
+| Activity log | `/api/2.0/fo/activity_log` — auditable record of every API call; filter by process state (Queued, Running, Expired, Finished, Blocked) | data source |
+| Vendor IDs / references, editing vulnerabilities | QID→vendor advisory mapping; local QID metadata overrides | deferred |
+| **Policy Compliance (whole module)** | controls, policies, export/import/merge, framework reports, posture (`/pcrs/` streaming), exceptions, control criticality, SCAP reports, and the PCAS policy-authoring and library trees | **out of scope for this product** unless PC is explicitly in remit — recorded, not planned |
+
+⚠️ **Conflict on the user API.** This source gives a base path family of
+`/api/2.0/fo/user/`, while the earlier pass found only V1 `/msp/user.php` documented
+(the V2 path was a third-party claim). `Unverified` — low priority, since `qualys_user`
+is out of scope.
+
 ## 15. TotalCloud / CloudView (module: CloudView — minimal retained scope)
 
 | Capability | Endpoint | Status | Classification |

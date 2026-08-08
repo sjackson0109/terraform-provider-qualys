@@ -26,15 +26,24 @@ host detections (data source) ─→ stale-asset review ─→ purge (imperative
 2. qps client (shared by WAS 3.0 / AM 2.0): ServiceRequest envelope, JSON preference,
    `hasMoreRecords`/`lastId` pagination. Gateway client (CSAM QQL) is a **third**
    variant — JWT bearer, **429** limit regime, no concurrency headers.
-3. Tenant capability probe (doc 08) + resolution of the remaining **design-gating
-   `Unverified` items**: the option-profile vulnerability-detection / authentication /
-   brute-force parameter names, the not-found error code, CIDR acceptance, and the
-   WAS `WasScanSchedule` recurrence element names.
+3. Tenant capability probe (`GET /qps/rest/portal/version` first; doc 08), including
+   **EULA-acceptance detection** — an unaccepted API-only account fails every call and
+   must produce a clear diagnostic, not a generic auth error.
+4. **Per-capability API version constants + EOS awareness** (doc 07). Versions already
+   differ per capability and are actively migrating; the client records the version it
+   targets and warns when running against a deprecated one.
+5. Resolve the remaining design-gating `Unverified` items: the **newer-version schemas**
+   for scan / schedule / option profile / detection (now the top target), the FO
+   not-found error code, CIDR acceptance, and the WAS recurrence sub-elements.
 
 ## Phase 1 — Targeting primitives (P0)
 
 4. `qualys_asset_group` (+ data source) — authoritative `set_*` updates.
 5. `qualys_asset_tag` (+ data sources) — static/dynamic/hierarchy.
+5a. `qualys_search_list_static` / `qualys_search_list_dynamic`
+    (`/api/2.0/fo/qid/search_list/{static|dynamic}/`) — **promoted into Phase 1**: VM
+    option profiles reference these by ID via `custom_search_list_ids`, so a profile
+    with custom vulnerability detection cannot be expressed without them.
 6. `qualys_vm_option_profile` (+ data source) — field-level CRUD; suppress
    non-round-trippable fields; model `default` and `global` as coupled (setting default
    forces global), and do not mark fields ForceNew without evidence.

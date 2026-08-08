@@ -28,6 +28,8 @@ clear diagnostics rather than raw API errors:
 | Rate/concurrency ceilings | subscription tier (headers observed at runtime are authoritative; limits are customisable per subscription by Qualys Support, so **never hardcode tier numbers**) |
 | **JWT bearer auth on `/api/2.0/fo/`** | **opt-in per subscription** (OpenID Connect API authentication or native `/auth/oauth` — both require Qualys Support activation). Probe by attempting a token and falling back to Basic; never assume tokens work |
 | WAS V4 schedule/report APIs | announced Apr 2026 — availability on the tenant must be probed before use |
+| **Qualys EULA acceptance** | **An API-only account (no GUI access) that has not accepted the EULA stays inactive and *every* API call fails.** Acceptance is a first-login step (`acceptEULA.php`). This is the most likely cause of a brand-new service account failing every request, so the provider must detect it and say so explicitly rather than surfacing a generic auth error |
+| Per-endpoint API version / EOS date | versions differ per capability and are actively migrating (doc 07); the EOS date is carried per endpoint, so the client should record it and warn when running on a deprecated version |
 
 Recommended pattern: a `provider helper` "tenant capability probe". Start with
 **`GET /qps/rest/portal/version`**, which returns installed Portal and per-module
@@ -184,8 +186,13 @@ See **[doc 11](11-verified-parameter-reference.md)** for the full parameter list
 - Scan-schedule list pagination model (no `truncation_limit`/`id_min` surfaced).
 - `tag_set_by` on purge; a third-party reference to `/api/5.0/fo/asset/host/?action=purge`
   that could not be corroborated.
-- Option-profile 2.0 → 4.0/5.0/7.0 field and encoding delta; the 2.0 → 3.0 report delta;
-  WAS V4 schedule/report paths and schemas.
+- **Option-profile 2.0 → 4.0/5.0/6.0 and report 2.0 → 3.0 deltas — now blocking, not
+  deferred.** Doc 07 records an EOS/EOL migration programme covering Scan (v3.0),
+  Schedule Scan (**v5.0**), Option Profiles (v4.0–v6.0), Asset Host / VM Detection
+  (**v5.0**) and Report Template Scan (v7.0). Pinning V2 therefore has a known expiry,
+  and the newer schemas are undocumented in everything obtained so far. This is the
+  single most valuable remaining research target.
+- WAS V4 schedule/report paths and schemas.
 - Report types beyond vulnerability/compliance accepting `use_tags`; a report-specific
   concurrency cap (likely none distinct from the default-2 per-API limit).
 - Full per-service-level API limits table (only Standard 300/3600s + concurrency 2 are

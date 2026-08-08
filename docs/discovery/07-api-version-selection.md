@@ -1,5 +1,39 @@
 # 07 — API Version Selection per Capability
 
+> ## ⚠️ Revision — V2 is not a safe default any more
+>
+> A compiled reference of the VM/PC API guide (supplied for this discovery; derived
+> secondary source) documents an **EOS/EOL migration programme already in flight**.
+> Each superseded path gets **End of Support 6 months** after the newer version ships,
+> then **End of Life 6 months after that**, at which point it is decommissioned.
+>
+> Migrations named as in flight:
+>
+> | Capability | Migrating to |
+> |---|---|
+> | Scan API | **v3.0** |
+> | Schedule Scan API | **v5.0** |
+> | Option Profile APIs | **v4.0–v6.0** (varies by sub-type) |
+> | Asset Host / VM Detection API | **v5.0** |
+> | Report Template Scan API | **v7.0** |
+> | Compliance Control List | **v4.0** |
+> | PC Posture Info | **pcrs v5.0** |
+>
+> Combined with the product decision to remove deprecated items, this inverts the
+> original guidance. **The table below still records what is fully documented at V2,
+> but V2 must now be treated as a starting point to migrate off, not a destination.**
+>
+> **Action before any client code is written:** confirm the current version and EOS
+> date for each capability the MVP touches — the guide says the EOS date is carried in
+> the response payload / docs per endpoint, so this is checkable at runtime against a
+> tenant. Build the client with the **API version as a per-capability constant** (it
+> already must be, since versions differ per capability) so a bump is a one-line change,
+> and log the EOS date when a deprecated version is in use.
+>
+> Where a newer version's schema is not yet documented (the 2.0→4.0/5.0 option-profile
+> delta, the 2.0→3.0 report delta), that gap is now **blocking rather than deferred**,
+> because pinning V2 has a known expiry. See doc 08.
+
 Deliverable 7. Per the task rule, versions are selected **per capability**, not one
 global VMDR version. "V1" = legacy `/msp/*.php`; "V2" = `/api/2.0/fo/`; "v3" =
 `/api/3.0/fo/` (where observed); "qps 2.0/3.0" = portal APIs.

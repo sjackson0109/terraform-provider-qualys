@@ -22,6 +22,30 @@ cross-cutting rules and the exceptions.
 identical across API versions or endpoints (Domain V2 and `/msp/user.php` prove the
 exceptions exist).
 
+## 4.0 Request mechanics — rules the client must encode
+
+From the compiled VM/PC API reference (derived secondary source; each is a
+straightforward client rule, so low risk to adopt):
+
+- **GET or POST** on most functions; POST preferred for large parameter sets because
+  GET hits practical URL-length limits.
+- **A repeated parameter keeps only its last instance** — the client must never emit a
+  key twice (a real hazard when merging defaults with user config).
+- **All parameters must be URL-encoded**, including `#` → `%23`; unencoded, the server
+  treats the remainder as a URL fragment and silently drops it.
+- **URL elements are case-sensitive**: `?action=list` works, `?Action=list` does not.
+- Dates are **RFC 3339 / ISO 8601** UTC: `yyyy-mm-ddThh:mm:ssZ`.
+- Responses are **UTF-8 XML** by default; some endpoints offer JSON/CSV via
+  `output_format`.
+- Passwords sent in a **POST body must be URL-encoded** (`+` → `%2B`); passwords sent
+  via HTTP Basic do not.
+- **Session timeout** defaults to 60 minutes (configurable per subscription). Jobs
+  already launched in the background do not time out mid-processing.
+- **Scan launch silently skips out-of-scope targets.** If a target IP is not in the
+  user's scope or licence, it is dropped from the job rather than failing the request —
+  so a "successful" launch may cover fewer assets than declared. Any scan-adjacent
+  validation must compare requested vs actual targets rather than trusting success.
+
 ## 4.x Request/response format rules (VMDR)
 
 - HTTP method, endpoint path, `action` parameter, form parameters, XML response root,
