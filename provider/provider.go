@@ -63,9 +63,11 @@ func Provider() *schema.Provider {
 		},
 
 		ResourcesMap: map[string]*schema.Resource{
-			"qualys_gcp_connector": resourceGCPConnector(),
-			"qualys_asset_group":   resourceAssetGroup(),
-			"qualys_asset_tag":     resourceAssetTag(),
+			"qualys_gcp_connector":      resourceGCPConnector(),
+			"qualys_asset_group":        resourceAssetGroup(),
+			"qualys_asset_tag":          resourceAssetTag(),
+			"qualys_static_search_list": resourceStaticSearchList(),
+			"qualys_vm_option_profile":  resourceVMOptionProfile(),
 		},
 
 		ConfigureContextFunc: providerConfigure,
