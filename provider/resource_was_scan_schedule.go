@@ -106,11 +106,9 @@ func resourceWASScanSchedule() *schema.Resource {
 				Optional: true,
 			},
 			"dns_override_id": {
-				Description: "ID of a `qualys_was_dns_override_record` (not yet implemented " +
-					"by this provider) to resolve the target through. Reference an ID " +
-					"configured outside Terraform.",
-				Type:     schema.TypeString,
-				Optional: true,
+				Description: "ID of a `qualys_was_dns_override` to resolve the target through.",
+				Type:        schema.TypeString,
+				Optional:    true,
 			},
 
 			"start_date": {

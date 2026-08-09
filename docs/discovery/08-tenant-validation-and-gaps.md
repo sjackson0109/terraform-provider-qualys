@@ -337,6 +337,26 @@ See **[doc 11](11-verified-parameter-reference.md)** for the full parameter list
   scan — administrator-declared "this is fixed" doesn't fit this provider's declarative
   model the way `ignore` does. **`retest` and severity overrides (updateSeverity/
   restoreSeverity) remain unimplemented** — no source has covered them yet.
+- ~~**WAS DNS override records — field names never obtained, entirely gated.**~~
+  **Closed.** An eleventh research pass — a user-supplied walkthrough, this one
+  carrying inline citations to specific docs.qualys.com pages (count/search/get/
+  create/update/delete_dns.htm) rather than reading as a plain transcription — closed
+  this gate and corrected the endpoint path this discovery had recorded:
+  `was/dnsoverride`, not the `dnsoverriderecord` guess doc 06 carried since the first
+  pass. Wrapper key `DnsOverride` confirmed verbatim. `mappings` (hostName/ipAddress
+  pairs) and `comments` (a list, not the flat string confirmed for option
+  profile/auth record — DNS override's comments field is evidenced differently, kept
+  as shown) use the same set/add/remove idiom already confirmed for tag associations;
+  this provider always sends `set`. **Two genuine API deviations, unique to this
+  object among everything built so far:** update (`POST update/was/dnsoverride`, no
+  path suffix) carries the ID inside the request body instead of the URL, and delete
+  (`POST delete/was/dnsoverride`, no path suffix) carries the ID as a filter criterion
+  instead. Built as `qualys_was_dns_override`, referenced by
+  `qualys_was_scan_schedule.dns_override_id` (already-built field, now backed by a
+  real resource instead of only an external ID). Web-application-level default DNS
+  override association (mentioned in the walkthrough's overview but with no create/
+  update example shown) is not built — same reasoning as the still-unconfirmed
+  `qualys_web_application` config fields (`defaultAuthRecord`, `cancelScansAt`, etc.).
 - **`time_zone_code_list.php` output field names.** The endpoint's existence and its
   DTD name (`time_zone_code_list.dtd`) are confirmed (doc 03 §8), and it is the source
   of the `time_zone_code` values `qualys_scan_schedule` accepts. Three research passes

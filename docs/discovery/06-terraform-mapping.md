@@ -29,7 +29,7 @@ Deliverables 4, 5 and 6. Grounded in the per-operation classifications of doc 03
 | `qualys_was_finding_ignore` | `.../was/finding` (`ignore`/`reopen` actions) | **Built.** Confirmed against a user-supplied "Findings Lifecycle Actions" walkthrough: `POST ignore\|reopen/was/finding/<id>` with a `data.Finding.comment` body. `fix` is confirmed too (client method `FixWASFinding`) but deliberately not wrapped in a resource — the source itself recommends against using lifecycle actions as a rescan substitute. `retest`/severity overrides remain unimplemented | done |
 | `qualys_report_template_scan` / `_patch` | `/api/2.0/fo/report/template/scan|patch/` | XML-body schemas; deferred until schema effort justified | deferred |
 | ~~`qualys_user`~~ | `/msp/user.php` (V1) | **Out of scope** — legacy generation, and deprecated items are not being built on | dropped |
-| `qualys_was_dns_override` | `/qps/rest/3.0/.../was/dnsoverriderecord` | staging-host resolution for WAS scans | P3 |
+| `qualys_was_dns_override` | `/qps/rest/3.0/.../was/dnsoverride` | **Built.** Path corrected from an earlier `dnsoverriderecord` guess. Confirmed against a user-supplied walkthrough with inline docs.qualys.com citations; update/delete take no ID in the URL path (a real deviation from every other WAS object) — ID travels in the body for update, as a filter criterion for delete | done |
 | `qualys_was_search_list` / `qualys_was_parameter_set` | `.../was/searchlist`, `.../was/parameter` | referenced by WAS option profiles | P3 |
 
 **Scan authentication approach (task question):** support **both** — resources that
