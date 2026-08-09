@@ -125,6 +125,36 @@ func TestCreateWASScanScheduleSendsDailyRecurrence(t *testing.T) {
 	}
 }
 
+func TestCreateWASScanScheduleSendsMonthlyRecurrence(t *testing.T) {
+	var gotBody map[string]interface{}
+	c, srv := testClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(b, &gotBody)
+		fmt.Fprint(w, `{"ServiceResponse":{"responseCode":"SUCCESS",
+		  "data":[{"WasScanSchedule":{"id":12,"name":"monthly"}}]}}`)
+	}))
+	defer srv.Close()
+
+	_, err := c.CreateWASScanSchedule(context.Background(), WASScanScheduleInput{
+		Name: "monthly", WebAppID: "1", StartDate: "2026-08-16T02:00:00Z", TimeZoneCode: "UTC",
+		OccurrenceType: WASOccurrenceMonthly,
+		Recurrence:     &WASScheduleRecurrence{DayOfMonth: 1, EveryNMonths: 1},
+	})
+	if err != nil {
+		t.Fatalf("CreateWASScanSchedule: %v", err)
+	}
+
+	sreq, _ := gotBody["ServiceRequest"].(map[string]interface{})
+	data, _ := sreq["data"].(map[string]interface{})
+	schedule, _ := data["WasScanSchedule"].(map[string]interface{})
+	scheduling, _ := schedule["scheduling"].(map[string]interface{})
+	occurrence, _ := scheduling["occurrence"].(map[string]interface{})
+	monthly, _ := occurrence["monthlyOccurrence"].(map[string]interface{})
+	if monthly["dayOfMonth"] != float64(1) || monthly["everyNMonths"] != float64(1) {
+		t.Errorf("occurrence.monthlyOccurrence = %v", monthly)
+	}
+}
+
 func TestCreateWASScanScheduleSendsNotification(t *testing.T) {
 	var gotBody map[string]interface{}
 	c, srv := testClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

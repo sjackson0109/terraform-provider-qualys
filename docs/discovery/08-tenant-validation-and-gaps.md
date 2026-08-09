@@ -305,6 +305,25 @@ See **[doc 11](11-verified-parameter-reference.md)** for the full parameter list
   `OptionProfile` in both the create/get/search decode path and the update encoder
   (which built its payload as a raw map, so needed a separate fix). Also added:
   `comments`, confirmed as a flat string.
+- ~~**WAS report schedules — deferred, assumed no v3 API.**~~ **Reversed; built as
+  `qualys_was_report_schedule`.** A ninth research pass — a user-supplied "Create and
+  Update Report Schedule" walkthrough, paired with a "Report Templates" walkthrough —
+  confirmed a v3 `/qps/rest/3.0/.../was/reportschedule` API exists after all,
+  contradicting this discovery's earlier passes, which found nothing and assumed only
+  the announced V4 schedule/report endpoints would cover this. Wrapper key
+  `ReportSchedule` confirmed verbatim. The report-schedule walkthrough also supplied the
+  one piece `qualys_was_scan_schedule` was still missing: a `monthlyOccurrence` example
+  (`dayOfMonth`, `everyNMonths`) — applied to scan schedule by analogy, since `DAILY`/
+  `WEEKLY` matched exactly between the two schedule types in the evidence obtained.
+  Report schedule and scan schedule now share their occurrence-encoding logic in
+  `qps/wasscanschedule.go`/`wasreportschedule.go` rather than duplicating it.
+  Separately, the report-templates walkthrough confirmed the WAS report template API
+  (`/qps/rest/3.0/.../was/reporttemplate`) is genuinely read-only (count/search/get,
+  explicitly no create/update/delete) — built as `data.qualys_was_report_templates`,
+  distinct from the existing `data.qualys_report_templates` (the legacy VM API). Its
+  wrapper key (`ReportTemplate`) was **not** shown in a worked example this time —
+  chosen because 3 of 4 confirmed wrapper keys in this codebase lack a `Was` prefix,
+  disclosed as a guess, not a repeat of the option-profile mistake.
 - **`time_zone_code_list.php` output field names.** The endpoint's existence and its
   DTD name (`time_zone_code_list.dtd`) are confirmed (doc 03 §8), and it is the source
   of the `time_zone_code` values `qualys_scan_schedule` accepts. Three research passes

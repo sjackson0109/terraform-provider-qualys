@@ -16,10 +16,10 @@ func resourceWASScanSchedule() *schema.Resource {
 			"**Provenance:** the element model is Confirmed against a user-supplied " +
 			"\"Create and Update Scan Schedule\" walkthrough (transcribed, not a verbatim " +
 			"PDF quote, so treated as strong but not absolute evidence) covering " +
-			"`ONCE`/`DAILY`/`WEEKLY` occurrences. `MONTHLY` recurrence detail (which day, " +
-			"which week of the month) is not covered by that walkthrough and remains " +
-			"unconfigurable here — a `MONTHLY` schedule uses whatever default cadence " +
-			"Qualys applies. Tag-based (multi-web-app) targeting is not modelled.",
+			"`ONCE`/`DAILY`/`WEEKLY` occurrences. `MONTHLY` (`day_of_month`/`every_n_months`) " +
+			"is modelled too, but by analogy from a WAS *report* schedule example rather " +
+			"than one seen for this object specifically — verify against a tenant. " +
+			"Tag-based (multi-web-app) targeting is not modelled.",
 
 		CreateContext: resourceWASScanScheduleCreate,
 		ReadContext:   resourceWASScanScheduleRead,
@@ -171,6 +171,20 @@ func resourceWASScanSchedule() *schema.Resource {
 				Type:     schema.TypeInt,
 				Optional: true,
 			},
+			"day_of_month": {
+				Description: "Day of the month to run on. Used with " +
+					"`occurrence_type = \"MONTHLY\"`. Seen only in a WAS *report* schedule " +
+					"example, applied here by analogy since DAILY/WEEKLY match exactly " +
+					"between the two schedule types — verify against a tenant.",
+				Type:     schema.TypeInt,
+				Optional: true,
+			},
+			"every_n_months": {
+				Description: "Repeat every N months. Used with `occurrence_type = \"MONTHLY\"`. " +
+					"See the note on `day_of_month`.",
+				Type:     schema.TypeInt,
+				Optional: true,
+			},
 
 			"notification": {
 				Description: "Email notification sent before a scan under this schedule runs.",
@@ -239,7 +253,10 @@ func wasScheduleRecurrenceFrom(d *schema.ResourceData) *qps.WASScheduleRecurrenc
 	everyNWeeks := d.Get("every_n_weeks").(int)
 	onDays := stringSet(d, "on_days")
 	occurrenceCount := d.Get("occurrence_count").(int)
-	if everyNDays == 0 && everyNWeeks == 0 && len(onDays) == 0 && occurrenceCount == 0 {
+	dayOfMonth := d.Get("day_of_month").(int)
+	everyNMonths := d.Get("every_n_months").(int)
+	if everyNDays == 0 && everyNWeeks == 0 && len(onDays) == 0 && occurrenceCount == 0 &&
+		dayOfMonth == 0 && everyNMonths == 0 {
 		return nil
 	}
 	return &qps.WASScheduleRecurrence{
@@ -247,6 +264,8 @@ func wasScheduleRecurrenceFrom(d *schema.ResourceData) *qps.WASScheduleRecurrenc
 		EveryNWeeks:     everyNWeeks,
 		OnDays:          onDays,
 		OccurrenceCount: occurrenceCount,
+		DayOfMonth:      dayOfMonth,
+		EveryNMonths:    everyNMonths,
 	}
 }
 
@@ -363,6 +382,8 @@ func resourceWASScanScheduleRead(ctx context.Context, d *schema.ResourceData, me
 		values["every_n_weeks"] = sched.Recurrence.EveryNWeeks
 		values["on_days"] = sched.Recurrence.OnDays
 		values["occurrence_count"] = sched.Recurrence.OccurrenceCount
+		values["day_of_month"] = sched.Recurrence.DayOfMonth
+		values["every_n_months"] = sched.Recurrence.EveryNMonths
 	}
 
 	if sched.Notification != nil {

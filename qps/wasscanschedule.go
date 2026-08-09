@@ -51,14 +51,16 @@ const (
 	WASWeekDaySaturday  = "SATURDAY"
 )
 
-// WASScheduleRecurrence is the per-occurrence cadence detail for a DAILY or
-// WEEKLY schedule.
+// WASScheduleRecurrence is the per-occurrence cadence detail for a DAILY,
+// WEEKLY or MONTHLY schedule. Shared between qualys_was_scan_schedule and
+// qualys_was_report_schedule, which use an identical occurrence structure.
 //
-// MONTHLY is not modelled: no source obtained during discovery, including
-// the user-supplied walkthrough that confirmed everything else in this
-// file, showed a monthlyOccurrence example. A MONTHLY schedule can still be
-// created (occurrenceType alone is accepted), but its cadence is whatever
-// Qualys defaults to without a monthlyOccurrence block — unverified.
+// The MONTHLY shape (dayOfMonth, everyNMonths) was seen only in a
+// user-supplied WAS *report* schedule example, not a scan schedule one —
+// applied here by analogy, since the DAILY and WEEKLY shapes are identical
+// across both schedule types in the evidence obtained so far. Only the
+// day-of-month form is modelled; a "the Nth weekday of the month" pattern
+// (as some scheduling APIs also support) has not been seen in any source.
 type WASScheduleRecurrence struct {
 	// EveryNDays applies to a DAILY schedule.
 	EveryNDays int
@@ -68,6 +70,9 @@ type WASScheduleRecurrence struct {
 	EveryNWeeks     int
 	OnDays          []string
 	OccurrenceCount int
+	// DayOfMonth and EveryNMonths apply to a MONTHLY schedule.
+	DayOfMonth   int
+	EveryNMonths int
 }
 
 // WASScheduleNotification is the pre-scan notification a schedule can send.
@@ -200,10 +205,15 @@ type wasWeeklyOccurrenceWire struct {
 	OnDays          *wasWeekDayListWire `json:"onDays,omitempty"`
 }
 
+type wasMonthlyOccurrenceWire struct {
+	DayOfMonth   int `json:"dayOfMonth,omitempty"`
+	EveryNMonths int `json:"everyNMonths,omitempty"`
+}
+
 type wasOccurrenceWire struct {
-	DailyOccurrence  *wasDailyOccurrenceWire  `json:"dailyOccurrence,omitempty"`
-	WeeklyOccurrence *wasWeeklyOccurrenceWire `json:"weeklyOccurrence,omitempty"`
-	// monthlyOccurrence intentionally omitted — see WASScheduleRecurrence.
+	DailyOccurrence   *wasDailyOccurrenceWire   `json:"dailyOccurrence,omitempty"`
+	WeeklyOccurrence  *wasWeeklyOccurrenceWire  `json:"weeklyOccurrence,omitempty"`
+	MonthlyOccurrence *wasMonthlyOccurrenceWire `json:"monthlyOccurrence,omitempty"`
 }
 
 type wasSchedulingWire struct {
@@ -310,28 +320,10 @@ func wasScanScheduleInputToWire(in WASScanScheduleInput) *wasScanScheduleWire {
 		CancelAfterNHours: in.CancelAfterHours,
 		StartDate:         in.StartDate,
 		OccurrenceType:    in.OccurrenceType,
+		Occurrence:        wasScheduleOccurrenceWireFrom(in.Recurrence),
 	}
 	if strings.TrimSpace(in.TimeZoneCode) != "" {
 		scheduling.TimeZone = &wasTimeZoneWire{Code: in.TimeZoneCode}
-	}
-	if in.Recurrence != nil {
-		occ := &wasOccurrenceWire{}
-		if in.Recurrence.EveryNDays > 0 {
-			occ.DailyOccurrence = &wasDailyOccurrenceWire{EveryNDays: in.Recurrence.EveryNDays}
-		}
-		if in.Recurrence.EveryNWeeks > 0 || len(in.Recurrence.OnDays) > 0 {
-			weekly := &wasWeeklyOccurrenceWire{
-				EveryNWeeks:     in.Recurrence.EveryNWeeks,
-				OccurrenceCount: in.Recurrence.OccurrenceCount,
-			}
-			if len(in.Recurrence.OnDays) > 0 {
-				weekly.OnDays = &wasWeekDayListWire{WeekDay: in.Recurrence.OnDays}
-			}
-			occ.WeeklyOccurrence = weekly
-		}
-		if occ.DailyOccurrence != nil || occ.WeeklyOccurrence != nil {
-			scheduling.Occurrence = occ
-		}
 	}
 	w.Scheduling = scheduling
 
@@ -404,20 +396,7 @@ func (w *wasScanScheduleWire) toWASScanSchedule() *WASScanSchedule {
 		if w.Scheduling.TimeZone != nil {
 			out.TimeZoneCode = w.Scheduling.TimeZone.Code
 		}
-		if w.Scheduling.Occurrence != nil {
-			rec := &WASScheduleRecurrence{}
-			if d := w.Scheduling.Occurrence.DailyOccurrence; d != nil {
-				rec.EveryNDays = d.EveryNDays
-			}
-			if wk := w.Scheduling.Occurrence.WeeklyOccurrence; wk != nil {
-				rec.EveryNWeeks = wk.EveryNWeeks
-				rec.OccurrenceCount = wk.OccurrenceCount
-				if wk.OnDays != nil {
-					rec.OnDays = wk.OnDays.WeekDay
-				}
-			}
-			out.Recurrence = rec
-		}
+		out.Recurrence = wasScheduleRecurrenceFromOccurrenceWire(w.Scheduling.Occurrence)
 	}
 
 	if w.Notification != nil {

@@ -64,12 +64,13 @@ capability this provider had not modelled at all: `cancel_after_hours`,
 the full `notification` sub-object, `send_one_mail`, and
 `send_mail_from_address_option`.
 
-**`MONTHLY` recurrence remains unconfirmed** — no source obtained during
-discovery, including this walkthrough, showed a `monthlyOccurrence` example.
-`occurrence_type = "MONTHLY"` is still accepted, but the cadence (which day,
-which week of the month) is whatever Qualys defaults to; verify in the
-Qualys UI after applying. Tag-based (multi-web-app) targeting is not
-modelled — only a single `web_app_id`.
+`MONTHLY` recurrence (`day_of_month`/`every_n_months`) is modelled too, but
+by analogy: the shape was seen only in a companion user-supplied *report*
+schedule walkthrough, not one for this object specifically. `DAILY` and
+`WEEKLY` matched exactly between the two schedule types in the evidence
+obtained so far, which is why the analogy was judged safe enough to build
+on — but verify against a tenant. Tag-based (multi-web-app) targeting is
+still not modelled — only a single `web_app_id`.
 
 Activating and deactivating a schedule now confirmed as dedicated endpoints
 (`activate`/`deactivate/was/wasscanschedule/<id>`), not "via update" as an
@@ -104,6 +105,8 @@ earlier pass guessed — `active` changes are sent through those endpoints.
 - **every_n_weeks** (Number) Repeat every N weeks. Used with `occurrence_type = "WEEKLY"`.
 - **on_days** (Set of String) Days of the week to run on. Used with `occurrence_type = "WEEKLY"`.
 - **occurrence_count** (Number) End the schedule after this many occurrences. Used with `occurrence_type = "WEEKLY"`.
+- **day_of_month** (Number) Day of the month to run on. Used with `occurrence_type = "MONTHLY"`.
+- **every_n_months** (Number) Repeat every N months. Used with `occurrence_type = "MONTHLY"`.
 - **notification** (Block List, Max: 1) Email notification sent before a scan runs.
   - **active** (Boolean)
   - **reschedule** (Boolean) Also notify when a scan is rescheduled rather than run as planned.
