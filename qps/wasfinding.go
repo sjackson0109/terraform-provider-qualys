@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 )
 
 // WAS finding severity/type/status enums, confirmed by doc 11 §9 as the
@@ -137,6 +138,52 @@ func (f WASFindingFilter) toCriteria() []Criterion {
 		out = append(out, Criterion{Field: "isIgnored", Operator: "EQUALS", Value: v})
 	}
 	return out
+}
+
+type wasFindingActionWire struct {
+	Comment string `json:"comment,omitempty"`
+}
+
+type wasFindingActionData struct {
+	Finding *wasFindingActionWire `json:"Finding,omitempty"`
+}
+
+// IgnoreWASFinding marks a finding as ignored (accepted risk, false
+// positive, third-party issue, or compensating control), with comment as
+// the audit-trail justification. Confirmed by a user-supplied "Findings
+// Lifecycle Actions" walkthrough: POST ignore/was/finding/<id> with a
+// data.Finding.comment body — the same Finding wrapper key already used for
+// get/search.
+func (c *Client) IgnoreWASFinding(ctx context.Context, id, comment string) error {
+	if strings.TrimSpace(id) == "" {
+		return fmt.Errorf("qualys qps: WAS finding id is required")
+	}
+	return c.call(ctx, http.MethodPost, "/qps/rest/3.0/ignore/was/finding/"+id,
+		&ServiceRequest{Data: wasFindingActionData{Finding: &wasFindingActionWire{Comment: comment}}}, nil, false)
+}
+
+// ReopenWASFinding reverses IgnoreWASFinding, returning a finding to active status.
+func (c *Client) ReopenWASFinding(ctx context.Context, id, comment string) error {
+	if strings.TrimSpace(id) == "" {
+		return fmt.Errorf("qualys qps: WAS finding id is required")
+	}
+	return c.call(ctx, http.MethodPost, "/qps/rest/3.0/reopen/was/finding/"+id,
+		&ServiceRequest{Data: wasFindingActionData{Finding: &wasFindingActionWire{Comment: comment}}}, nil, false)
+}
+
+// FixWASFinding marks a finding as fixed. Deliberately not wrapped in a
+// Terraform resource: the source walkthrough itself recommends against
+// using lifecycle actions as a substitute for rescanning — "fixed" is
+// meant to be scan-verified (a later scan can revert it if the
+// vulnerability is still detected), not administratively declared the way
+// "ignored" legitimately is. Exposed here for scripted use outside the
+// declarative resource model.
+func (c *Client) FixWASFinding(ctx context.Context, id, comment string) error {
+	if strings.TrimSpace(id) == "" {
+		return fmt.Errorf("qualys qps: WAS finding id is required")
+	}
+	return c.call(ctx, http.MethodPost, "/qps/rest/3.0/fix/was/finding/"+id,
+		&ServiceRequest{Data: wasFindingActionData{Finding: &wasFindingActionWire{Comment: comment}}}, nil, false)
 }
 
 // GetWASFinding returns one WAS finding, or ErrNotFound.

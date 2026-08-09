@@ -324,6 +324,19 @@ See **[doc 11](11-verified-parameter-reference.md)** for the full parameter list
   wrapper key (`ReportTemplate`) was **not** shown in a worked example this time —
   chosen because 3 of 4 confirmed wrapper keys in this codebase lack a `Was` prefix,
   disclosed as a guess, not a repeat of the option-profile mistake.
+- ~~**Finding lifecycle actions (ignore/retest/severity override) — not implemented.**~~
+  **Partially closed.** A tenth research pass — a user-supplied "Findings Lifecycle
+  Actions" walkthrough — confirmed `ignore`/`reopen`/`fix` as `POST
+  {action}/was/finding/<id>` with a `data.Finding.comment` body, reusing the `Finding`
+  wrapper key already confirmed for get/search. `qualys_was_finding_ignore` built for
+  `ignore`/`reopen` (create=ignore, delete=reopen — a genuine declarative state: an
+  admin-accepted risk or confirmed false positive). `fix` is implemented at the client
+  level (`FixWASFinding`) but deliberately not wrapped in a resource: the same
+  walkthrough explicitly recommends against using lifecycle actions as a rescan
+  substitute, since "fixed" is meant to be scan-verified and can be reverted by a later
+  scan — administrator-declared "this is fixed" doesn't fit this provider's declarative
+  model the way `ignore` does. **`retest` and severity overrides (updateSeverity/
+  restoreSeverity) remain unimplemented** — no source has covered them yet.
 - **`time_zone_code_list.php` output field names.** The endpoint's existence and its
   DTD name (`time_zone_code_list.dtd`) are confirmed (doc 03 §8), and it is the source
   of the `time_zone_code` values `qualys_scan_schedule` accepts. Three research passes

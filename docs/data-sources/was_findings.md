@@ -10,8 +10,9 @@ description: |-
 
 Look up Qualys WAS scan findings: vulnerabilities, sensitive-content
 exposures and information-gathered items reported against web applications.
-Read-only — finding lifecycle actions (ignore, retest, severity overrides)
-are not implemented by this provider.
+Read-only — to manage a finding's ignored state, see
+`qualys_was_finding_ignore`. `retest` and severity overrides are not
+implemented.
 
 ## Example Usage
 
