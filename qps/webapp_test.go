@@ -101,3 +101,55 @@ func TestSearchWebAppsDecodesListShape(t *testing.T) {
 		t.Fatalf("got %d web applications, want 2", len(apps))
 	}
 }
+
+func TestUpdateWebAppAuthRecordAssociationsSendsAddAndRemove(t *testing.T) {
+	var gotPath string
+	var gotBody map[string]interface{}
+
+	c, srv := testClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		b, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(b, &gotBody)
+		fmt.Fprint(w, `{"ServiceResponse":{"responseCode":"SUCCESS"}}`)
+	}))
+	defer srv.Close()
+
+	if err := c.UpdateWebAppAuthRecordAssociations(context.Background(), "555", []string{"10"}, []string{"20"}); err != nil {
+		t.Fatalf("UpdateWebAppAuthRecordAssociations: %v", err)
+	}
+	if gotPath != "/qps/rest/3.0/update/was/webapp/555" {
+		t.Errorf("path = %q", gotPath)
+	}
+
+	sreq, _ := gotBody["ServiceRequest"].(map[string]interface{})
+	data, _ := sreq["data"].(map[string]interface{})
+	webapp, _ := data["WebApp"].(map[string]interface{})
+	authRecords, _ := webapp["authRecords"].(map[string]interface{})
+	if authRecords == nil {
+		t.Fatalf("no authRecords in payload: %v", webapp)
+	}
+	add, _ := authRecords["add"].(map[string]interface{})
+	addList, _ := add["WebAppAuthRecord"].([]interface{})
+	if len(addList) != 1 {
+		t.Errorf("expected 1 added ref, got %v", add)
+	}
+	remove, _ := authRecords["remove"].(map[string]interface{})
+	removeList, _ := remove["WebAppAuthRecord"].([]interface{})
+	if len(removeList) != 1 {
+		t.Errorf("expected 1 removed ref, got %v", remove)
+	}
+	if webapp["tags"] != nil || webapp["name"] != nil {
+		t.Errorf("association update must not touch name/url/tags: %v", webapp)
+	}
+}
+
+func TestUpdateWebAppAuthRecordAssociationsNoopWithNothingToDo(t *testing.T) {
+	c, srv := testClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("no request should be sent with nothing to add or remove")
+	}))
+	defer srv.Close()
+
+	if err := c.UpdateWebAppAuthRecordAssociations(context.Background(), "555", nil, nil); err != nil {
+		t.Fatalf("UpdateWebAppAuthRecordAssociations: %v", err)
+	}
+}

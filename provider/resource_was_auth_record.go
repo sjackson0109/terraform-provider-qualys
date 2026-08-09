@@ -36,15 +36,19 @@ func resourceWASAuthRecord() *schema.Resource {
 	return &schema.Resource{
 		Description: "A Qualys WAS authentication record: form or server credentials the " +
 			"crawler uses to authenticate against a web application during a scan.\n\n" +
-			"**Provenance note:** the field names used here are corroborated from two " +
-			"independent non-official sources (the WAS API guide's derived reference and " +
-			"an open-source Qualys API client). A user-supplied excerpt of the official " +
-			"WAS API User Guide (Chapter 3, p.102) later confirmed the endpoint path " +
-			"(`/was/webauthrecord`, corrected from an earlier `/was/webappauthrecord` " +
-			"guess) and the record sub-type vocabulary, but not yet the create/update " +
-			"payload shape itself. Verify against a tenant before relying on it for " +
-			"anything beyond form and server records; Selenium script and OAuth2 " +
-			"records are not implemented.\n\n" +
+			"**Provenance note:** the field names used here were first corroborated from " +
+			"two independent non-official sources, then substantially revised against two " +
+			"user-supplied excerpts of the official WAS API User Guide (Chapter 3): a " +
+			"primary-source excerpt (p.102) confirmed the endpoint path (`/was/webauthrecord`) " +
+			"and the record sub-type vocabulary, and a transcribed \"Create and Update " +
+			"Authentication Records\" walkthrough showed `username`/`password`/`login_url` as " +
+			"flat elements rather than the generic field list this resource originally sent " +
+			"them through — the current shape. Treat the walkthrough as strong but not " +
+			"absolute evidence (it reads as a transcription, not a verbatim quote) and verify " +
+			"against a tenant before relying on this in production. Selenium script and " +
+			"OAuth2 records are not implemented.\n\n" +
+			"Associating a record with a web application is a separate step — see " +
+			"`qualys_web_application`'s `auth_record_ids`.\n\n" +
 			"Credentials are write-only: Qualys masks them on read, so this provider never " +
 			"reads them back into state. A credential changed outside Terraform is not " +
 			"detected as drift, and the values still live in Terraform state because " +
@@ -65,6 +69,10 @@ func resourceWASAuthRecord() *schema.Resource {
 				Type:        schema.TypeString,
 				Required:    true,
 			},
+			"comments": {
+				Type:     schema.TypeString,
+				Optional: true,
+			},
 			"tag_ids": {
 				Description: "Asset tag IDs (see `qualys_asset_tag`) associated with this record.",
 				Type:        schema.TypeSet,
@@ -73,8 +81,11 @@ func resourceWASAuthRecord() *schema.Resource {
 			},
 
 			"form_record": {
-				Description: "Form-based authentication: field/value pairs the crawler fills " +
-					"into a login page. Conflicts with `server_record`.",
+				Description: "Form-based authentication: the crawler fills these in on a login " +
+					"page. Conflicts with `server_record`. Set `login_url`/`username`/`password` " +
+					"for a `STANDARD` record (a login page with a known username and password " +
+					"field); set one or more `field` blocks instead for a `CUSTOM` record whose " +
+					"field names aren't fixed.",
 				Type:          schema.TypeList,
 				Optional:      true,
 				MaxItems:      1,
@@ -82,14 +93,32 @@ func resourceWASAuthRecord() *schema.Resource {
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
 						"sub_type": {
-							Description: "Authentication style. A primary-source excerpt of the " +
-								"WAS API User Guide names `STANDARD`, `CERT` and `SELFINITIAL` " +
-								"as form record sub-types, but not validated client-side — that " +
-								"evidence confirms them as filter values, not directly as this " +
-								"create-time field's accepted values; an invalid value is " +
-								"rejected by the API at apply time.",
+							Description: "Authentication style: `STANDARD` or `CUSTOM` " +
+								"(corroborated by a create-example and by supported-types " +
+								"documentation respectively), or `CERT`/`SELFINITIAL` " +
+								"(corroborated only via a filter enum). Not validated " +
+								"client-side; an invalid value is rejected by the API at " +
+								"apply time.",
 							Type:     schema.TypeString,
 							Optional: true,
+						},
+						"login_url": {
+							Description: "URL of the login page. Used with a `STANDARD` record.",
+							Type:        schema.TypeString,
+							Optional:    true,
+						},
+						"username": {
+							Description: "Used with a `STANDARD` record. Write-only — see the " +
+								"resource-level note on credentials.",
+							Type:     schema.TypeString,
+							Optional: true,
+						},
+						"password": {
+							Description: "Used with a `STANDARD` record. Write-only — see the " +
+								"resource-level note on credentials.",
+							Type:      schema.TypeString,
+							Optional:  true,
+							Sensitive: true,
 						},
 						"ssl_only": {
 							Description: "Only submit credentials over HTTPS.",
@@ -102,11 +131,11 @@ func resourceWASAuthRecord() *schema.Resource {
 							Optional:    true,
 						},
 						"field": {
-							Description: "One login-form field. Repeat for each field the " +
-								"login form needs (typically a username and a password field).",
+							Description: "One login-form field, for a `CUSTOM` record whose " +
+								"field names aren't fixed. Repeat for each field the login " +
+								"form needs.",
 							Type:     schema.TypeList,
-							Required: true,
-							MinItems: 1,
+							Optional: true,
 							Elem:     fieldElem,
 						},
 					},
@@ -114,7 +143,7 @@ func resourceWASAuthRecord() *schema.Resource {
 			},
 
 			"server_record": {
-				Description: "Server-based authentication (HTTP Basic/NTLM/Digest-style). " +
+				Description: "Server-based authentication (HTTP Basic/Digest-style). " +
 					"Conflicts with `form_record`.",
 				Type:          schema.TypeList,
 				Optional:      true,
@@ -123,10 +152,9 @@ func resourceWASAuthRecord() *schema.Resource {
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
 						"sub_type": {
-							Description: "Authentication style. The same primary-source excerpt " +
-								"names `BASIC` and `DIGEST` as server record sub-types; see the " +
-								"equivalent note on `form_record.sub_type` for why this is not " +
-								"validated client-side.",
+							Description: "Authentication style: `BASIC` or `DIGEST`, " +
+								"corroborated via a filter enum. Not validated client-side; " +
+								"an invalid value is rejected by the API at apply time.",
 							Type:     schema.TypeString,
 							Optional: true,
 						},
@@ -152,9 +180,20 @@ func resourceWASAuthRecord() *schema.Resource {
 		},
 
 		CustomizeDiff: func(ctx context.Context, d *schema.ResourceDiff, meta interface{}) error {
-			if len(d.Get("form_record").([]interface{})) == 0 && len(d.Get("server_record").([]interface{})) == 0 {
+			form := d.Get("form_record").([]interface{})
+			server := d.Get("server_record").([]interface{})
+			if len(form) == 0 && len(server) == 0 {
 				return errors.New("one of form_record or server_record is required: " +
 					"a record with neither has no credential for the crawler to use")
+			}
+			if len(form) == 1 {
+				m := form[0].(map[string]interface{})
+				hasStandard := m["username"].(string) != "" && m["password"].(string) != ""
+				hasCustom := len(m["field"].([]interface{})) > 0
+				if !hasStandard && !hasCustom {
+					return errors.New("form_record needs either username and password " +
+						"(a STANDARD record) or at least one field block (a CUSTOM record)")
+				}
 			}
 			return nil
 		},
@@ -179,14 +218,18 @@ func wasAuthFieldsFrom(raw []interface{}) []qps.WASAuthField {
 
 func wasAuthRecordInputFrom(d *schema.ResourceData) qps.WASAuthRecordInput {
 	in := qps.WASAuthRecordInput{
-		Name:   d.Get("name").(string),
-		TagIDs: stringSet(d, "tag_ids"),
+		Name:     d.Get("name").(string),
+		Comments: d.Get("comments").(string),
+		TagIDs:   stringSet(d, "tag_ids"),
 	}
 
 	if raw := d.Get("form_record").([]interface{}); len(raw) == 1 {
 		m := raw[0].(map[string]interface{})
 		in.Form = &qps.WASFormRecord{
 			SubType:   m["sub_type"].(string),
+			LoginURL:  m["login_url"].(string),
+			Username:  m["username"].(string),
+			Password:  m["password"].(string),
 			SSLOnly:   m["ssl_only"].(bool),
 			AuthVault: m["auth_vault"].(bool),
 			Fields:    wasAuthFieldsFrom(m["field"].([]interface{})),
@@ -251,9 +294,10 @@ func resourceWASAuthRecordRead(ctx context.Context, d *schema.ResourceData, meta
 	// nothing trustworthy to refresh state with. Leaving them out of this
 	// map keeps whatever the last apply configured.
 	return diag.FromErr(setAll(d, map[string]interface{}{
-		"name":    rec.Name,
-		"tag_ids": tagIDs,
-		"created": rec.Created,
+		"name":     rec.Name,
+		"comments": rec.Comments,
+		"tag_ids":  tagIDs,
+		"created":  rec.Created,
 	}))
 }
 

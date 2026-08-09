@@ -244,6 +244,28 @@ See **[doc 11](11-verified-parameter-reference.md)** for the full parameter list
   ask if more of the guide becomes available:** the "Create Authentication Record" and
   "Update Authentication Record" pages (expected to follow this one in Chapter 3), and
   the WAS Scan Schedule chapter's recurrence sub-elements.
+- **Sixth pass — a user-supplied "Create and Update Authentication Records" walkthrough
+  covering exactly the two pages the fifth pass asked for.** Treated as strong but not
+  absolute evidence: it reads as a transcription (clean Markdown/fenced code, unlike the
+  raw, messy text the fifth pass's genuine PDF copy/paste produced), not a verbatim quote.
+  It corrects a real design mistake rather than just filling a gap: a `STANDARD` form
+  record and a server record both use flat `username`/`password` elements (plus
+  `login_url` for form records) directly under `formRecord`/`serverRecord` — **not** the
+  generic `fields` list of `{name, value, secured}` entries the fourth pass's two sources
+  described. `qualys_was_auth_record` sent every credential through that generic list;
+  now only a `CUSTOM` form record does (kept, since supported-types documentation
+  separately names CUSTOM and the generic list is still the two original sources'
+  evidence for it — just not for STANDARD). Also newly confirmed: a flat `comments`
+  string element (not a list, as the fourth pass's summarised source implied), and that
+  associating an auth record with a web application is a **separate** call —
+  `update/was/webapp/<id>` with `data.WebApp.authRecords.add`/`.remove`, each a list of
+  `{id}` refs, an incremental idiom distinct from tags' authoritative "set". Added as
+  `qualys_web_application.auth_record_ids`, diffed against prior state on every apply.
+  The GET response shape for `authRecords` was not shown in either excerpt; this
+  provider's decode is inferred by analogy with how `tags` round-trips, disclosed as
+  such in code. **Still open:** whether OAuth2/Selenium records follow the same
+  flat-element pattern or the generic list; the WAS Scan Schedule recurrence
+  sub-elements, still not supplied.
 - **`time_zone_code_list.php` output field names.** The endpoint's existence and its
   DTD name (`time_zone_code_list.dtd`) are confirmed (doc 03 §8), and it is the source
   of the `time_zone_code` values `qualys_scan_schedule` accepts. Three research passes

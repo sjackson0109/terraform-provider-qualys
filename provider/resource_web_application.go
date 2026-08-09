@@ -42,6 +42,17 @@ func resourceWebApplication() *schema.Resource {
 				Optional: true,
 				Elem:     &schema.Schema{Type: schema.TypeString},
 			},
+			"auth_record_ids": {
+				Description: "IDs of `qualys_was_auth_record`s to associate with this web " +
+					"application. A user-supplied example shows this managed via a separate " +
+					"add/remove call rather than the authoritative \"set\" idiom `tag_ids` uses " +
+					"— this provider diffs the configured set against state and sends only the " +
+					"added/removed IDs. The response shape used to read this back was not shown " +
+					"in that example; it is inferred by analogy with how `tag_ids` round-trips.",
+				Type:     schema.TypeSet,
+				Optional: true,
+				Elem:     &schema.Schema{Type: schema.TypeString},
+			},
 
 			"created": {Type: schema.TypeString, Computed: true},
 		},
@@ -56,6 +67,29 @@ func webAppInputFrom(d *schema.ResourceData) qps.WebAppInput {
 	}
 }
 
+// diffStringSets returns the elements added and removed going from old to
+// new, for callers that manage a relationship via incremental add/remove
+// rather than an authoritative replace.
+func diffStringSets(old, new []string) (added, removed []string) {
+	oldSet := make(map[string]bool, len(old))
+	for _, v := range old {
+		oldSet[v] = true
+	}
+	newSet := make(map[string]bool, len(new))
+	for _, v := range new {
+		newSet[v] = true
+		if !oldSet[v] {
+			added = append(added, v)
+		}
+	}
+	for _, v := range old {
+		if !newSet[v] {
+			removed = append(removed, v)
+		}
+	}
+	return added, removed
+}
+
 func resourceWebApplicationCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	c, err := qpsClient(meta)
 	if err != nil {
@@ -66,6 +100,16 @@ func resourceWebApplicationCreate(ctx context.Context, d *schema.ResourceData, m
 		return diag.FromErr(err)
 	}
 	d.SetId(app.ID)
+
+	// A user-supplied example states that creating an authentication record
+	// does not associate it with a web application, and vice versa: the
+	// association is always this separate call, even on first creation.
+	if authRecordIDs := stringSet(d, "auth_record_ids"); len(authRecordIDs) > 0 {
+		if err := c.UpdateWebAppAuthRecordAssociations(ctx, app.ID, authRecordIDs, nil); err != nil {
+			return diag.FromErr(err)
+		}
+	}
+
 	return resourceWebApplicationRead(ctx, d, meta)
 }
 
@@ -97,10 +141,11 @@ func resourceWebApplicationRead(ctx context.Context, d *schema.ResourceData, met
 	}
 
 	return diag.FromErr(setAll(d, map[string]interface{}{
-		"name":    app.Name,
-		"url":     app.URL,
-		"tag_ids": tagIDs,
-		"created": app.Created,
+		"name":            app.Name,
+		"url":             app.URL,
+		"tag_ids":         tagIDs,
+		"auth_record_ids": app.AuthRecordIDs,
+		"created":         app.Created,
 	}))
 }
 
@@ -112,6 +157,18 @@ func resourceWebApplicationUpdate(ctx context.Context, d *schema.ResourceData, m
 	if err := c.UpdateWebApp(ctx, d.Id(), webAppInputFrom(d)); err != nil {
 		return diag.FromErr(err)
 	}
+
+	if d.HasChange("auth_record_ids") {
+		oldRaw, newRaw := d.GetChange("auth_record_ids")
+		added, removed := diffStringSets(
+			stringSetFromInterface(oldRaw), stringSetFromInterface(newRaw))
+		if len(added) > 0 || len(removed) > 0 {
+			if err := c.UpdateWebAppAuthRecordAssociations(ctx, d.Id(), added, removed); err != nil {
+				return diag.FromErr(err)
+			}
+		}
+	}
+
 	return resourceWebApplicationRead(ctx, d, meta)
 }
 

@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-func TestCreateWASAuthRecordSendsFormFieldsUnderSetIdiom(t *testing.T) {
+func TestCreateWASAuthRecordSendsStandardFormCredentialsAsFlatFields(t *testing.T) {
 	var gotPath string
 	var gotBody map[string]interface{}
 
@@ -26,11 +26,10 @@ func TestCreateWASAuthRecordSendsFormFieldsUnderSetIdiom(t *testing.T) {
 	rec, err := c.CreateWASAuthRecord(context.Background(), WASAuthRecordInput{
 		Name: "storefront-login",
 		Form: &WASFormRecord{
-			SubType: "STANDARD",
-			Fields: []WASAuthField{
-				{Name: "username", Value: "scanner"},
-				{Name: "password", Value: "s3cret", Secured: true},
-			},
+			SubType:  WASAuthFormStandard,
+			LoginURL: "https://shop.example.com/login",
+			Username: "scanner",
+			Password: "s3cret",
 		},
 	})
 	if err != nil {
@@ -50,6 +49,44 @@ func TestCreateWASAuthRecordSendsFormFieldsUnderSetIdiom(t *testing.T) {
 	if formRecord == nil {
 		t.Fatalf("no formRecord in payload: %v", record)
 	}
+	if formRecord["username"] != "scanner" || formRecord["password"] != "s3cret" ||
+		formRecord["loginUrl"] != "https://shop.example.com/login" {
+		t.Errorf("formRecord did not send flat credential elements: %v", formRecord)
+	}
+	if _, present := formRecord["fields"]; present {
+		t.Errorf("a STANDARD record must not send the generic fields list: %v", formRecord)
+	}
+}
+
+func TestCreateWASAuthRecordSendsCustomFormFieldsUnderSetIdiom(t *testing.T) {
+	var gotBody map[string]interface{}
+
+	c, srv := testClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(b, &gotBody)
+		fmt.Fprint(w, `{"ServiceResponse":{"responseCode":"SUCCESS",
+		  "data":[{"WebAppAuthRecord":{"id":79,"name":"custom-login"}}]}}`)
+	}))
+	defer srv.Close()
+
+	_, err := c.CreateWASAuthRecord(context.Background(), WASAuthRecordInput{
+		Name: "custom-login",
+		Form: &WASFormRecord{
+			SubType: WASAuthFormCustom,
+			Fields: []WASAuthField{
+				{Name: "user", Value: "scanner"},
+				{Name: "pass", Value: "s3cret", Secured: true},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateWASAuthRecord: %v", err)
+	}
+
+	sreq, _ := gotBody["ServiceRequest"].(map[string]interface{})
+	data, _ := sreq["data"].(map[string]interface{})
+	record, _ := data["WebAppAuthRecord"].(map[string]interface{})
+	formRecord, _ := record["formRecord"].(map[string]interface{})
 	fields, _ := formRecord["fields"].(map[string]interface{})
 	set, _ := fields["set"].(map[string]interface{})
 	entries, _ := set["WebAppAuthFormRecordField"].([]interface{})
@@ -58,7 +95,7 @@ func TestCreateWASAuthRecordSendsFormFieldsUnderSetIdiom(t *testing.T) {
 	}
 }
 
-func TestCreateWASAuthRecordEncodesServerCredentialsAsFields(t *testing.T) {
+func TestCreateWASAuthRecordSendsServerCredentialsAsFlatFields(t *testing.T) {
 	var gotBody map[string]interface{}
 
 	c, srv := testClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -84,11 +121,43 @@ func TestCreateWASAuthRecordEncodesServerCredentialsAsFields(t *testing.T) {
 	if serverRecord == nil {
 		t.Fatalf("no serverRecord in payload: %v", record)
 	}
-	fields, _ := serverRecord["fields"].(map[string]interface{})
-	set, _ := fields["set"].(map[string]interface{})
-	entries, _ := set["WebAppAuthFormRecordField"].([]interface{})
-	if len(entries) != 3 {
-		t.Fatalf("expected username, domain and password fields, got %v", entries)
+	if serverRecord["username"] != "scanner" || serverRecord["password"] != "s3cret" ||
+		serverRecord["domain"] != "CORP" {
+		t.Errorf("serverRecord did not send flat credential elements: %v", serverRecord)
+	}
+	if _, present := serverRecord["fields"]; present {
+		t.Errorf("a server record must not send the generic fields list: %v", serverRecord)
+	}
+}
+
+func TestCreateWASAuthRecordSendsComments(t *testing.T) {
+	var gotBody map[string]interface{}
+
+	c, srv := testClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(b, &gotBody)
+		fmt.Fprint(w, `{"ServiceResponse":{"responseCode":"SUCCESS",
+		  "data":[{"WebAppAuthRecord":{"id":80,"name":"x","comments":"Created via API"}}]}}`)
+	}))
+	defer srv.Close()
+
+	rec, err := c.CreateWASAuthRecord(context.Background(), WASAuthRecordInput{
+		Name:     "x",
+		Comments: "Created via API",
+		Server:   &WASServerRecord{Username: "u", Password: "p"},
+	})
+	if err != nil {
+		t.Fatalf("CreateWASAuthRecord: %v", err)
+	}
+	if rec.Comments != "Created via API" {
+		t.Errorf("rec.Comments = %q", rec.Comments)
+	}
+
+	sreq, _ := gotBody["ServiceRequest"].(map[string]interface{})
+	data, _ := sreq["data"].(map[string]interface{})
+	record, _ := data["WebAppAuthRecord"].(map[string]interface{})
+	if record["comments"] != "Created via API" {
+		t.Errorf("comments = %v", record["comments"])
 	}
 }
 

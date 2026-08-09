@@ -10,12 +10,19 @@ import (
 
 // WebApp is a WAS web application: the scan target object that option
 // profiles, auth records and scan schedules all reference.
+//
+// AuthRecordIDs is decoded on the same list/set pattern this package already
+// confirmed for Tags (a "list" sub-key of {id, name} refs on read), inferred
+// by analogy rather than seen in a GET example — the one user-supplied
+// example for this field only shows the update (add/remove) side. See
+// UpdateWebAppAuthRecordAssociations.
 type WebApp struct {
-	ID      string
-	Name    string
-	URL     string
-	Tags    []TagRef
-	Created string
+	ID            string
+	Name          string
+	URL           string
+	Tags          []TagRef
+	AuthRecordIDs []string
+	Created       string
 }
 
 // WebAppInput is the desired state of a web application.
@@ -27,6 +34,25 @@ type WebAppInput struct {
 	// create/update, matching the "set" idiom the tagging API documents for
 	// tag-list associations, rather than an incremental add/remove.
 	TagIDs []string
+}
+
+type webAppAuthRecordRef struct {
+	ID json.Number `json:"id,omitempty"`
+}
+
+type webAppAuthRecordRefList struct {
+	WebAppAuthRecord []webAppAuthRecordRef `json:"WebAppAuthRecord"`
+}
+
+// webAppAuthRecordsWire is the "authRecords" element. A user-supplied
+// example shows only add/remove (an incremental idiom, unlike tags' "set"
+// authoritative replace); "list" is this package's own addition for
+// decoding a GET response, inferred by analogy with the tags list/set shape
+// rather than confirmed against a sample response.
+type webAppAuthRecordsWire struct {
+	Add    *webAppAuthRecordRefList `json:"add,omitempty"`
+	Remove *webAppAuthRecordRefList `json:"remove,omitempty"`
+	List   *webAppAuthRecordRefList `json:"list,omitempty"`
 }
 
 // tagSimpleList is the wire shape the portal API uses under both "set" and
@@ -43,11 +69,12 @@ type webAppTagList struct {
 }
 
 type webAppWire struct {
-	ID      json.Number    `json:"id,omitempty"`
-	Name    string         `json:"name,omitempty"`
-	URL     string         `json:"url,omitempty"`
-	Tags    *webAppTagList `json:"tags,omitempty"`
-	Created string         `json:"createdDate,omitempty"`
+	ID          json.Number            `json:"id,omitempty"`
+	Name        string                 `json:"name,omitempty"`
+	URL         string                 `json:"url,omitempty"`
+	Tags        *webAppTagList         `json:"tags,omitempty"`
+	AuthRecords *webAppAuthRecordsWire `json:"authRecords,omitempty"`
+	Created     string                 `json:"createdDate,omitempty"`
 }
 
 type webAppData struct {
@@ -64,6 +91,11 @@ func (w *webAppWire) toWebApp() *WebApp {
 	if w.Tags != nil && w.Tags.List != nil {
 		for _, t := range w.Tags.List.TagSimple {
 			out.Tags = append(out.Tags, TagRef{ID: t.ID.String(), Name: t.Name})
+		}
+	}
+	if w.AuthRecords != nil && w.AuthRecords.List != nil {
+		for _, r := range w.AuthRecords.List.WebAppAuthRecord {
+			out.AuthRecordIDs = append(out.AuthRecordIDs, r.ID.String())
 		}
 	}
 	return out
@@ -116,6 +148,45 @@ func (c *Client) UpdateWebApp(ctx context.Context, id string, in WebAppInput) er
 	}
 	return c.call(ctx, http.MethodPost, "/qps/rest/3.0/update/was/webapp/"+id,
 		&ServiceRequest{Data: webAppData{WebApp: webAppInputToWire(in)}}, nil, false)
+}
+
+// UpdateWebAppAuthRecordAssociations adds and/or removes authentication
+// record associations on a web application.
+//
+// A user-supplied example shows this as its own update call — POST
+// update/was/webapp/<id> with data.WebApp.authRecords.add/.remove, each a
+// list of {id} refs — using an incremental add/remove idiom, distinct from
+// the "set" (authoritative replace) idiom UpdateWebApp uses for tags. The
+// same example states that creating an authentication record does not
+// associate it with any web application; the association is always this
+// separate step, including on first creation of a web application that
+// should reference existing records.
+func (c *Client) UpdateWebAppAuthRecordAssociations(ctx context.Context, webAppID string, add, remove []string) error {
+	if strings.TrimSpace(webAppID) == "" {
+		return fmt.Errorf("qualys qps: web application id is required")
+	}
+	if len(add) == 0 && len(remove) == 0 {
+		return nil
+	}
+
+	authRecords := &webAppAuthRecordsWire{}
+	if len(add) > 0 {
+		authRecords.Add = &webAppAuthRecordRefList{WebAppAuthRecord: webAppAuthRecordRefsFor(add)}
+	}
+	if len(remove) > 0 {
+		authRecords.Remove = &webAppAuthRecordRefList{WebAppAuthRecord: webAppAuthRecordRefsFor(remove)}
+	}
+
+	return c.call(ctx, http.MethodPost, "/qps/rest/3.0/update/was/webapp/"+webAppID,
+		&ServiceRequest{Data: webAppData{WebApp: &webAppWire{AuthRecords: authRecords}}}, nil, false)
+}
+
+func webAppAuthRecordRefsFor(ids []string) []webAppAuthRecordRef {
+	out := make([]webAppAuthRecordRef, 0, len(ids))
+	for _, id := range ids {
+		out = append(out, webAppAuthRecordRef{ID: json.Number(id)})
+	}
+	return out
 }
 
 // DeleteWebApp removes a web application.
