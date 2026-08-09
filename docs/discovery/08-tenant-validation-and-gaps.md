@@ -264,8 +264,29 @@ See **[doc 11](11-verified-parameter-reference.md)** for the full parameter list
   The GET response shape for `authRecords` was not shown in either excerpt; this
   provider's decode is inferred by analogy with how `tags` round-trips, disclosed as
   such in code. **Still open:** whether OAuth2/Selenium records follow the same
-  flat-element pattern or the generic list; the WAS Scan Schedule recurrence
-  sub-elements, still not supplied.
+  flat-element pattern or the generic list.
+- ~~**WAS scan schedule recurrence sub-elements.**~~ **Closed for `DAILY`/`WEEKLY`
+  (Confirmed) — `MONTHLY` still open.** A user-supplied "Create and Update Scan
+  Schedule" walkthrough (transcribed, not a verbatim quote — strong but not absolute
+  evidence) supplied exactly the recurrence detail this discovery had been asking for
+  since the third pass, and along the way corrected a bigger structural mistake: the
+  first `qualys_was_scan_schedule` was built with `startDate`/`timeZone`/
+  `occurrenceType` as flat top-level fields, per the official Quick Reference's element
+  list, and `cancelOption` at the top level too. The walkthrough shows all of these
+  nested under a `scheduling` sub-object (`timeZone` itself wrapping a `.code`), and
+  `cancelOption` living under `target` instead. This is the second time in this
+  discovery a summarised element list (Quick Reference or a derived reference) named
+  the right elements but not their true nesting — the first was the WAS auth record's
+  fields-list-vs-flat-elements mistake, closed by the prior pass. **Pattern for future
+  passes: treat a flat element list as leads to verify, not a payload shape, until a
+  worked example confirms the nesting.** Newly confirmed alongside recurrence:
+  `cancelAfterNHours`, the full `notification` sub-object (`active`, `reschedule`,
+  `delay.nb`/`.scale`, `recipients.set.EmailAddress`, `message`), `sendMail`,
+  `sendOneMail`, `sendMailFromAddressOption`, and that activate/deactivate are dedicated
+  endpoints (resolving the "Conflicts with the Quick Reference" item doc 11 §9 recorded
+  in favour of the derived reference). `qualys_was_scan_schedule` rebuilt accordingly.
+  **Still open:** `MONTHLY` recurrence — no `monthlyOccurrence` example was supplied;
+  tag-based (multi-web-app) targeting, still not modelled at all.
 - **`time_zone_code_list.php` output field names.** The endpoint's existence and its
   DTD name (`time_zone_code_list.dtd`) are confirmed (doc 03 §8), and it is the source
   of the `time_zone_code` values `qualys_scan_schedule` accepts. Three research passes

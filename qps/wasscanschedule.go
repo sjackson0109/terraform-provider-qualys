@@ -22,103 +22,245 @@ const (
 	WASOccurrenceMonthly = "MONTHLY"
 )
 
+// WAS scan schedule scanner appliance types.
+const (
+	WASScannerExternal = "EXTERNAL"
+	WASScannerInternal = "INTERNAL"
+)
+
+// WAS scan schedule cancel options.
+const (
+	WASCancelOptionDefault  = "DEFAULT"
+	WASCancelOptionSpecific = "SPECIFIC"
+)
+
+// WAS scan schedule notification sender options.
+const (
+	WASSendMailFromQualysSupport = "QUALYS_SUPPORT"
+	WASSendMailFromOwner         = "OWNER"
+)
+
+// Week days accepted by a weekly schedule's onDays list.
+const (
+	WASWeekDaySunday    = "SUNDAY"
+	WASWeekDayMonday    = "MONDAY"
+	WASWeekDayTuesday   = "TUESDAY"
+	WASWeekDayWednesday = "WEDNESDAY"
+	WASWeekDayThursday  = "THURSDAY"
+	WASWeekDayFriday    = "FRIDAY"
+	WASWeekDaySaturday  = "SATURDAY"
+)
+
+// WASScheduleRecurrence is the per-occurrence cadence detail for a DAILY or
+// WEEKLY schedule.
+//
+// MONTHLY is not modelled: no source obtained during discovery, including
+// the user-supplied walkthrough that confirmed everything else in this
+// file, showed a monthlyOccurrence example. A MONTHLY schedule can still be
+// created (occurrenceType alone is accepted), but its cadence is whatever
+// Qualys defaults to without a monthlyOccurrence block — unverified.
+type WASScheduleRecurrence struct {
+	// EveryNDays applies to a DAILY schedule.
+	EveryNDays int
+	// EveryNWeeks, OnDays and OccurrenceCount apply to a WEEKLY schedule.
+	// OnDays holds WASWeekDay* values. OccurrenceCount, if set, ends the
+	// schedule after that many occurrences.
+	EveryNWeeks     int
+	OnDays          []string
+	OccurrenceCount int
+}
+
+// WASScheduleNotification is the pre-scan notification a schedule can send.
+type WASScheduleNotification struct {
+	Active bool
+	// Reschedule enables a separate notification when a scan is
+	// rescheduled rather than run as planned.
+	Reschedule bool
+	// DelayAmount/DelayScale set how long before the scan the notification
+	// goes out, e.g. DelayAmount=1, DelayScale="DAY".
+	DelayAmount int
+	DelayScale  string
+	Recipients  []string
+	Message     string
+}
+
 // WASScanSchedule is a recurring WAS scan.
 type WASScanSchedule struct {
-	ID                 string
-	Name               string
-	Type               string
-	WebAppID           string
-	OptionProfileID    string
-	StartDate          string
-	TimeZone           string
-	OccurrenceType     string
-	Notification       bool
-	Reschedule         bool
-	RandomizeScan      bool
-	WebAppAuthRecordID string
-	ProxyID            string
-	DNSOverrideID      string
-	CancelOption       string
-	SendMail           bool
-	Active             bool
-	Created            string
+	ID       string
+	Name     string
+	Type     string
+	Active   bool
+	WebAppID string
+
+	WebAppAuthRecordID        string
+	WebAppAuthRecordIsDefault bool
+	ScannerType               string
+	ScannerFriendlyName       string
+	CancelOption              string
+
+	OptionProfileID string
+	ProxyID         string
+	DNSOverrideID   string
+
+	StartDate        string
+	TimeZoneCode     string
+	OccurrenceType   string
+	CancelAfterHours int
+	Recurrence       *WASScheduleRecurrence
+
+	Notification              *WASScheduleNotification
+	SendMail                  bool
+	SendOneMail               bool
+	SendMailFromAddressOption string
+
+	Created string
 }
 
 // WASScanScheduleInput is the desired state of a WAS scan schedule.
 //
-// This models only the elements doc 11 (this provider's discovery notes,
-// §8) confirms by name from the official Quick Reference: name,
-// target.webApp.id, type, profile.id, startDate, timeZone, occurrenceType,
-// notification, reschedule, and the simple optional id/boolean references.
-// Tag-based (multi-web-app) targeting and the scannerAppliance sub-object
-// are not modelled — their exact wire nesting was only described in prose,
-// never seen in a sample payload, and stacking an unverified nesting on top
-// of an already-partial resource was judged too much unverified surface for
-// one pass.
+// The element model is now Confirmed against a user-supplied "Create and
+// Update Scan Schedule" walkthrough (transcribed, not a verbatim PDF quote,
+// so treated as strong but not absolute evidence) covering ONCE/DAILY/WEEKLY
+// occurrences, the full target sub-object (web app, auth record,
+// scanner appliance, cancel option), scheduling (startDate, timeZone.code,
+// cancelAfterNHours), notifications (active, reschedule, delay, email
+// recipients, message) and completion mail (sendMail, sendOneMail,
+// sendMailFromAddressOption). This replaced an earlier version built only
+// from doc 11's official Quick Reference, which named these top-level
+// elements but not their exact nesting (scheduling and notification turned
+// out to be sub-objects, not flat fields; cancelOption turned out to live
+// under target, not top-level) or the recurrence sub-elements at all.
 //
-// The per-occurrence recurrence detail (every N days/weeks/months, which
-// weekdays, which day of month) is NOT modelled: doc 11 confirms
-// occurrenceType itself but explicitly could not find the frequency
-// sub-element names anywhere reachable during discovery, including a fourth
-// pass that reached several mirrors of the WAS API User Guide, all blocked
-// by this environment's network egress policy. A DAILY/WEEKLY/MONTHLY
-// schedule created here uses whatever default cadence Qualys applies when
-// those fields are omitted from the request — which has not been observed
-// against a live tenant. Verify the resulting cadence in the Qualys UI after
-// the first apply.
+// MONTHLY recurrence detail remains unconfirmed — see the WASScheduleRecurrence
+// doc comment. Tag-based (multi-web-app) targeting is still not modelled.
 type WASScanScheduleInput struct {
-	Name               string
-	Type               string
-	WebAppID           string
-	OptionProfileID    string
-	StartDate          string
-	TimeZone           string
-	OccurrenceType     string
-	Notification       bool
-	Reschedule         bool
-	RandomizeScan      bool
-	WebAppAuthRecordID string
-	ProxyID            string
-	DNSOverrideID      string
-	CancelOption       string
-	SendMail           bool
+	Name     string
+	Type     string
+	Active   bool
+	WebAppID string
+
+	WebAppAuthRecordID        string
+	WebAppAuthRecordIsDefault bool
+	ScannerType               string
+	ScannerFriendlyName       string
+	CancelOption              string
+
+	OptionProfileID string
+	ProxyID         string
+	DNSOverrideID   string
+
+	StartDate        string
+	TimeZoneCode     string
+	OccurrenceType   string
+	CancelAfterHours int
+	Recurrence       *WASScheduleRecurrence
+
+	Notification              *WASScheduleNotification
+	SendMail                  bool
+	SendOneMail               bool
+	SendMailFromAddressOption string
 }
 
 type wasIDRefWire struct {
 	ID json.Number `json:"id,omitempty"`
 }
 
-type wasScanScheduleTargetWire struct {
-	WebApp           *wasIDRefWire `json:"webApp,omitempty"`
-	AuthRecordOption string        `json:"authRecordOption,omitempty"`
-	RandomizeScan    *bool         `json:"randomizeScan,omitempty"`
-	WebAppAuthRecord *wasIDRefWire `json:"webAppAuthRecord,omitempty"`
+type wasAuthRecordRefWire struct {
+	ID        json.Number `json:"id,omitempty"`
+	IsDefault *bool       `json:"isDefault,omitempty"`
+}
+
+type wasScannerApplianceWire struct {
+	Type         string `json:"type,omitempty"`
+	FriendlyName string `json:"friendlyName,omitempty"`
+}
+
+type wasScheduleTargetWire struct {
+	WebApp           *wasIDRefWire            `json:"webApp,omitempty"`
+	WebAppAuthRecord *wasAuthRecordRefWire    `json:"webAppAuthRecord,omitempty"`
+	ScannerAppliance *wasScannerApplianceWire `json:"scannerAppliance,omitempty"`
+	CancelOption     string                   `json:"cancelOption,omitempty"`
+}
+
+type wasTimeZoneWire struct {
+	Code string `json:"code,omitempty"`
+}
+
+type wasWeekDayListWire struct {
+	WeekDay []string `json:"WeekDay,omitempty"`
+}
+
+type wasDailyOccurrenceWire struct {
+	EveryNDays int `json:"everyNDays,omitempty"`
+}
+
+type wasWeeklyOccurrenceWire struct {
+	EveryNWeeks     int                 `json:"everyNWeeks,omitempty"`
+	OccurrenceCount int                 `json:"occurrenceCount,omitempty"`
+	OnDays          *wasWeekDayListWire `json:"onDays,omitempty"`
+}
+
+type wasOccurrenceWire struct {
+	DailyOccurrence  *wasDailyOccurrenceWire  `json:"dailyOccurrence,omitempty"`
+	WeeklyOccurrence *wasWeeklyOccurrenceWire `json:"weeklyOccurrence,omitempty"`
+	// monthlyOccurrence intentionally omitted — see WASScheduleRecurrence.
+}
+
+type wasSchedulingWire struct {
+	CancelAfterNHours int                `json:"cancelAfterNHours,omitempty"`
+	StartDate         string             `json:"startDate,omitempty"`
+	TimeZone          *wasTimeZoneWire   `json:"timeZone,omitempty"`
+	OccurrenceType    string             `json:"occurrenceType,omitempty"`
+	Occurrence        *wasOccurrenceWire `json:"occurrence,omitempty"`
+}
+
+type wasDelayWire struct {
+	NB    int    `json:"nb,omitempty"`
+	Scale string `json:"scale,omitempty"`
+}
+
+// wasEmailSetWire is the recipients list wrapper. A user-supplied example
+// shows only the "set" (authoritative replace) idiom on write; "list" is
+// this package's own addition for decoding a GET response, inferred by
+// analogy with how tags round-trip rather than confirmed against a sample
+// response.
+type wasEmailSetWire struct {
+	EmailAddress []string `json:"EmailAddress,omitempty"`
+}
+
+type wasEmailListWire struct {
+	Set  *wasEmailSetWire `json:"set,omitempty"`
+	List *wasEmailSetWire `json:"list,omitempty"`
+}
+
+type wasNotificationWire struct {
+	Active     *bool             `json:"active,omitempty"`
+	Reschedule *bool             `json:"reschedule,omitempty"`
+	Delay      *wasDelayWire     `json:"delay,omitempty"`
+	Recipients *wasEmailListWire `json:"recipients,omitempty"`
+	Message    string            `json:"message,omitempty"`
 }
 
 type wasScanScheduleWire struct {
-	ID             json.Number                `json:"id,omitempty"`
-	Name           string                     `json:"name,omitempty"`
-	Type           string                     `json:"type,omitempty"`
-	Target         *wasScanScheduleTargetWire `json:"target,omitempty"`
-	Profile        *wasIDRefWire              `json:"profile,omitempty"`
-	StartDate      string                     `json:"startDate,omitempty"`
-	TimeZone       string                     `json:"timeZone,omitempty"`
-	OccurrenceType string                     `json:"occurrenceType,omitempty"`
-	Notification   *bool                      `json:"notification,omitempty"`
-	Reschedule     *bool                      `json:"reschedule,omitempty"`
-	Proxy          *wasIDRefWire              `json:"proxy,omitempty"`
-	DNSOverride    *wasIDRefWire              `json:"dnsOverride,omitempty"`
-	CancelOption   string                     `json:"cancelOption,omitempty"`
-	SendMail       *bool                      `json:"sendMail,omitempty"`
-	Active         *bool                      `json:"active,omitempty"`
-	Created        string                     `json:"createdDate,omitempty"`
+	ID                        json.Number            `json:"id,omitempty"`
+	Name                      string                 `json:"name,omitempty"`
+	Type                      string                 `json:"type,omitempty"`
+	Active                    *bool                  `json:"active,omitempty"`
+	Target                    *wasScheduleTargetWire `json:"target,omitempty"`
+	Profile                   *wasIDRefWire          `json:"profile,omitempty"`
+	Proxy                     *wasIDRefWire          `json:"proxy,omitempty"`
+	DNSOverride               *wasIDRefWire          `json:"dnsOverride,omitempty"`
+	Scheduling                *wasSchedulingWire     `json:"scheduling,omitempty"`
+	Notification              *wasNotificationWire   `json:"notification,omitempty"`
+	SendMail                  *bool                  `json:"sendMail,omitempty"`
+	SendOneMail               *bool                  `json:"sendOneMail,omitempty"`
+	SendMailFromAddressOption string                 `json:"sendMailFromAddressOption,omitempty"`
+	Created                   string                 `json:"createdDate,omitempty"`
 }
 
 // wasScanScheduleData is the "data" envelope. The wrapper key WasScanSchedule
-// follows this API's naming convention (WasOptionProfile for
-// was/optionprofile) rather than a confirmed sample payload — no source
-// reached during discovery showed one. If Qualys rejects it, the fix is a
-// one-line rename here, not a schema redesign.
+// is Confirmed: it matches this package's naming-convention guess and
+// appears verbatim in a user-supplied create example.
 type wasScanScheduleData struct {
 	WasScanSchedule *wasScanScheduleWire `json:"WasScanSchedule,omitempty"`
 }
@@ -127,24 +269,30 @@ func boolPtr(b bool) *bool { return &b }
 
 func wasScanScheduleInputToWire(in WASScanScheduleInput) *wasScanScheduleWire {
 	w := &wasScanScheduleWire{
-		Name:           in.Name,
-		Type:           in.Type,
-		StartDate:      in.StartDate,
-		TimeZone:       in.TimeZone,
-		OccurrenceType: in.OccurrenceType,
-		Notification:   boolPtr(in.Notification),
-		Reschedule:     boolPtr(in.Reschedule),
-		CancelOption:   in.CancelOption,
-		SendMail:       boolPtr(in.SendMail),
+		Name:                      in.Name,
+		Type:                      in.Type,
+		Active:                    boolPtr(in.Active),
+		SendMail:                  boolPtr(in.SendMail),
+		SendOneMail:               boolPtr(in.SendOneMail),
+		SendMailFromAddressOption: in.SendMailFromAddressOption,
 	}
 
 	if strings.TrimSpace(in.WebAppID) != "" {
-		target := &wasScanScheduleTargetWire{
-			WebApp:        &wasIDRefWire{ID: json.Number(in.WebAppID)},
-			RandomizeScan: boolPtr(in.RandomizeScan),
+		target := &wasScheduleTargetWire{
+			WebApp:       &wasIDRefWire{ID: json.Number(in.WebAppID)},
+			CancelOption: in.CancelOption,
 		}
-		if strings.TrimSpace(in.WebAppAuthRecordID) != "" {
-			target.WebAppAuthRecord = &wasIDRefWire{ID: json.Number(in.WebAppAuthRecordID)}
+		switch {
+		case strings.TrimSpace(in.WebAppAuthRecordID) != "":
+			target.WebAppAuthRecord = &wasAuthRecordRefWire{ID: json.Number(in.WebAppAuthRecordID)}
+		case in.WebAppAuthRecordIsDefault:
+			target.WebAppAuthRecord = &wasAuthRecordRefWire{IsDefault: boolPtr(true)}
+		}
+		if strings.TrimSpace(in.ScannerType) != "" {
+			target.ScannerAppliance = &wasScannerApplianceWire{
+				Type:         in.ScannerType,
+				FriendlyName: in.ScannerFriendlyName,
+			}
 		}
 		w.Target = target
 	}
@@ -158,33 +306,66 @@ func wasScanScheduleInputToWire(in WASScanScheduleInput) *wasScanScheduleWire {
 		w.DNSOverride = &wasIDRefWire{ID: json.Number(in.DNSOverrideID)}
 	}
 
+	scheduling := &wasSchedulingWire{
+		CancelAfterNHours: in.CancelAfterHours,
+		StartDate:         in.StartDate,
+		OccurrenceType:    in.OccurrenceType,
+	}
+	if strings.TrimSpace(in.TimeZoneCode) != "" {
+		scheduling.TimeZone = &wasTimeZoneWire{Code: in.TimeZoneCode}
+	}
+	if in.Recurrence != nil {
+		occ := &wasOccurrenceWire{}
+		if in.Recurrence.EveryNDays > 0 {
+			occ.DailyOccurrence = &wasDailyOccurrenceWire{EveryNDays: in.Recurrence.EveryNDays}
+		}
+		if in.Recurrence.EveryNWeeks > 0 || len(in.Recurrence.OnDays) > 0 {
+			weekly := &wasWeeklyOccurrenceWire{
+				EveryNWeeks:     in.Recurrence.EveryNWeeks,
+				OccurrenceCount: in.Recurrence.OccurrenceCount,
+			}
+			if len(in.Recurrence.OnDays) > 0 {
+				weekly.OnDays = &wasWeekDayListWire{WeekDay: in.Recurrence.OnDays}
+			}
+			occ.WeeklyOccurrence = weekly
+		}
+		if occ.DailyOccurrence != nil || occ.WeeklyOccurrence != nil {
+			scheduling.Occurrence = occ
+		}
+	}
+	w.Scheduling = scheduling
+
+	if in.Notification != nil {
+		n := &wasNotificationWire{
+			Active:     boolPtr(in.Notification.Active),
+			Reschedule: boolPtr(in.Notification.Reschedule),
+			Message:    in.Notification.Message,
+		}
+		if in.Notification.DelayAmount > 0 {
+			n.Delay = &wasDelayWire{NB: in.Notification.DelayAmount, Scale: in.Notification.DelayScale}
+		}
+		if len(in.Notification.Recipients) > 0 {
+			n.Recipients = &wasEmailListWire{Set: &wasEmailSetWire{EmailAddress: in.Notification.Recipients}}
+		}
+		w.Notification = n
+	}
+
 	return w
 }
 
 func (w *wasScanScheduleWire) toWASScanSchedule() *WASScanSchedule {
 	out := &WASScanSchedule{
-		ID:             w.ID.String(),
-		Name:           w.Name,
-		Type:           w.Type,
-		StartDate:      w.StartDate,
-		TimeZone:       w.TimeZone,
-		OccurrenceType: w.OccurrenceType,
-		CancelOption:   w.CancelOption,
-		Created:        w.Created,
+		ID:                        w.ID.String(),
+		Name:                      w.Name,
+		Type:                      w.Type,
+		SendMailFromAddressOption: w.SendMailFromAddressOption,
+		Created:                   w.Created,
+	}
+	if w.Active != nil {
+		out.Active = *w.Active
 	}
 	if w.Profile != nil {
 		out.OptionProfileID = w.Profile.ID.String()
-	}
-	if w.Target != nil {
-		if w.Target.WebApp != nil {
-			out.WebAppID = w.Target.WebApp.ID.String()
-		}
-		if w.Target.WebAppAuthRecord != nil {
-			out.WebAppAuthRecordID = w.Target.WebAppAuthRecord.ID.String()
-		}
-		if w.Target.RandomizeScan != nil {
-			out.RandomizeScan = *w.Target.RandomizeScan
-		}
 	}
 	if w.Proxy != nil {
 		out.ProxyID = w.Proxy.ID.String()
@@ -192,18 +373,77 @@ func (w *wasScanScheduleWire) toWASScanSchedule() *WASScanSchedule {
 	if w.DNSOverride != nil {
 		out.DNSOverrideID = w.DNSOverride.ID.String()
 	}
-	if w.Notification != nil {
-		out.Notification = *w.Notification
-	}
-	if w.Reschedule != nil {
-		out.Reschedule = *w.Reschedule
-	}
 	if w.SendMail != nil {
 		out.SendMail = *w.SendMail
 	}
-	if w.Active != nil {
-		out.Active = *w.Active
+	if w.SendOneMail != nil {
+		out.SendOneMail = *w.SendOneMail
 	}
+
+	if w.Target != nil {
+		if w.Target.WebApp != nil {
+			out.WebAppID = w.Target.WebApp.ID.String()
+		}
+		if w.Target.WebAppAuthRecord != nil {
+			out.WebAppAuthRecordID = w.Target.WebAppAuthRecord.ID.String()
+			if w.Target.WebAppAuthRecord.IsDefault != nil {
+				out.WebAppAuthRecordIsDefault = *w.Target.WebAppAuthRecord.IsDefault
+			}
+		}
+		if w.Target.ScannerAppliance != nil {
+			out.ScannerType = w.Target.ScannerAppliance.Type
+			out.ScannerFriendlyName = w.Target.ScannerAppliance.FriendlyName
+		}
+		out.CancelOption = w.Target.CancelOption
+	}
+
+	if w.Scheduling != nil {
+		out.StartDate = w.Scheduling.StartDate
+		out.OccurrenceType = w.Scheduling.OccurrenceType
+		out.CancelAfterHours = w.Scheduling.CancelAfterNHours
+		if w.Scheduling.TimeZone != nil {
+			out.TimeZoneCode = w.Scheduling.TimeZone.Code
+		}
+		if w.Scheduling.Occurrence != nil {
+			rec := &WASScheduleRecurrence{}
+			if d := w.Scheduling.Occurrence.DailyOccurrence; d != nil {
+				rec.EveryNDays = d.EveryNDays
+			}
+			if wk := w.Scheduling.Occurrence.WeeklyOccurrence; wk != nil {
+				rec.EveryNWeeks = wk.EveryNWeeks
+				rec.OccurrenceCount = wk.OccurrenceCount
+				if wk.OnDays != nil {
+					rec.OnDays = wk.OnDays.WeekDay
+				}
+			}
+			out.Recurrence = rec
+		}
+	}
+
+	if w.Notification != nil {
+		n := &WASScheduleNotification{Message: w.Notification.Message}
+		if w.Notification.Active != nil {
+			n.Active = *w.Notification.Active
+		}
+		if w.Notification.Reschedule != nil {
+			n.Reschedule = *w.Notification.Reschedule
+		}
+		if w.Notification.Delay != nil {
+			n.DelayAmount = w.Notification.Delay.NB
+			n.DelayScale = w.Notification.Delay.Scale
+		}
+		if w.Notification.Recipients != nil {
+			set := w.Notification.Recipients.List
+			if set == nil {
+				set = w.Notification.Recipients.Set
+			}
+			if set != nil {
+				n.Recipients = set.EmailAddress
+			}
+		}
+		out.Notification = n
+	}
+
 	return out
 }
 
@@ -215,8 +455,8 @@ func (c *Client) CreateWASScanSchedule(ctx context.Context, in WASScanScheduleIn
 	if strings.TrimSpace(in.WebAppID) == "" {
 		return nil, fmt.Errorf("qualys qps: WAS scan schedule requires a web application target")
 	}
-	if strings.TrimSpace(in.StartDate) == "" || strings.TrimSpace(in.TimeZone) == "" || strings.TrimSpace(in.OccurrenceType) == "" {
-		return nil, fmt.Errorf("qualys qps: WAS scan schedule requires start_date, time_zone and occurrence_type")
+	if strings.TrimSpace(in.StartDate) == "" || strings.TrimSpace(in.TimeZoneCode) == "" || strings.TrimSpace(in.OccurrenceType) == "" {
+		return nil, fmt.Errorf("qualys qps: WAS scan schedule requires start_date, time_zone_code and occurrence_type")
 	}
 
 	var resp ServiceResponse
@@ -236,13 +476,36 @@ func (c *Client) CreateWASScanSchedule(ctx context.Context, in WASScanScheduleIn
 	return schedules[0], nil
 }
 
-// UpdateWASScanSchedule applies desired state to an existing WAS scan schedule.
+// UpdateWASScanSchedule applies desired state to an existing WAS scan
+// schedule. A user-supplied example notes that update only requires the
+// fields being changed, but this sends the full desired state on every
+// call, consistent with every other update encoder in this package — the
+// server accepts a superset of the minimal patch it documents.
 func (c *Client) UpdateWASScanSchedule(ctx context.Context, id string, in WASScanScheduleInput) error {
 	if strings.TrimSpace(id) == "" {
 		return fmt.Errorf("qualys qps: WAS scan schedule id is required for update")
 	}
 	return c.call(ctx, http.MethodPost, "/qps/rest/3.0/update/was/wasscanschedule/"+id,
 		&ServiceRequest{Data: wasScanScheduleData{WasScanSchedule: wasScanScheduleInputToWire(in)}}, nil, false)
+}
+
+// ActivateWASScanSchedule activates a schedule, confirmed as its own
+// dedicated endpoint (not "via update", an earlier open question this
+// package's own discovery notes recorded).
+func (c *Client) ActivateWASScanSchedule(ctx context.Context, id string) error {
+	if strings.TrimSpace(id) == "" {
+		return fmt.Errorf("qualys qps: WAS scan schedule id is required")
+	}
+	return c.call(ctx, http.MethodPost, "/qps/rest/3.0/activate/was/wasscanschedule/"+id, nil, nil, false)
+}
+
+// DeactivateWASScanSchedule deactivates a schedule (retained, but excluded
+// from future scheduled launches), confirmed as its own dedicated endpoint.
+func (c *Client) DeactivateWASScanSchedule(ctx context.Context, id string) error {
+	if strings.TrimSpace(id) == "" {
+		return fmt.Errorf("qualys qps: WAS scan schedule id is required")
+	}
+	return c.call(ctx, http.MethodPost, "/qps/rest/3.0/deactivate/was/wasscanschedule/"+id, nil, nil, false)
 }
 
 // DeleteWASScanSchedule removes a WAS scan schedule.

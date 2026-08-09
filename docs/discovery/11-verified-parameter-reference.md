@@ -228,18 +228,21 @@ Operations: `count`, `search`, `get/<id>`, `create` (single web app **and** mult
   `cancelOption={DEFAULT|SPECIFIC}`, `sendMail` (Boolean)
 
 Per-occurrence frequency sub-elements (every N days/weeks/months) are **not** enumerated
-in the Quick Reference — `occurrenceType` is confirmed, the frequency detail remains
-`Unverified` and needs the WAS API User Guide or a tenant probe. A fourth research pass
-(triggered by user feedback that WAS coverage was too thin) tried docs.qualys.com,
-cdn2.qualys.com, a manualzz.com mirror of the guide PDF, and a Brazilian government
-procurement portal hosting a copy — all four are blocked by this environment's network
-egress policy, so this stays open. `qualys_was_scan_schedule` was still built, covering
-everything else this section confirms by name (single web-app target, type, profile,
-start/timezone/occurrenceType, and the simple id/boolean options); a
-`DAILY`/`WEEKLY`/`MONTHLY` schedule created through it uses whatever default cadence
-Qualys applies when the frequency fields are omitted, unobserved against a live tenant.
-Its JSON wrapper key (`WasScanSchedule`) is also unconfirmed, inferred only from this
-API's own naming convention (`WasOptionProfile` for `was/optionprofile`).
+in the Quick Reference — this section's summary of `occurrenceType`, `startDate` and
+`timeZone` as flat top-level elements also turned out to be incomplete in a more
+consequential way: a later user-supplied "Create and Update Scan Schedule" walkthrough
+showed all three actually nest under a `scheduling` sub-object (`timeZone` itself
+wrapping a `.code`), and `cancelOption` nests under `target`, not top-level. The Quick
+Reference's element list named the right elements, just not their true payload
+structure — the same class of gap the WAS auth record's fields-list-vs-flat-elements
+correction hit. `qualys_was_scan_schedule` was rebuilt against the walkthrough: it now
+covers `DAILY`/`WEEKLY` recurrence (`everyNDays`; `everyNWeeks`/`onDays`/
+`occurrenceCount`), `cancelAfterNHours`, a full `notification` sub-object, `sendMail`/
+`sendOneMail`/`sendMailFromAddressOption`, and confirms activate/deactivate as dedicated
+endpoints. `MONTHLY` recurrence detail remains open — no source has shown a
+`monthlyOccurrence` example — and tag-based multi-web-app targeting is still not
+modelled. The JSON wrapper key `WasScanSchedule` is now Confirmed, appearing verbatim
+in the walkthrough.
 
 **Notable for untagged discovery:** WAS schedule/scan search filters document
 `webApp.tags` **with `operator="NONE"`**, and `lastScan` with `operation="NONE"` —
