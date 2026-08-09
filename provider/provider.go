@@ -70,6 +70,7 @@ func Provider() *schema.Provider {
 			"qualys_host_detections":    dataSourceHostDetections(),
 			"qualys_report_templates":   dataSourceReportTemplates(),
 			"qualys_domains":            dataSourceDomains(),
+			"qualys_was_findings":       dataSourceWASFindings(),
 		},
 
 		ResourcesMap: map[string]*schema.Resource{
@@ -86,6 +87,8 @@ func Provider() *schema.Provider {
 			"qualys_auth_record_unix":    resourceUnixAuthRecord(),
 			"qualys_web_application":     resourceWebApplication(),
 			"qualys_was_option_profile":  resourceWASOptionProfile(),
+			"qualys_was_auth_record":     resourceWASAuthRecord(),
+			"qualys_was_scan_schedule":   resourceWASScanSchedule(),
 		},
 
 		ConfigureContextFunc: providerConfigure,

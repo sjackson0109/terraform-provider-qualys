@@ -229,7 +229,17 @@ Operations: `count`, `search`, `get/<id>`, `create` (single web app **and** mult
 
 Per-occurrence frequency sub-elements (every N days/weeks/months) are **not** enumerated
 in the Quick Reference — `occurrenceType` is confirmed, the frequency detail remains
-`Unverified` and needs the WAS API User Guide or a tenant probe.
+`Unverified` and needs the WAS API User Guide or a tenant probe. A fourth research pass
+(triggered by user feedback that WAS coverage was too thin) tried docs.qualys.com,
+cdn2.qualys.com, a manualzz.com mirror of the guide PDF, and a Brazilian government
+procurement portal hosting a copy — all four are blocked by this environment's network
+egress policy, so this stays open. `qualys_was_scan_schedule` was still built, covering
+everything else this section confirms by name (single web-app target, type, profile,
+start/timezone/occurrenceType, and the simple id/boolean options); a
+`DAILY`/`WEEKLY`/`MONTHLY` schedule created through it uses whatever default cadence
+Qualys applies when the frequency fields are omitted, unobserved against a live tenant.
+Its JSON wrapper key (`WasScanSchedule`) is also unconfirmed, inferred only from this
+API's own naming convention (`WasOptionProfile` for `was/optionprofile`).
 
 **Notable for untagged discovery:** WAS schedule/scan search filters document
 `webApp.tags` **with `operator="NONE"`**, and `lastScan` with `operation="NONE"` —

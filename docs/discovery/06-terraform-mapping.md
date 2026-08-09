@@ -20,9 +20,10 @@ Deliverables 4, 5 and 6. Grounded in the per-operation classifications of doc 03
 | `qualys_excluded_ips` | `/api/2.0/fo/asset/excluded_ip/` add/remove | supports `expiry_days` | P3 |
 | `qualys_web_application` | `qps/rest/3.0/.../was/webapp` | JSON/XML ServiceRequest; TagList association | P2 |
 | `qualys_was_option_profile` | `.../was/optionprofile` | full CRUD incl. delete | P2 |
-| `qualys_was_auth_record` | `.../was/webappauthrecord` | secrets masked on read → write-only | P2 |
-| `qualys_was_scan_schedule` | `.../was/wasscanschedule` | CRUD confirmed (9 ops); **recurrence element names still `Unverified`** — schema cannot be written until they are, and the VM/FO `<SCHEDULE>` DTD must not be reused | P2–P3 |
+| `qualys_was_auth_record` | `.../was/webappauthrecord` | **Built.** Form and server records; secrets masked on read → write-only. Field names corroborated from two non-official sources (docs.qualys.com/cdn2.qualys.com stayed unreachable), not the official guide — verify against a tenant. Selenium/OAuth2 record types not implemented | done |
+| `qualys_was_scan_schedule` | `.../was/wasscanschedule` | **Built, partially.** Single-web-app target, type, profile, start/timezone/occurrenceType and the simple id/boolean options. Tag-based multi-app targeting and **per-occurrence recurrence element names remain `Unverified`** (a fourth research pass, reaching several non-official mirrors of the guide, still could not reach them) — `DAILY`/`WEEKLY`/`MONTHLY` schedules use Qualys's undocumented default cadence. JSON wrapper key inferred by naming-convention pattern, not confirmed | done (partial) |
 | `qualys_gcp_connector` (existing) | **Connector v3** `/qps/rest/3.0/.../am/gcpassetdataconnector` | migrate off the deprecated CloudView v1 path (product decision: deprecated items are removed); state migration required for existing users | migrate |
+| `data.qualys_was_findings` | `.../was/finding` | **Built.** Read-only: search/get. Filter and finding fields from the derived WAS reference (doc 11 §9), Corroborated non-official. Lifecycle actions (ignore/retest/severity override) not implemented | done |
 | `qualys_report_template_scan` / `_patch` | `/api/2.0/fo/report/template/scan|patch/` | XML-body schemas; deferred until schema effort justified | deferred |
 | ~~`qualys_user`~~ | `/msp/user.php` (V1) | **Out of scope** — legacy generation, and deprecated items are not being built on | dropped |
 | `qualys_was_dns_override` | `/qps/rest/3.0/.../was/dnsoverriderecord` | staging-host resolution for WAS scans | P3 |
