@@ -240,9 +240,15 @@ covers `DAILY`/`WEEKLY` recurrence (`everyNDays`; `everyNWeeks`/`onDays`/
 `occurrenceCount`), `cancelAfterNHours`, a full `notification` sub-object, `sendMail`/
 `sendOneMail`/`sendMailFromAddressOption`, and confirms activate/deactivate as dedicated
 endpoints. `MONTHLY` recurrence detail remains open — no source has shown a
-`monthlyOccurrence` example — and tag-based multi-web-app targeting is still not
-modelled. The JSON wrapper key `WasScanSchedule` is now Confirmed, appearing verbatim
-in the walkthrough.
+`monthlyOccurrence` example for this object specifically. (A later pass briefly
+modelled it anyway, by analogy with `qualys_was_report_schedule`'s confirmed MONTHLY
+shape; a user-supplied "Gap Review" document explicitly rejected that inference —
+"do not derive the WasScanSchedule MONTHLY payload solely from report scheduling" —
+and it was reverted. `qualys_was_scan_schedule` does not accept MONTHLY.) Tag-based
+multi-web-app targeting is still not modelled — the same document confirms the shape
+exists for one-off WAS Multi-Scan launches, but not that this object accepts it. The
+JSON wrapper key `WasScanSchedule` is now Confirmed, appearing verbatim in the
+walkthrough.
 
 **Notable for untagged discovery:** WAS schedule/scan search filters document
 `webApp.tags` **with `operator="NONE"`**, and `lastScan` with `operation="NONE"` —

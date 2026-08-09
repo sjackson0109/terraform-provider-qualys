@@ -3,6 +3,7 @@ package qps
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -53,12 +54,18 @@ const (
 
 // WASScheduleRecurrence is the per-occurrence cadence detail for a DAILY,
 // WEEKLY or MONTHLY schedule. Shared between qualys_was_scan_schedule and
-// qualys_was_report_schedule, which use an identical occurrence structure.
+// qualys_was_report_schedule, which use an identical DAILY/WEEKLY structure.
 //
-// The MONTHLY shape (dayOfMonth, everyNMonths) was seen only in a
-// user-supplied WAS *report* schedule example, not a scan schedule one —
-// applied here by analogy, since the DAILY and WEEKLY shapes are identical
-// across both schedule types in the evidence obtained so far. Only the
+// MONTHLY (dayOfMonth, everyNMonths) is Confirmed for WASReportSchedule (a
+// user-supplied report-schedule walkthrough shows it directly) but NOT for
+// WASScanSchedule. An earlier version of this package applied the shape to
+// WASScanSchedule too, by analogy; a later user-supplied "Gap Review"
+// document explicitly corrected this — "Do not derive the WasScanSchedule
+// MONTHLY payload solely from report scheduling... keep this gap open until
+// either the wasscanschedule.xsd confirms the structure, or an official
+// WasScanSchedule MONTHLY request example is obtained." CreateWASScanSchedule
+// and UpdateWASScanSchedule reject a MONTHLY occurrence accordingly; only
+// WASReportSchedule accepts DayOfMonth/EveryNMonths in practice. Only the
 // day-of-month form is modelled; a "the Nth weekday of the month" pattern
 // (as some scheduling APIs also support) has not been seen in any source.
 type WASScheduleRecurrence struct {
@@ -136,8 +143,13 @@ type WASScanSchedule struct {
 // out to be sub-objects, not flat fields; cancelOption turned out to live
 // under target, not top-level) or the recurrence sub-elements at all.
 //
-// MONTHLY recurrence detail remains unconfirmed — see the WASScheduleRecurrence
-// doc comment. Tag-based (multi-web-app) targeting is still not modelled.
+// MONTHLY recurrence is rejected client-side — see the WASScheduleRecurrence
+// doc comment for why. Tag-based (multi-web-app) targeting is still not
+// modelled: a "Gap Review" document confirmed WAS supports tag-based
+// multi-web-app targeting for one-off Multi-Scans (tags.included/excluded
+// with ALL/ANY inclusion logic), but explicitly cautions against assuming
+// WasScanSchedule accepts the same payload without checking the schedule
+// XSD/reference directly.
 type WASScanScheduleInput struct {
 	Name     string
 	Type     string
@@ -426,6 +438,23 @@ func (w *wasScanScheduleWire) toWASScanSchedule() *WASScanSchedule {
 	return out
 }
 
+// wasScanScheduleRejectsMonthly reports whether in requests a MONTHLY
+// occurrence, which CreateWASScanSchedule/UpdateWASScanSchedule refuse to
+// send: see the WASScheduleRecurrence doc comment for why the payload shape
+// is not confirmed for this object specifically, unlike WASReportSchedule.
+func wasScanScheduleRejectsMonthly(in WASScanScheduleInput) bool {
+	if in.OccurrenceType == WASOccurrenceMonthly {
+		return true
+	}
+	return in.Recurrence != nil && (in.Recurrence.DayOfMonth > 0 || in.Recurrence.EveryNMonths > 0)
+}
+
+const wasScanScheduleMonthlyUnsupportedMsg = "qualys qps: WAS scan schedule MONTHLY recurrence is not " +
+	"implemented: its payload shape is confirmed for WASReportSchedule but not for WASScanSchedule " +
+	"specifically, and a user-supplied \"Gap Review\" document explicitly warns against deriving one " +
+	"from the other. Use ONCE, DAILY or WEEKLY, or supply a confirmed WasScanSchedule MONTHLY example " +
+	"to close this gap"
+
 // CreateWASScanSchedule creates a WAS scan schedule and returns it.
 func (c *Client) CreateWASScanSchedule(ctx context.Context, in WASScanScheduleInput) (*WASScanSchedule, error) {
 	if strings.TrimSpace(in.Name) == "" {
@@ -436,6 +465,9 @@ func (c *Client) CreateWASScanSchedule(ctx context.Context, in WASScanScheduleIn
 	}
 	if strings.TrimSpace(in.StartDate) == "" || strings.TrimSpace(in.TimeZoneCode) == "" || strings.TrimSpace(in.OccurrenceType) == "" {
 		return nil, fmt.Errorf("qualys qps: WAS scan schedule requires start_date, time_zone_code and occurrence_type")
+	}
+	if wasScanScheduleRejectsMonthly(in) {
+		return nil, errors.New(wasScanScheduleMonthlyUnsupportedMsg)
 	}
 
 	var resp ServiceResponse
@@ -463,6 +495,9 @@ func (c *Client) CreateWASScanSchedule(ctx context.Context, in WASScanScheduleIn
 func (c *Client) UpdateWASScanSchedule(ctx context.Context, id string, in WASScanScheduleInput) error {
 	if strings.TrimSpace(id) == "" {
 		return fmt.Errorf("qualys qps: WAS scan schedule id is required for update")
+	}
+	if wasScanScheduleRejectsMonthly(in) {
+		return errors.New(wasScanScheduleMonthlyUnsupportedMsg)
 	}
 	return c.call(ctx, http.MethodPost, "/qps/rest/3.0/update/was/wasscanschedule/"+id,
 		&ServiceRequest{Data: wasScanScheduleData{WasScanSchedule: wasScanScheduleInputToWire(in)}}, nil, false)

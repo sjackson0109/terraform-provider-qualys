@@ -357,6 +357,85 @@ See **[doc 11](11-verified-parameter-reference.md)** for the full parameter list
   override association (mentioned in the walkthrough's overview but with no create/
   update example shown) is not built — same reasoning as the still-unconfirmed
   `qualys_web_application` config fields (`defaultAuthRecord`, `cancelScansAt`, etc.).
+- ~~**WAS auth record STANDARD shape (built on lower-confidence evidence);
+  `qualys_was_scan_schedule` MONTHLY (built by analogy); Selenium/OAuth2 auth
+  records, findings retest, Burp import, and several `qualys_web_application`
+  fields — all unimplemented.**~~ **Twelfth research pass — two corrections
+  to already-shipped code, plus several new closures.** A user-supplied "Gap
+  Review" document, quoting official Qualys reference pages directly rather
+  than transcribing a walkthrough, both confirmed several previously open
+  gaps and **explicitly contradicted two things this provider had already
+  shipped**:
+  - **`qualys_was_auth_record` STANDARD shape, corrected again.** The ninth
+    research pass's transcribed walkthrough had shown `STANDARD` form
+    credentials as flat `username`/`password` elements, and this provider's
+    schema followed suit. The Gap Review document quotes the official
+    Qualys `STANDARD` create example directly: it uses the same
+    `fields`/`set`/`WebAppAuthFormRecordField` list as `CUSTOM`. Fixed in
+    `qps/wasauthrecord.go` — `username`/`password` are now encoded into
+    that list (as fields named `"username"`/`"password"`) for both
+    sub-types; `login_url` remains a flat element, since the correction
+    only concerned the credential fields. This is the second time a
+    transcribed walkthrough got a nesting detail wrong that a direct quote
+    of the official page corrected — see the standing caution below.
+  - **`qualys_was_scan_schedule` MONTHLY, reverted.** An earlier pass added
+    `day_of_month`/`every_n_months` to `qualys_was_scan_schedule` by
+    analogy with `qualys_was_report_schedule`'s confirmed MONTHLY shape,
+    reasoning that DAILY/WEEKLY matched exactly between the two schedule
+    types. The Gap Review document explicitly rejects that inference:
+    "Do not derive the WasScanSchedule MONTHLY payload solely from report
+    scheduling... keep this gap open until either the wasscanschedule.xsd
+    confirms the structure, or an official WasScanSchedule MONTHLY request
+    example is obtained." Reverted: `day_of_month`/`every_n_months` are
+    removed from the `qualys_was_scan_schedule` schema, `MONTHLY` is
+    removed from its `occurrence_type` validator, and
+    `CreateWASScanSchedule`/`UpdateWASScanSchedule` now reject a MONTHLY
+    request outright rather than send an unconfirmed payload.
+    `qualys_was_report_schedule` keeps MONTHLY — its payload shape is
+    independently confirmed, not borrowed.
+  - **Newly closed, all Confirmed by the same document:** Selenium form
+    auth records (`seleniumScript`/`seleniumCreds`) and a dedicated OAuth2
+    auth record (`oauth2Record`, flat grant-specific fields, explicitly
+    *not* the generic field list) — both added to `qualys_was_auth_record`.
+    Findings `retest`/`retestStatus` (`RetestWASFinding`,
+    `GetWASFindingRetestStatus` client methods; not a resource, same
+    async-job reasoning as scan/report launch). Burp report import
+    (`ImportWASBurp`, `POST import/was/burp` with a flat body — the one
+    WAS write call seen so far that does *not* nest under
+    `data.<WrapperKey>`). `qualys_web_application` gained `attributes`,
+    `config.cancelScansAt`/`cancelScansAfterNHours`/
+    `defaultDnsOverride.id`, a separate `dnsOverrides` collection,
+    `swaggerFile`/`postmanCollection` (mutually exclusive base64 uploads),
+    `malwareMonitoring`/`malwareNotification`, and read-only
+    `crawlingScripts`.
+  - **Explicitly still open, per the same document:** the exact
+    `WasScanSchedule` MONTHLY XML/JSON structure; whether
+    `WasScanSchedule` accepts the same tag-based multi-web-app targeting
+    confirmed for one-off WAS Multi-Scans (`tags.included`/`excluded`,
+    `ALL`/`ANY`); `progressiveScanning`'s full request/response shape;
+    `malwareScheduling`'s recurrence structure; the exact `authRecords`
+    collection wrapper on a WebApp GET (existence and content-type are now
+    confirmed, serialisation as count/list vs. something else is not);
+    Edit/Restore Finding Severity's endpoint and payload (existence
+    confirmed); the Catalog CRUD/search/promote workflow; Search List/
+    Parameter Set schemas; the exact bearer-token endpoint and whether
+    `/auth/oidc`/`/auth/oauth` differ; and whether the newly-confirmed rich
+    report-configuration fields (`display.contents`/`graphs`/`groups`,
+    `filters.searchlists`/`status`/`url`/`remediation`, `showPatched`,
+    report format enum) apply to report-template *retrieval* or only to
+    report *creation* — deliberately not bolted onto
+    `data.qualys_was_report_templates` until that's resolved, since
+    building it onto the wrong object would repeat the STANDARD/MONTHLY
+    mistake a third time.
+
+  **Standing caution reinforced by this pass:** a transcribed walkthrough
+  (however detailed) is not the same evidence tier as a direct quote of an
+  official reference page, and a shape "seen only in a companion object's
+  example" is not the same as a shape confirmed for the object in question
+  — both caused a shipped correction this session, in the same auth-record
+  file, twice. Prefer verifying every remaining "by analogy" or
+  "transcribed" item against a tenant, the object's own XSD, or a direct
+  quote before treating it as load-bearing.
 - **`time_zone_code_list.php` output field names.** The endpoint's existence and its
   DTD name (`time_zone_code_list.dtd`) are confirmed (doc 03 §8), and it is the source
   of the `time_zone_code` values `qualys_scan_schedule` accepts. Three research passes

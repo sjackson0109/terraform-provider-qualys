@@ -143,6 +143,141 @@ func TestUpdateWebAppAuthRecordAssociationsSendsAddAndRemove(t *testing.T) {
 	}
 }
 
+func TestCreateWebAppSendsAttributesAndDNSOverrides(t *testing.T) {
+	var gotBody map[string]interface{}
+	c, srv := testClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(b, &gotBody)
+		fmt.Fprint(w, `{"ServiceResponse":{"responseCode":"SUCCESS",
+		  "data":[{"WebApp":{"id":556,"name":"storefront"}}]}}`)
+	}))
+	defer srv.Close()
+
+	_, err := c.CreateWebApp(context.Background(), WebAppInput{
+		Name: "storefront", URL: "https://shop.example.com",
+		Attributes:           []WebAppAttribute{{Name: "Custom key 1", Value: "Custom value 1"}},
+		DNSOverrideIDs:       []string{"2022"},
+		DefaultDNSOverrideID: "2022",
+	})
+	if err != nil {
+		t.Fatalf("CreateWebApp: %v", err)
+	}
+
+	sreq, _ := gotBody["ServiceRequest"].(map[string]interface{})
+	data, _ := sreq["data"].(map[string]interface{})
+	webapp, _ := data["WebApp"].(map[string]interface{})
+
+	attrs, _ := webapp["attributes"].(map[string]interface{})
+	attrSet, _ := attrs["set"].(map[string]interface{})
+	attrList, _ := attrSet["Attribute"].([]interface{})
+	if len(attrList) != 1 {
+		t.Fatalf("expected 1 attribute sent via the set idiom, got %v", attrs)
+	}
+	first, _ := attrList[0].(map[string]interface{})
+	if first["name"] != "Custom key 1" || first["value"] != "Custom value 1" {
+		t.Errorf("attribute = %v", first)
+	}
+
+	dnsOverrides, _ := webapp["dnsOverrides"].(map[string]interface{})
+	dnsSet, _ := dnsOverrides["set"].(map[string]interface{})
+	dnsList, _ := dnsSet["DnsOverride"].([]interface{})
+	if len(dnsList) != 1 {
+		t.Fatalf("expected 1 dnsOverride sent via the set idiom, got %v", dnsOverrides)
+	}
+
+	config, _ := webapp["config"].(map[string]interface{})
+	defaultDNS, _ := config["defaultDnsOverride"].(map[string]interface{})
+	if defaultDNS["id"] != float64(2022) {
+		t.Errorf("config.defaultDnsOverride.id = %v", defaultDNS["id"])
+	}
+	if _, present := config["cancelScansAt"]; present {
+		t.Errorf("cancelScansAt should be omitted when not set: %v", config)
+	}
+}
+
+// A user-supplied "Gap Review" document documents a landmine this package
+// reproduces faithfully: config is only sent when at least one of its three
+// governed fields is set, because Qualys clears the cancellation setting if
+// config is present without a cancellation element.
+func TestUpdateWebAppOmitsConfigWhenNoConfigFieldsSet(t *testing.T) {
+	var gotBody map[string]interface{}
+	c, srv := testClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(b, &gotBody)
+		fmt.Fprint(w, `{"ServiceResponse":{"responseCode":"SUCCESS"}}`)
+	}))
+	defer srv.Close()
+
+	if err := c.UpdateWebApp(context.Background(), "555", WebAppInput{Name: "storefront"}); err != nil {
+		t.Fatalf("UpdateWebApp: %v", err)
+	}
+
+	sreq, _ := gotBody["ServiceRequest"].(map[string]interface{})
+	data, _ := sreq["data"].(map[string]interface{})
+	webapp, _ := data["WebApp"].(map[string]interface{})
+	if _, present := webapp["config"]; present {
+		t.Errorf("config should be omitted entirely when no config fields are set: %v", webapp["config"])
+	}
+}
+
+func TestCreateWebAppSendsSwaggerFile(t *testing.T) {
+	var gotBody map[string]interface{}
+	c, srv := testClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(b, &gotBody)
+		fmt.Fprint(w, `{"ServiceResponse":{"responseCode":"SUCCESS",
+		  "data":[{"WebApp":{"id":557,"name":"api"}}]}}`)
+	}))
+	defer srv.Close()
+
+	_, err := c.CreateWebApp(context.Background(), WebAppInput{
+		Name: "api", URL: "https://api.example.com",
+		SwaggerFile: &WebAppFile{Name: "openapi.yml", Content: "QkFTRTY0"},
+	})
+	if err != nil {
+		t.Fatalf("CreateWebApp: %v", err)
+	}
+
+	sreq, _ := gotBody["ServiceRequest"].(map[string]interface{})
+	data, _ := sreq["data"].(map[string]interface{})
+	webapp, _ := data["WebApp"].(map[string]interface{})
+	swagger, _ := webapp["swaggerFile"].(map[string]interface{})
+	if swagger["name"] != "openapi.yml" || swagger["content"] != "QkFTRTY0" {
+		t.Errorf("swaggerFile = %v", swagger)
+	}
+	if _, present := webapp["postmanCollection"]; present {
+		t.Errorf("swaggerFile and postmanCollection are mutually exclusive: %v", webapp)
+	}
+}
+
+func TestGetWebAppDecodesCrawlingScriptsAndMalwareFlags(t *testing.T) {
+	c, srv := testClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"ServiceResponse":{"responseCode":"SUCCESS",
+		  "data":[{"WebApp":{"id":558,"name":"storefront","malwareMonitoring":true,
+		  "malwareNotification":false,
+		  "crawlingScripts":{"count":1,"list":{"SeleniumScript":[{"id":2500,
+		  "name":"name of the Script","data":"...","requiresAuthentication":true,
+		  "startingUrl":"https://example.com/","startingUrlRegex":true}]}}}}]}}`)
+	}))
+	defer srv.Close()
+
+	app, err := c.GetWebApp(context.Background(), "558")
+	if err != nil {
+		t.Fatalf("GetWebApp: %v", err)
+	}
+	if !app.MalwareMonitoring || app.MalwareNotification {
+		t.Errorf("malware flags = monitoring:%v notification:%v", app.MalwareMonitoring, app.MalwareNotification)
+	}
+	if len(app.CrawlingScripts) != 1 {
+		t.Fatalf("got %d crawling scripts, want 1", len(app.CrawlingScripts))
+	}
+	s := app.CrawlingScripts[0]
+	if s.ID != "2500" || s.Name != "name of the Script" || !s.RequiresAuthentication ||
+		s.StartingURL != "https://example.com/" || !s.StartingURLRegex {
+		t.Errorf("crawling script = %+v", s)
+	}
+}
+
 func TestUpdateWebAppAuthRecordAssociationsNoopWithNothingToDo(t *testing.T) {
 	c, srv := testClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("no request should be sent with nothing to add or remove")

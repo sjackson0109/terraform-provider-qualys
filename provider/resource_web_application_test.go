@@ -28,6 +28,39 @@ func TestWebApplicationAuthRecordIDsIsASet(t *testing.T) {
 	}
 }
 
+func TestWebApplicationCancelScansFieldsConflict(t *testing.T) {
+	r := resourceWebApplication()
+	at := r.Schema["cancel_scans_at"]
+	after := r.Schema["cancel_scans_after_hours"]
+	if len(at.ConflictsWith) != 1 || at.ConflictsWith[0] != "cancel_scans_after_hours" {
+		t.Errorf("cancel_scans_at.ConflictsWith = %v", at.ConflictsWith)
+	}
+	if len(after.ConflictsWith) != 1 || after.ConflictsWith[0] != "cancel_scans_at" {
+		t.Errorf("cancel_scans_after_hours.ConflictsWith = %v", after.ConflictsWith)
+	}
+}
+
+func TestWebApplicationSwaggerAndPostmanConflict(t *testing.T) {
+	r := resourceWebApplication()
+	swagger := r.Schema["swagger_file"]
+	postman := r.Schema["postman_collection"]
+	if len(swagger.ConflictsWith) != 1 || swagger.ConflictsWith[0] != "postman_collection" {
+		t.Errorf("swagger_file.ConflictsWith = %v", swagger.ConflictsWith)
+	}
+	if len(postman.ConflictsWith) != 1 || postman.ConflictsWith[0] != "swagger_file" {
+		t.Errorf("postman_collection.ConflictsWith = %v", postman.ConflictsWith)
+	}
+}
+
+func TestWebApplicationCrawlingScriptsIsComputedOnly(t *testing.T) {
+	r := resourceWebApplication()
+	cs := r.Schema["crawling_scripts"]
+	if !cs.Computed || cs.Optional || cs.Required {
+		t.Errorf("crawling_scripts should be read-only (Computed only), got Optional=%v Required=%v Computed=%v",
+			cs.Optional, cs.Required, cs.Computed)
+	}
+}
+
 func TestDiffStringSets(t *testing.T) {
 	cases := []struct {
 		name            string

@@ -26,6 +26,17 @@ const (
 	WASFindingSourceBurp   = "BURP"
 )
 
+// WAS finding retest states, Confirmed by a user-supplied "Gap Review"
+// document quoting the official Qualys "Retrieve Finding Retest Status"
+// reference.
+const (
+	WASRetestStatusNoRetest    = "NO_RETEST"
+	WASRetestStatusUnderRetest = "UNDER_RETEST"
+	WASRetestStatusRetested    = "RETESTED"
+	WASRetestStatusCanceling   = "CANCELING"
+	WASRetestStatusCanceled    = "CANCELED"
+)
+
 // WASFinding is a WAS scan finding: a vulnerability, sensitive-content
 // exposure, or information-gathered item Qualys (or an imported Burp scan)
 // reported against a web application.
@@ -184,6 +195,94 @@ func (c *Client) FixWASFinding(ctx context.Context, id, comment string) error {
 	}
 	return c.call(ctx, http.MethodPost, "/qps/rest/3.0/fix/was/finding/"+id,
 		&ServiceRequest{Data: wasFindingActionData{Finding: &wasFindingActionWire{Comment: comment}}}, nil, false)
+}
+
+type wasFindingRetestRequestWire struct {
+	ID json.Number `json:"id,omitempty"`
+}
+
+type wasFindingRetestRequestData struct {
+	Finding *wasFindingRetestRequestWire `json:"Finding,omitempty"`
+}
+
+// RetestWASFinding triggers an asynchronous retest of a finding (a
+// potential vulnerability, confirmed vulnerability, or sensitive-content
+// finding). Confirmed by a user-supplied "Gap Review" document quoting the
+// official Qualys "Retest Finding" reference: POST retest/was/finding/<id>
+// with a data.Finding.id body. Requires the WAS.VULN.RETEST permission.
+// Poll GetWASFindingRetestStatus for progress — this call only starts the
+// retest, it does not wait for it.
+func (c *Client) RetestWASFinding(ctx context.Context, id string) error {
+	if strings.TrimSpace(id) == "" {
+		return fmt.Errorf("qualys qps: WAS finding id is required")
+	}
+	return c.call(ctx, http.MethodPost, "/qps/rest/3.0/retest/was/finding/"+id,
+		&ServiceRequest{Data: wasFindingRetestRequestData{Finding: &wasFindingRetestRequestWire{ID: json.Number(id)}}},
+		nil, false)
+}
+
+// WASFindingRetestStatus is the current state of a finding's asynchronous
+// retest, as returned by GetWASFindingRetestStatus. RetestStatus is one of
+// the WASRetestStatus* constants; not validated client-side.
+type WASFindingRetestStatus struct {
+	ID            string
+	UniqueID      string
+	RetestStatus  string
+	RetestedDate  string
+	FindingStatus string
+	Reason        string
+}
+
+type wasFindingRetestDetailWire struct {
+	RetestStatus  string `json:"retestStatus,omitempty"`
+	RetestedDate  string `json:"retestedDate,omitempty"`
+	FindingStatus string `json:"findingStatus,omitempty"`
+	Reason        string `json:"reason,omitempty"`
+}
+
+type wasFindingRetestStatusWire struct {
+	ID       json.Number                 `json:"id,omitempty"`
+	UniqueID string                      `json:"uniqueId,omitempty"`
+	Retest   *wasFindingRetestDetailWire `json:"retest,omitempty"`
+}
+
+type wasFindingRetestStatusData struct {
+	Finding *wasFindingRetestStatusWire `json:"Finding,omitempty"`
+}
+
+// GetWASFindingRetestStatus returns a finding's current retest status.
+// Confirmed by the same "Gap Review" document quoting the official Qualys
+// "Retrieve Finding Retest Status" reference: POST
+// retestStatus/was/finding/<id> — a POST despite reading state, as the
+// source documents it.
+func (c *Client) GetWASFindingRetestStatus(ctx context.Context, id string) (*WASFindingRetestStatus, error) {
+	if strings.TrimSpace(id) == "" {
+		return nil, fmt.Errorf("qualys qps: WAS finding id is required")
+	}
+	var resp ServiceResponse
+	err := c.call(ctx, http.MethodPost, "/qps/rest/3.0/retestStatus/was/finding/"+id, nil, &resp, false)
+	if err != nil {
+		return nil, err
+	}
+	items := decodeListOrSingle(resp.Data)
+	if len(items) == 0 {
+		return nil, fmt.Errorf("qualys qps: WAS finding %s retest status: %w", id, ErrNotFound)
+	}
+	var d wasFindingRetestStatusData
+	if err := json.Unmarshal(items[0], &d); err != nil {
+		return nil, fmt.Errorf("qualys qps: decoding WAS finding retest status: %w", err)
+	}
+	if d.Finding == nil {
+		return nil, fmt.Errorf("qualys qps: WAS finding %s retest status: %w", id, ErrNotFound)
+	}
+	out := &WASFindingRetestStatus{ID: d.Finding.ID.String(), UniqueID: d.Finding.UniqueID}
+	if d.Finding.Retest != nil {
+		out.RetestStatus = d.Finding.Retest.RetestStatus
+		out.RetestedDate = d.Finding.Retest.RetestedDate
+		out.FindingStatus = d.Finding.Retest.FindingStatus
+		out.Reason = d.Finding.Retest.Reason
+	}
+	return out, nil
 }
 
 // GetWASFinding returns one WAS finding, or ErrNotFound.

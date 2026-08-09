@@ -107,6 +107,56 @@ func TestReopenAndFixWASFindingUseDedicatedEndpoints(t *testing.T) {
 	}
 }
 
+func TestRetestWASFindingSendsFindingID(t *testing.T) {
+	var gotPath string
+	var gotBody map[string]interface{}
+	c, srv := testClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		b, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(b, &gotBody)
+		fmt.Fprint(w, `{"ServiceResponse":{"responseCode":"SUCCESS"}}`)
+	}))
+	defer srv.Close()
+
+	if err := c.RetestWASFinding(context.Background(), "1728792"); err != nil {
+		t.Fatalf("RetestWASFinding: %v", err)
+	}
+	if gotPath != "/qps/rest/3.0/retest/was/finding/1728792" {
+		t.Errorf("path = %q", gotPath)
+	}
+
+	sreq, _ := gotBody["ServiceRequest"].(map[string]interface{})
+	data, _ := sreq["data"].(map[string]interface{})
+	finding, _ := data["Finding"].(map[string]interface{})
+	if finding["id"] != float64(1728792) {
+		t.Errorf("data.Finding.id = %v", finding["id"])
+	}
+}
+
+func TestGetWASFindingRetestStatusDecodesRetestDetail(t *testing.T) {
+	var gotPath string
+	c, srv := testClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		fmt.Fprint(w, `{"ServiceResponse":{"responseCode":"SUCCESS",
+		  "data":[{"Finding":{"id":2774812,"uniqueId":"af45db08-80c6-4527-a48a-9759450b21a2",
+		  "retest":{"retestStatus":"RETESTED","retestedDate":"2020-10-30T09:03:11Z",
+		  "findingStatus":"Finding has been detected","reason":"Finding was confirmed"}}}]}}`)
+	}))
+	defer srv.Close()
+
+	status, err := c.GetWASFindingRetestStatus(context.Background(), "2774812")
+	if err != nil {
+		t.Fatalf("GetWASFindingRetestStatus: %v", err)
+	}
+	if gotPath != "/qps/rest/3.0/retestStatus/was/finding/2774812" {
+		t.Errorf("path = %q", gotPath)
+	}
+	if status.RetestStatus != WASRetestStatusRetested || status.UniqueID != "af45db08-80c6-4527-a48a-9759450b21a2" ||
+		status.Reason != "Finding was confirmed" {
+		t.Errorf("status = %+v", status)
+	}
+}
+
 func TestSearchWASFindingsWithNoFilterOmitsFilters(t *testing.T) {
 	var gotBody map[string]interface{}
 	c, srv := testClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
