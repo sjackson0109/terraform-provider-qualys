@@ -44,9 +44,9 @@ resource "qualys_was_auth_record" "internal_app_basic_auth" {
 ## Provenance
 
 This resource was gated for a long time: the WAS API confirms that
-`webappauthrecord` create/get/update/delete/search all exist and that secrets
+`webauthrecord` create/get/update/delete/search all exist and that secrets
 are masked on read, but no source obtained during this provider's original
-discovery pass named the actual field names. It is now built from two
+discovery pass named the actual field names. It was first built from two
 independent, non-official sources that agree — the WAS API guide's derived
 reference (a `fields` list of `{name, value, secured}` entries under a
 `formRecord`/`serverRecord` sub-object) and an open-source Qualys API
@@ -54,14 +54,24 @@ client's data model — rather than the official WAS API User Guide PDF
 itself, which was unreachable while building this (network egress to
 `docs.qualys.com`/`cdn2.qualys.com` is blocked in this environment).
 
+A user-supplied excerpt of that guide (Chapter 3, p.102, "Current
+authentication record count") later confirmed two things directly: the
+endpoint path is `/qps/rest/3.0/.../was/webauthrecord` (this resource
+originally called `/was/webappauthrecord`, an incorrect guess, now fixed),
+and the record sub-type vocabulary — `STANDARD`/`CERT`/`SELFINITIAL` for form
+records, `BASIC`/`DIGEST` for server records (confirmed as `credentials`
+filter values; not validated client-side since that doesn't directly confirm
+they're also this field's accepted values). The create/update payload shape
+itself is still only Corroborated, not Confirmed.
+
 Only form and server records are implemented. Selenium script and OAuth2
 records are not — their field names are known from the same sources but
 were left out of this pass to keep the surface verifiable in one sitting.
 
 **Verify against a tenant before relying on this in production.** If Qualys
-rejects a field, `sub_type`, or the top-level shape, that is expected: the
-schema records what two secondary sources agree on, not a confirmed 1:1
-match with the API.
+rejects a field or the top-level shape, that is expected: the schema records
+what the available evidence agrees on, not a confirmed 1:1 match with the
+API.
 
 ## Credentials are write-only
 
@@ -92,14 +102,14 @@ at plan time.
     - **name** (String) The login form's field name (as it appears in the page's HTML).
     - **value** (String, Sensitive) Value to fill in.
     - **secured** (Boolean) Whether this field holds a credential.
-  - **sub_type** (String) Authentication style, for example `STANDARD`. Not validated client-side.
+  - **sub_type** (String) Authentication style: `STANDARD`, `CERT` or `SELFINITIAL`. Not validated client-side.
   - **ssl_only** (Boolean) Only submit credentials over HTTPS.
   - **auth_vault** (Boolean) Store this record in the Qualys password vault.
-- **server_record** (Block List, Max: 1) Server-based authentication (HTTP Basic/NTLM/Digest-style). Conflicts with `form_record`.
+- **server_record** (Block List, Max: 1) Server-based authentication (HTTP Basic/Digest-style). Conflicts with `form_record`.
   - **username** (String)
   - **password** (String, Sensitive)
   - **domain** (String)
-  - **sub_type** (String) Authentication style. Not validated client-side.
+  - **sub_type** (String) Authentication style: `BASIC` or `DIGEST`. Not validated client-side.
 
 ### Read-Only
 

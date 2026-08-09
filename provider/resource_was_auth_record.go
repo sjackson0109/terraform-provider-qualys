@@ -38,10 +38,12 @@ func resourceWASAuthRecord() *schema.Resource {
 			"crawler uses to authenticate against a web application during a scan.\n\n" +
 			"**Provenance note:** the field names used here are corroborated from two " +
 			"independent non-official sources (the WAS API guide's derived reference and " +
-			"an open-source Qualys API client), not read directly from the official WAS " +
-			"API User Guide PDF — network access to docs.qualys.com/cdn2.qualys.com was " +
-			"unavailable while building this. Verify against a tenant before relying on it " +
-			"for anything beyond form and server records; Selenium script and OAuth2 " +
+			"an open-source Qualys API client). A user-supplied excerpt of the official " +
+			"WAS API User Guide (Chapter 3, p.102) later confirmed the endpoint path " +
+			"(`/was/webauthrecord`, corrected from an earlier `/was/webappauthrecord` " +
+			"guess) and the record sub-type vocabulary, but not yet the create/update " +
+			"payload shape itself. Verify against a tenant before relying on it for " +
+			"anything beyond form and server records; Selenium script and OAuth2 " +
 			"records are not implemented.\n\n" +
 			"Credentials are write-only: Qualys masks them on read, so this provider never " +
 			"reads them back into state. A credential changed outside Terraform is not " +
@@ -80,10 +82,12 @@ func resourceWASAuthRecord() *schema.Resource {
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
 						"sub_type": {
-							Description: "Authentication style, for example `STANDARD`. Not " +
-								"validated client-side — the full set of accepted values is " +
-								"not corroborated well enough to enumerate; an invalid value " +
-								"is rejected by the API at apply time.",
+							Description: "Authentication style. A primary-source excerpt of the " +
+								"WAS API User Guide names `STANDARD`, `CERT` and `SELFINITIAL` " +
+								"as form record sub-types, but not validated client-side — that " +
+								"evidence confirms them as filter values, not directly as this " +
+								"create-time field's accepted values; an invalid value is " +
+								"rejected by the API at apply time.",
 							Type:     schema.TypeString,
 							Optional: true,
 						},
@@ -119,8 +123,10 @@ func resourceWASAuthRecord() *schema.Resource {
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
 						"sub_type": {
-							Description: "Authentication style. Not validated client-side — see " +
-								"the equivalent note on `form_record.sub_type`.",
+							Description: "Authentication style. The same primary-source excerpt " +
+								"names `BASIC` and `DIGEST` as server record sub-types; see the " +
+								"equivalent note on `form_record.sub_type` for why this is not " +
+								"validated client-side.",
 							Type:     schema.TypeString,
 							Optional: true,
 						},

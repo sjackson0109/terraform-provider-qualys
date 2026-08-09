@@ -43,7 +43,7 @@ separate source and must not be used to infer VMDR endpoint behaviour.
     `cdn2.qualys.com/docs/version/10.21/`)
 - **Sections inventoried:** web applications (`webapp`), WAS option profiles
   (`optionprofile` — WAS scan configurations), scans (`wasscan`), authentication records
-  (`webappauthrecord`), scan schedules (**object name is `wasscanschedule`**, not
+  (`webauthrecord`), scan schedules (**object name is `wasscanschedule`**, not
   `wasschedule`), reports (`report`) and report templates, tag associations (`TagList` on
   `webapp`). WAS report *schedules* exist in the UI; a WAS API for them is `Unverified`
   (none surfaced).

@@ -225,6 +225,25 @@ See **[doc 11](11-verified-parameter-reference.md)** for the full parameter list
   `clientSecret`, `seleniumScript`, …) — same two sources name these fields too,
   but they were left out of this pass to keep the shipped surface verifiable in one
   sitting. Verify the whole resource against a live tenant before depending on it.
+- **Fifth pass — a user-supplied primary-source excerpt, direct from the official WAS
+  API User Guide (Chapter 3 "Authentication API", p.102, "Current authentication
+  record count").** This is the first Confirmed (not merely Corroborated) evidence
+  for this object, and it corrected a real mistake: the endpoint path is
+  `/qps/rest/3.0/count/was/webauthrecord` — **not** `webappauthrecord`, the name this
+  discovery had assumed since the first research pass and which `qualys_was_auth_record`
+  was built against. Fixed across the client, tests and docs. The same excerpt confirms
+  the count/search filter fields (`id`, `updateDate`, `name`, `lastScan`,
+  `lastScanStatus={NOT_USED|SUCCESSFUL|FAILED}`, `tags.id`, `tags.name`, `credentials`,
+  `createdDate`) and, via the `credentials` filter, the record sub-type vocabulary:
+  `FORM_STANDARD`, `FORM_CERT`, `FORM_SELFINITIAL`, `SERVER_BASIC`, `SERVER_DIGEST`.
+  Added to the client as the `WASAuthForm*`/`WASAuthServer*` constants, documented as
+  likely-but-not-directly-confirmed for the create-time `type` field (a filter enum
+  confirms the vocabulary exists, not that the create payload's field spells it the
+  same way). The create/update payload shape itself remains unconfirmed by this
+  excerpt — only the count endpoint's filters were in the pasted page. **Next-most-useful
+  ask if more of the guide becomes available:** the "Create Authentication Record" and
+  "Update Authentication Record" pages (expected to follow this one in Chapter 3), and
+  the WAS Scan Schedule chapter's recurrence sub-elements.
 - **`time_zone_code_list.php` output field names.** The endpoint's existence and its
   DTD name (`time_zone_code_list.dtd`) are confirmed (doc 03 §8), and it is the source
   of the `time_zone_code` values `qualys_scan_schedule` accepts. Three research passes

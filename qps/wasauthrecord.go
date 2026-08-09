@@ -8,6 +8,23 @@ import (
 	"strings"
 )
 
+// Sub-types confirmed by a primary-source excerpt (WAS API User Guide,
+// Chapter 3 "Authentication API", p.102, "Current authentication record
+// count") supplied directly during this provider's discovery work: the
+// `credentials` count/search filter accepts exactly these five values,
+// implying they are also the record's own sub-type vocabulary — FORM records
+// come in STANDARD/CERT/SELFINITIAL flavours, SERVER records in BASIC/DIGEST.
+// That inference (filter enum implies field enum) is not itself confirmed by
+// the excerpt, so these are offered as documented, likely-correct values
+// rather than enforced by client-side validation.
+const (
+	WASAuthFormStandard    = "STANDARD"
+	WASAuthFormCert        = "CERT"
+	WASAuthFormSelfInitial = "SELFINITIAL"
+	WASAuthServerBasic     = "BASIC"
+	WASAuthServerDigest    = "DIGEST"
+)
+
 // WASAuthField is one named credential field of a WAS authentication record:
 // a login-form field/value pair, or (for a server record) one of the
 // synthetic "username"/"password"/"domain" fields the API represents server
@@ -21,18 +38,20 @@ type WASAuthField struct {
 // WASFormRecord is the form-based half of a WAS authentication record: the
 // crawler fills these field/value pairs into a login page.
 type WASFormRecord struct {
-	// SubType is the record's authentication style (Qualys examples include
-	// STANDARD and SELENIUM). Not validated client-side: the confirmed
-	// values are not corroborated well enough to enumerate; an invalid
-	// value is rejected by the API at apply time.
+	// SubType is the record's authentication style. See the WASAuthForm*
+	// constants above for the values a primary-source excerpt corroborates;
+	// not validated client-side since that corroboration is an inference,
+	// not a direct confirmation — an invalid value is rejected by the API
+	// at apply time.
 	SubType   string
 	SSLOnly   bool
 	AuthVault bool
 	Fields    []WASAuthField
 }
 
-// WASServerRecord is the server-based (HTTP Basic/NTLM/Digest-style) half of
-// a WAS authentication record.
+// WASServerRecord is the server-based (HTTP Basic/Digest-style) half of a
+// WAS authentication record. See the WASAuthServer* constants above for the
+// SubType values a primary-source excerpt corroborates.
 type WASServerRecord struct {
 	SubType  string
 	Username string
@@ -69,11 +88,14 @@ type WASAuthRecord struct {
 // entries under the "set" idiom already used for tag associations) is
 // corroborated from two independent, non-official sources — the WAS API
 // guide's derived reference and an open-source Qualys API client — rather
-// than read directly from the official WAS API User Guide PDF, which was
-// unreachable (network egress to docs.qualys.com/cdn2.qualys.com is blocked
-// in the environment this was built in). Verify against a tenant before
-// relying on it for a Selenium or OAuth2 record; only form and server
-// records are implemented.
+// than read directly from the official WAS API User Guide PDF. A
+// user-supplied excerpt of that guide (Chapter 3, p.102) later confirmed the
+// endpoint path is /was/webauthrecord (not /was/webappauthrecord, this
+// package's original guess) and the record sub-type vocabulary — see the
+// WASAuthForm*/WASAuthServer* constants above — but not yet the create/update
+// payload shape itself, which remains Corroborated rather than Confirmed.
+// Verify against a tenant before relying on this for a Selenium or OAuth2
+// record; only form and server records are implemented.
 type WASAuthRecordInput struct {
 	Name   string
 	TagIDs []string
@@ -195,7 +217,7 @@ func (c *Client) CreateWASAuthRecord(ctx context.Context, in WASAuthRecordInput)
 	}
 
 	var resp ServiceResponse
-	err := c.call(ctx, http.MethodPost, "/qps/rest/3.0/create/was/webappauthrecord",
+	err := c.call(ctx, http.MethodPost, "/qps/rest/3.0/create/was/webauthrecord",
 		&ServiceRequest{Data: wasAuthRecordData{WebAppAuthRecord: wasAuthRecordInputToWire(in)}}, &resp, true)
 	if err != nil {
 		return nil, err
@@ -216,13 +238,13 @@ func (c *Client) UpdateWASAuthRecord(ctx context.Context, id string, in WASAuthR
 	if strings.TrimSpace(id) == "" {
 		return fmt.Errorf("qualys qps: WAS authentication record id is required for update")
 	}
-	return c.call(ctx, http.MethodPost, "/qps/rest/3.0/update/was/webappauthrecord/"+id,
+	return c.call(ctx, http.MethodPost, "/qps/rest/3.0/update/was/webauthrecord/"+id,
 		&ServiceRequest{Data: wasAuthRecordData{WebAppAuthRecord: wasAuthRecordInputToWire(in)}}, nil, false)
 }
 
 // DeleteWASAuthRecord removes a WAS authentication record.
 func (c *Client) DeleteWASAuthRecord(ctx context.Context, id string) error {
-	return c.call(ctx, http.MethodPost, "/qps/rest/3.0/delete/was/webappauthrecord/"+id, nil, nil, true)
+	return c.call(ctx, http.MethodPost, "/qps/rest/3.0/delete/was/webauthrecord/"+id, nil, nil, true)
 }
 
 // GetWASAuthRecord returns one WAS authentication record, or ErrNotFound.
@@ -231,7 +253,7 @@ func (c *Client) DeleteWASAuthRecord(ctx context.Context, id string) error {
 // WASAuthRecord doc comment for why credential contents are not decoded.
 func (c *Client) GetWASAuthRecord(ctx context.Context, id string) (*WASAuthRecord, error) {
 	var resp ServiceResponse
-	err := c.call(ctx, http.MethodGet, "/qps/rest/3.0/get/was/webappauthrecord/"+id, nil, &resp, false)
+	err := c.call(ctx, http.MethodGet, "/qps/rest/3.0/get/was/webauthrecord/"+id, nil, &resp, false)
 	if err != nil {
 		return nil, err
 	}
@@ -248,7 +270,7 @@ func (c *Client) GetWASAuthRecord(ctx context.Context, id string) (*WASAuthRecor
 // SearchWASAuthRecords returns WAS authentication records matching filters, following pagination.
 func (c *Client) SearchWASAuthRecords(ctx context.Context, filters *Filters) ([]*WASAuthRecord, error) {
 	var all []*WASAuthRecord
-	err := c.SearchAll(ctx, "/qps/rest/3.0/search/was/webappauthrecord", filters, 100, 0,
+	err := c.SearchAll(ctx, "/qps/rest/3.0/search/was/webauthrecord", filters, 100, 0,
 		func(raw json.RawMessage) error {
 			recs, err := decodeWASAuthRecords(raw)
 			if err != nil {

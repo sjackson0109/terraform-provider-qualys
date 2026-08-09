@@ -39,7 +39,7 @@ func TestCreateWASAuthRecordSendsFormFieldsUnderSetIdiom(t *testing.T) {
 	if rec.ID != "77" {
 		t.Errorf("rec = %+v", rec)
 	}
-	if gotPath != "/qps/rest/3.0/create/was/webappauthrecord" {
+	if gotPath != "/qps/rest/3.0/create/was/webauthrecord" {
 		t.Errorf("path = %q", gotPath)
 	}
 
