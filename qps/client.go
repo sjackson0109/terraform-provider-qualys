@@ -411,7 +411,7 @@ func (c *Client) SearchAll(ctx context.Context, path string, filters *Filters, p
 // search results, or a single bare object for get/create. Each returned
 // element is valid JSON on its own, for the caller to unmarshal into its own
 // typed wrapper — this only factors out the shape detection, which every
-// object type in this package (Tag, WebApp, WasOptionProfile, ...) needs
+// object type in this package (Tag, WebApp, WASOptionProfile, ...) needs
 // identically; the per-type unmarshalling stays with the caller since Go's
 // lack of generics before this module's minimum version rules out a fully
 // generic decoder.

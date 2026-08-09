@@ -13,7 +13,13 @@ import (
 func resourceWASOptionProfile() *schema.Resource {
 	return &schema.Resource{
 		Description: "A Qualys WAS scan option profile, referenced by web application scans " +
-			"and scan schedules.",
+			"and scan schedules. Also where WAS policy-compliance settings (PCI DSS, OWASP " +
+			"Top 10, SSL/TLS, crawling, exclusions, …) live — Qualys does not model policy " +
+			"compliance as a separate object; a user-supplied example confirmed this and " +
+			"caught a real bug: the wire wrapper key is `OptionProfile`, not the " +
+			"`WasOptionProfile` this resource had used since its first version, which would " +
+			"have failed every create/update against a live tenant. `comments` is also new, " +
+			"confirmed as a flat string by the same example.",
 
 		CreateContext: resourceWASOptionProfileCreate,
 		ReadContext:   resourceWASOptionProfileRead,
@@ -29,6 +35,11 @@ func resourceWASOptionProfile() *schema.Resource {
 				Description: "Option profile name.",
 				Type:        schema.TypeString,
 				Required:    true,
+			},
+			"comments": {
+				Type:     schema.TypeString,
+				Optional: true,
+				Computed: true,
 			},
 			// These seven fields are Optional+Computed, not just Optional. The
 			// create encoder (qps.CreateWASOptionProfile) omits any of them left
@@ -95,6 +106,7 @@ func resourceWASOptionProfile() *schema.Resource {
 func wasOptionProfileInputFrom(d *schema.ResourceData) qps.WASOptionProfileInput {
 	return qps.WASOptionProfileInput{
 		Name:                     d.Get("name").(string),
+		Comments:                 d.Get("comments").(string),
 		MaxCrawlRequests:         d.Get("max_crawl_requests").(int),
 		Performance:              d.Get("performance").(string),
 		BruteforceOption:         d.Get("bruteforce_option").(string),
@@ -142,6 +154,7 @@ func resourceWASOptionProfileRead(ctx context.Context, d *schema.ResourceData, m
 
 	return diag.FromErr(setAll(d, map[string]interface{}{
 		"name":                           profile.Name,
+		"comments":                       profile.Comments,
 		"max_crawl_requests":             profile.MaxCrawlRequests,
 		"performance":                    profile.Performance,
 		"bruteforce_option":              profile.BruteforceOption,

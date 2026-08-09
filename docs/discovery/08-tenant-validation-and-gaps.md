@@ -287,6 +287,24 @@ See **[doc 11](11-verified-parameter-reference.md)** for the full parameter list
   in favour of the derived reference). `qualys_was_scan_schedule` rebuilt accordingly.
   **Still open:** `MONTHLY` recurrence — no `monthlyOccurrence` example was supplied;
   tag-based (multi-web-app) targeting, still not modelled at all.
+- **Eighth pass — WAS option profile wrapper key was wrong since this resource's first
+  version, and every mock-based test passed anyway.** A user-supplied "Policy
+  Compliance" walkthrough clarifies that WAS has no separate policy-compliance object —
+  it's configured through the option profile — and along the way supplied a genuine
+  create example: `<OptionProfile>`, not `<WasOptionProfile>`. This project's
+  naming-convention pattern (`WasOptionProfile` mirroring `was/optionprofile`, by
+  analogy with `WasScanSchedule` for `was/wasscanschedule`) held for the schedule object
+  but not this one — there is no reliable rule here, each wrapper key needs its own
+  evidence. **Consequence worth internalising:** this bug shipped in PR #3 and survived
+  every subsequent review and test run, because this package's unit tests mock the HTTP
+  layer — the mock server echoes back whatever key the code under test sends, so a
+  wrong wrapper key and its "verification" test both agree with each other and neither
+  is checked against reality. Unit tests here prove internal consistency, not wire
+  correctness; only a live-tenant probe (still not done for anything in this provider)
+  or a primary/worked-example source closes that gap. Fixed: wrapper key corrected to
+  `OptionProfile` in both the create/get/search decode path and the update encoder
+  (which built its payload as a raw map, so needed a separate fix). Also added:
+  `comments`, confirmed as a flat string.
 - **`time_zone_code_list.php` output field names.** The endpoint's existence and its
   DTD name (`time_zone_code_list.dtd`) are confirmed (doc 03 §8), and it is the source
   of the `time_zone_code` values `qualys_scan_schedule` accepts. Three research passes
