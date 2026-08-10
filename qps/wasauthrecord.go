@@ -8,31 +8,99 @@ import (
 	"strings"
 )
 
-// WASAuthField is one named credential field of a WAS authentication record:
-// a login-form field/value pair, or (for a server record) one of the
-// synthetic "username"/"password"/"domain" fields the API represents server
-// credentials as.
+// Sub-types confirmed by a primary-source excerpt (WAS API User Guide,
+// Chapter 3 "Authentication API", p.102, "Current authentication record
+// count") supplied directly during this provider's discovery work: the
+// `credentials` count/search filter accepts exactly these five values,
+// implying they are also the record's own sub-type vocabulary — FORM records
+// come in STANDARD/CERT/SELFINITIAL flavours, SERVER records in BASIC/DIGEST.
+// SELENIUM is a sixth FORM sub-type, Confirmed against the official
+// docs.qualys.com "Create Authentication Record" reference (a user-supplied
+// "Gap Review" document quoting it, not a direct fetch — this sandbox
+// cannot reach docs.qualys.com — but citing the specific page rather than
+// transcribing prose, so treated as strong evidence).
+const (
+	WASAuthFormStandard    = "STANDARD"
+	WASAuthFormCustom      = "CUSTOM"
+	WASAuthFormCert        = "CERT"
+	WASAuthFormSelfInitial = "SELFINITIAL"
+	WASAuthFormSelenium    = "SELENIUM"
+	// WASAuthFormNone is not a real form record: setting formRecord.type to
+	// NONE is the documented way to switch a record from form authentication
+	// to OAuth2, per the same "Gap Review" source. See WASOAuth2Record.
+	WASAuthFormNone     = "NONE"
+	WASAuthServerBasic  = "BASIC"
+	WASAuthServerDigest = "DIGEST"
+)
+
+// OAuth2 grant types, Confirmed against the same source as WASAuthFormSelenium.
+const (
+	WASOAuth2GrantNone        = "NONE"
+	WASOAuth2GrantAuthCode    = "AUTH_CODE"
+	WASOAuth2GrantImplicit    = "IMPLICIT"
+	WASOAuth2GrantPassword    = "PASSWORD"
+	WASOAuth2GrantClientCreds = "CLIENT_CREDS"
+)
+
+// WASAuthField is one named field of a WAS form authentication record's
+// generic field collection.
 type WASAuthField struct {
 	Name    string
 	Value   string
 	Secured bool
 }
 
-// WASFormRecord is the form-based half of a WAS authentication record: the
-// crawler fills these field/value pairs into a login page.
-type WASFormRecord struct {
-	// SubType is the record's authentication style (Qualys examples include
-	// STANDARD and SELENIUM). Not validated client-side: the confirmed
-	// values are not corroborated well enough to enumerate; an invalid
-	// value is rejected by the API at apply time.
-	SubType   string
-	SSLOnly   bool
-	AuthVault bool
-	Fields    []WASAuthField
+// WASSeleniumScript is a Selenium IDE script attached to a SELENIUM form
+// record, or to an OAuth2 AUTH_CODE/IMPLICIT grant that needs to drive a
+// login page itself.
+type WASSeleniumScript struct {
+	Name string
+	// Data is the exported Selenium IDE script content (HTML/XML).
+	Data string
+	// Regex is the pattern Qualys evaluates against the resulting page to
+	// confirm the script authenticated successfully.
+	Regex string
 }
 
-// WASServerRecord is the server-based (HTTP Basic/NTLM/Digest-style) half of
-// a WAS authentication record.
+// WASFormRecord is the form-based half of a WAS authentication record.
+//
+// Username/Password are a convenience for the STANDARD case, but are NOT
+// sent as flat elements: a user-supplied "Gap Review" document, quoting the
+// official Qualys create example verbatim, showed STANDARD authentication
+// using the same generic `fields`/`set`/`WebAppAuthFormRecordField` list as
+// CUSTOM records — correcting this package's previous version, which sent
+// STANDARD credentials as flat `username`/`password` elements based on an
+// earlier, lower-confidence transcribed walkthrough. Username/Password here
+// are encoded into that same fields list under the "username"/"password"
+// names on write; see wasFormFieldsToWire.
+//
+// SeleniumScript/SeleniumCreds are for a SELENIUM record: the crawler runs
+// the script instead of filling in a login form directly. SeleniumCreds
+// enables the "@@authusername@@"/"@@authpassword@@" placeholder substitution
+// the source documents, letting Username/Password be rotated without
+// editing the script.
+type WASFormRecord struct {
+	// SubType is the record's authentication style. See the WASAuthForm*
+	// constants above. Not validated client-side: an invalid value is left
+	// for the API to reject at apply time.
+	SubType   string
+	LoginURL  string
+	SSLOnly   bool
+	AuthVault bool
+	Username  string
+	Password  string
+	// Fields carries additional field/value pairs for a CUSTOM record whose
+	// login form field names aren't the standard username/password.
+	Fields         []WASAuthField
+	SeleniumScript *WASSeleniumScript
+	SeleniumCreds  bool
+}
+
+// WASServerRecord is the server-based (HTTP Basic/Digest-style) half of a
+// WAS authentication record. Username/Password/Domain are flat elements
+// under serverRecord — unlike WASFormRecord, the "Gap Review" correction
+// only concerned form records; the server record shape is unchanged from
+// the evidence that established it.
 type WASServerRecord struct {
 	SubType  string
 	Username string
@@ -40,45 +108,76 @@ type WASServerRecord struct {
 	Domain   string
 }
 
+// WASOAuth2Record is a dedicated OAuth2 authentication record — Confirmed
+// as its own `oauth2Record` object with flat, grant-specific fields, NOT
+// modelled through the generic CUSTOM field list. Which fields the API
+// requires depends on GrantType (see the WASOAuth2Grant* constants):
+//
+//	AUTH_CODE:    SeleniumScript, RedirectURL required; AccessTokenURL,
+//	              ClientID, ClientSecret, Scope, AccessTokenExpiredMsgPattern optional
+//	IMPLICIT:     SeleniumScript, RedirectURL required
+//	PASSWORD:     AccessTokenURL, Username, Password required; ClientID,
+//	              ClientSecret, Scope, AccessTokenExpiredMsgPattern optional
+//	CLIENT_CREDS: AccessTokenURL required; ClientID, ClientSecret, Scope optional
+//
+// Not validated client-side beyond requiring GrantType — the API enforces
+// the per-grant requirements above at apply time. A record can be switched
+// from OAuth2 back to form authentication by setting GrantType to NONE (see
+// WASAuthFormNone for the reverse direction).
+type WASOAuth2Record struct {
+	GrantType                    string
+	AccessTokenURL               string
+	ClientID                     string
+	ClientSecret                 string
+	Scope                        string
+	RedirectURL                  string
+	Username                     string
+	Password                     string
+	SeleniumScript               *WASSeleniumScript
+	AccessTokenExpiredMsgPattern string
+}
+
 // WASAuthRecord is a WAS authentication record as read back from the API.
 //
-// Only the non-credential fields are modelled: Qualys masks form and server
-// field values on read (see the WASAuthRecordInput doc comment), so a
+// Only the non-credential fields are modelled: Qualys masks form, server and
+// OAuth2 field values on read (see the WASAuthRecordInput doc comment), so a
 // faithful decode of the credential contents would be misleading even if
-// attempted. Callers that need to know whether a record carries a form or
-// server record should keep that in their own configuration rather than
-// infer it from a read.
+// attempted. Callers that need to know whether a record carries a form,
+// server or OAuth2 record should keep that in their own configuration
+// rather than infer it from a read.
 type WASAuthRecord struct {
-	ID      string
-	Name    string
-	Tags    []TagRef
-	Created string
+	ID       string
+	Name     string
+	Comments string
+	Tags     []TagRef
+	Created  string
 }
 
 // WASAuthRecordInput is the desired state of a WAS authentication record.
 //
 // Credentials here are write-only from Terraform's point of view: Qualys
-// masks form and server field values on read (confirmed — see doc 08 in the
-// provider's discovery notes), so this package never attempts to decode them
-// back out of a get/search response, and the provider resource never sets
-// them from a read. A credential changed outside Terraform is not detected
-// as drift.
+// masks form, server and OAuth2 field values on read (confirmed — see doc
+// 08 in the provider's discovery notes), so this package never attempts to
+// decode them back out of a get/search response, and the provider resource
+// never sets them from a read. A credential changed outside Terraform is
+// not detected as drift.
 //
-// The wire shape for formRecord/serverRecord (a "type" sub-type string, an
-// sslOnly/authVault flag pair, and a "fields" list of {name, value, secured}
-// entries under the "set" idiom already used for tag associations) is
-// corroborated from two independent, non-official sources — the WAS API
-// guide's derived reference and an open-source Qualys API client — rather
-// than read directly from the official WAS API User Guide PDF, which was
-// unreachable (network egress to docs.qualys.com/cdn2.qualys.com is blocked
-// in the environment this was built in). Verify against a tenant before
-// relying on it for a Selenium or OAuth2 record; only form and server
-// records are implemented.
+// The wire shape is grounded in two rounds of user-supplied evidence: a
+// "Create and Update Authentication Records" walkthrough (transcribed, not
+// verbatim) established the endpoint path and record sub-type vocabulary,
+// then a later "Gap Review" document — quoting the official Qualys create
+// example directly — corrected STANDARD form records to use the same
+// generic fields list as CUSTOM (this package's first version had them
+// flat, based on the transcribed walkthrough alone) and added SELENIUM form
+// records and the dedicated OAuth2Record. Exactly one of Form, Server or
+// OAuth2 should be set per record.
 type WASAuthRecordInput struct {
-	Name   string
-	TagIDs []string
-	Form   *WASFormRecord
-	Server *WASServerRecord
+	Name     string
+	Comments string
+	TagIDs   []string
+	Form     *WASFormRecord
+	Server   *WASServerRecord
+	OAuth2   *WASOAuth2Record
 }
 
 type wasAuthFieldWire struct {
@@ -87,10 +186,11 @@ type wasAuthFieldWire struct {
 	Secured bool   `json:"secured"`
 }
 
-// wasAuthFieldSet is the "fields" list wrapper. The element key
-// (WebAppAuthFormRecordField) is the one class name doc 11's derived WAS API
-// reference names explicitly for this list, reused here for both form and
-// server records since the API represents server credentials as fields too.
+// wasAuthFieldSet is the "fields" list wrapper for a form record's generic
+// field collection. The element key (WebAppAuthFormRecordField) and the
+// fields/set/WebAppAuthFormRecordField nesting are both Confirmed — the
+// latter by a user-supplied "Gap Review" document quoting the official
+// Qualys STANDARD create example verbatim, which uses this exact shape.
 type wasAuthFieldSet struct {
 	WebAppAuthFormRecordField []wasAuthFieldWire `json:"WebAppAuthFormRecordField"`
 }
@@ -99,24 +199,73 @@ type wasAuthFieldsWire struct {
 	Set *wasAuthFieldSet `json:"set,omitempty"`
 }
 
-type wasAuthSubRecordWire struct {
-	Type      string             `json:"type,omitempty"`
-	SSLOnly   *bool              `json:"sslOnly,omitempty"`
-	AuthVault *bool              `json:"authVault,omitempty"`
-	Fields    *wasAuthFieldsWire `json:"fields,omitempty"`
+type wasSeleniumScriptWire struct {
+	Name  string `json:"name,omitempty"`
+	Data  string `json:"data,omitempty"`
+	Regex string `json:"regex,omitempty"`
+}
+
+type wasFormRecordWire struct {
+	Type           string                 `json:"type,omitempty"`
+	LoginURL       string                 `json:"loginUrl,omitempty"`
+	SSLOnly        *bool                  `json:"sslOnly,omitempty"`
+	AuthVault      *bool                  `json:"authVault,omitempty"`
+	Fields         *wasAuthFieldsWire     `json:"fields,omitempty"`
+	SeleniumScript *wasSeleniumScriptWire `json:"seleniumScript,omitempty"`
+	SeleniumCreds  *bool                  `json:"seleniumCreds,omitempty"`
+}
+
+type wasServerRecordWire struct {
+	Type      string `json:"type,omitempty"`
+	Domain    string `json:"domain,omitempty"`
+	Username  string `json:"username,omitempty"`
+	Password  string `json:"password,omitempty"`
+	SSLOnly   *bool  `json:"sslOnly,omitempty"`
+	AuthVault *bool  `json:"authVault,omitempty"`
+}
+
+type wasOAuth2RecordWire struct {
+	GrantType                    string                 `json:"grantType,omitempty"`
+	AccessTokenURL               string                 `json:"accessTokenUrl,omitempty"`
+	ClientID                     string                 `json:"clientId,omitempty"`
+	ClientSecret                 string                 `json:"clientSecret,omitempty"`
+	Scope                        string                 `json:"scope,omitempty"`
+	RedirectURL                  string                 `json:"redirectUrl,omitempty"`
+	Username                     string                 `json:"username,omitempty"`
+	Password                     string                 `json:"password,omitempty"`
+	SeleniumScript               *wasSeleniumScriptWire `json:"seleniumScript,omitempty"`
+	AccessTokenExpiredMsgPattern string                 `json:"accessTokenExpiredMsgPattern,omitempty"`
 }
 
 type wasAuthRecordWire struct {
-	ID           json.Number           `json:"id,omitempty"`
-	Name         string                `json:"name,omitempty"`
-	FormRecord   *wasAuthSubRecordWire `json:"formRecord,omitempty"`
-	ServerRecord *wasAuthSubRecordWire `json:"serverRecord,omitempty"`
-	Tags         *webAppTagList        `json:"tags,omitempty"`
-	Created      string                `json:"createdDate,omitempty"`
+	ID           json.Number          `json:"id,omitempty"`
+	Name         string               `json:"name,omitempty"`
+	FormRecord   *wasFormRecordWire   `json:"formRecord,omitempty"`
+	ServerRecord *wasServerRecordWire `json:"serverRecord,omitempty"`
+	OAuth2Record *wasOAuth2RecordWire `json:"oauth2Record,omitempty"`
+	Tags         *webAppTagList       `json:"tags,omitempty"`
+	Comments     string               `json:"comments,omitempty"`
+	Created      string               `json:"createdDate,omitempty"`
 }
 
 type wasAuthRecordData struct {
 	WebAppAuthRecord *wasAuthRecordWire `json:"WebAppAuthRecord,omitempty"`
+}
+
+// wasFormFieldsToWire builds a form record's generic fields list from the
+// convenience Username/Password plus any explicit extra fields. Used for
+// STANDARD and CUSTOM alike, per the STANDARD correction described on
+// WASFormRecord.
+func wasFormFieldsToWire(username, password string, extra []WASAuthField) *wasAuthFieldsWire {
+	var fields []WASAuthField
+	if username != "" {
+		fields = append(fields, WASAuthField{Name: "username", Value: username})
+	}
+	if password != "" {
+		fields = append(fields, WASAuthField{Name: "password", Value: password, Secured: true})
+	}
+	fields = append(fields, extra...)
+	return wasAuthFieldsToWire(fields)
 }
 
 func wasAuthFieldsToWire(fields []WASAuthField) *wasAuthFieldsWire {
@@ -130,8 +279,15 @@ func wasAuthFieldsToWire(fields []WASAuthField) *wasAuthFieldsWire {
 	return &wasAuthFieldsWire{Set: &wasAuthFieldSet{WebAppAuthFormRecordField: wire}}
 }
 
+func wasSeleniumScriptToWire(s *WASSeleniumScript) *wasSeleniumScriptWire {
+	if s == nil {
+		return nil
+	}
+	return &wasSeleniumScriptWire{Name: s.Name, Data: s.Data, Regex: s.Regex}
+}
+
 func wasAuthRecordInputToWire(in WASAuthRecordInput) *wasAuthRecordWire {
-	w := &wasAuthRecordWire{Name: in.Name}
+	w := &wasAuthRecordWire{Name: in.Name, Comments: in.Comments}
 
 	if len(in.TagIDs) > 0 {
 		simples := make([]tagSimple, 0, len(in.TagIDs))
@@ -143,24 +299,45 @@ func wasAuthRecordInputToWire(in WASAuthRecordInput) *wasAuthRecordWire {
 
 	if in.Form != nil {
 		sslOnly, authVault := in.Form.SSLOnly, in.Form.AuthVault
-		w.FormRecord = &wasAuthSubRecordWire{
+		formWire := &wasFormRecordWire{
 			Type:      in.Form.SubType,
+			LoginURL:  in.Form.LoginURL,
 			SSLOnly:   &sslOnly,
 			AuthVault: &authVault,
-			Fields:    wasAuthFieldsToWire(in.Form.Fields),
+			Fields:    wasFormFieldsToWire(in.Form.Username, in.Form.Password, in.Form.Fields),
 		}
+		if in.Form.SeleniumScript != nil {
+			formWire.SeleniumScript = wasSeleniumScriptToWire(in.Form.SeleniumScript)
+			creds := in.Form.SeleniumCreds
+			formWire.SeleniumCreds = &creds
+		}
+		w.FormRecord = formWire
 	}
 
 	if in.Server != nil {
-		fields := []WASAuthField{{Name: "username", Value: in.Server.Username}}
-		if strings.TrimSpace(in.Server.Domain) != "" {
-			fields = append(fields, WASAuthField{Name: "domain", Value: in.Server.Domain})
+		w.ServerRecord = &wasServerRecordWire{
+			Type:     in.Server.SubType,
+			Domain:   in.Server.Domain,
+			Username: in.Server.Username,
+			Password: in.Server.Password,
 		}
-		fields = append(fields, WASAuthField{Name: "password", Value: in.Server.Password, Secured: true})
-		w.ServerRecord = &wasAuthSubRecordWire{
-			Type:   in.Server.SubType,
-			Fields: wasAuthFieldsToWire(fields),
+	}
+
+	if in.OAuth2 != nil {
+		o := in.OAuth2
+		oauthWire := &wasOAuth2RecordWire{
+			GrantType:                    o.GrantType,
+			AccessTokenURL:               o.AccessTokenURL,
+			ClientID:                     o.ClientID,
+			ClientSecret:                 o.ClientSecret,
+			Scope:                        o.Scope,
+			RedirectURL:                  o.RedirectURL,
+			Username:                     o.Username,
+			Password:                     o.Password,
+			SeleniumScript:               wasSeleniumScriptToWire(o.SeleniumScript),
+			AccessTokenExpiredMsgPattern: o.AccessTokenExpiredMsgPattern,
 		}
+		w.OAuth2Record = oauthWire
 	}
 
 	return w
@@ -168,9 +345,10 @@ func wasAuthRecordInputToWire(in WASAuthRecordInput) *wasAuthRecordWire {
 
 func (w *wasAuthRecordWire) toWASAuthRecord() *WASAuthRecord {
 	out := &WASAuthRecord{
-		ID:      w.ID.String(),
-		Name:    w.Name,
-		Created: w.Created,
+		ID:       w.ID.String(),
+		Name:     w.Name,
+		Comments: w.Comments,
+		Created:  w.Created,
 	}
 	if w.Tags != nil && w.Tags.List != nil {
 		for _, t := range w.Tags.List.TagSimple {
@@ -182,20 +360,21 @@ func (w *wasAuthRecordWire) toWASAuthRecord() *WASAuthRecord {
 
 // CreateWASAuthRecord creates a WAS authentication record and returns it.
 //
-// Exactly one of in.Form or in.Server should be set; the API is not known to
-// support both record types on one record (only Corroborated evidence for
-// either individually), so sending both is not attempted here — the
-// provider resource enforces the choice at plan time.
+// Exactly one of in.Form, in.Server or in.OAuth2 should be set; the API is
+// not known to support more than one on a record at a time (only
+// Corroborated evidence per record type individually), so sending more than
+// one is not attempted here — the provider resource enforces the choice at
+// plan time.
 func (c *Client) CreateWASAuthRecord(ctx context.Context, in WASAuthRecordInput) (*WASAuthRecord, error) {
 	if strings.TrimSpace(in.Name) == "" {
 		return nil, fmt.Errorf("qualys qps: WAS authentication record name is required")
 	}
-	if in.Form == nil && in.Server == nil {
-		return nil, fmt.Errorf("qualys qps: WAS authentication record requires a form or server record")
+	if in.Form == nil && in.Server == nil && in.OAuth2 == nil {
+		return nil, fmt.Errorf("qualys qps: WAS authentication record requires a form, server or oauth2 record")
 	}
 
 	var resp ServiceResponse
-	err := c.call(ctx, http.MethodPost, "/qps/rest/3.0/create/was/webappauthrecord",
+	err := c.call(ctx, http.MethodPost, "/qps/rest/3.0/create/was/webauthrecord",
 		&ServiceRequest{Data: wasAuthRecordData{WebAppAuthRecord: wasAuthRecordInputToWire(in)}}, &resp, true)
 	if err != nil {
 		return nil, err
@@ -216,22 +395,23 @@ func (c *Client) UpdateWASAuthRecord(ctx context.Context, id string, in WASAuthR
 	if strings.TrimSpace(id) == "" {
 		return fmt.Errorf("qualys qps: WAS authentication record id is required for update")
 	}
-	return c.call(ctx, http.MethodPost, "/qps/rest/3.0/update/was/webappauthrecord/"+id,
+	return c.call(ctx, http.MethodPost, "/qps/rest/3.0/update/was/webauthrecord/"+id,
 		&ServiceRequest{Data: wasAuthRecordData{WebAppAuthRecord: wasAuthRecordInputToWire(in)}}, nil, false)
 }
 
 // DeleteWASAuthRecord removes a WAS authentication record.
 func (c *Client) DeleteWASAuthRecord(ctx context.Context, id string) error {
-	return c.call(ctx, http.MethodPost, "/qps/rest/3.0/delete/was/webappauthrecord/"+id, nil, nil, true)
+	return c.call(ctx, http.MethodPost, "/qps/rest/3.0/delete/was/webauthrecord/"+id, nil, nil, true)
 }
 
 // GetWASAuthRecord returns one WAS authentication record, or ErrNotFound.
 //
-// Only id, name, tags and the creation date are populated — see the
-// WASAuthRecord doc comment for why credential contents are not decoded.
+// Only id, name, comments, tags and the creation date are populated — see
+// the WASAuthRecord doc comment for why credential contents are not
+// decoded.
 func (c *Client) GetWASAuthRecord(ctx context.Context, id string) (*WASAuthRecord, error) {
 	var resp ServiceResponse
-	err := c.call(ctx, http.MethodGet, "/qps/rest/3.0/get/was/webappauthrecord/"+id, nil, &resp, false)
+	err := c.call(ctx, http.MethodGet, "/qps/rest/3.0/get/was/webauthrecord/"+id, nil, &resp, false)
 	if err != nil {
 		return nil, err
 	}
@@ -248,7 +428,7 @@ func (c *Client) GetWASAuthRecord(ctx context.Context, id string) (*WASAuthRecor
 // SearchWASAuthRecords returns WAS authentication records matching filters, following pagination.
 func (c *Client) SearchWASAuthRecords(ctx context.Context, filters *Filters) ([]*WASAuthRecord, error) {
 	var all []*WASAuthRecord
-	err := c.SearchAll(ctx, "/qps/rest/3.0/search/was/webappauthrecord", filters, 100, 0,
+	err := c.SearchAll(ctx, "/qps/rest/3.0/search/was/webauthrecord", filters, 100, 0,
 		func(raw json.RawMessage) error {
 			recs, err := decodeWASAuthRecords(raw)
 			if err != nil {

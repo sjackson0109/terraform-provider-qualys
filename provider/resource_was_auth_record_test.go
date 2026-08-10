@@ -32,6 +32,33 @@ func TestWASAuthRecordAcceptsFormRecord(t *testing.T) {
 	}
 }
 
+func TestWASAuthRecordAcceptsStandardFormRecord(t *testing.T) {
+	err := diffFor(t, resourceWASAuthRecord(), map[string]interface{}{
+		"name": "storefront-login",
+		"form_record": []interface{}{
+			map[string]interface{}{
+				"sub_type":  "STANDARD",
+				"login_url": "https://shop.example.com/login",
+				"username":  "scanner",
+				"password":  "s3cret",
+			},
+		},
+	})
+	if err != nil {
+		t.Errorf("STANDARD form record rejected: %v", err)
+	}
+}
+
+func TestWASAuthRecordRejectsEmptyFormRecord(t *testing.T) {
+	err := diffFor(t, resourceWASAuthRecord(), map[string]interface{}{
+		"name":        "storefront-login",
+		"form_record": []interface{}{map[string]interface{}{"sub_type": "STANDARD"}},
+	})
+	if err == nil {
+		t.Fatal("expected a plan-time error: a form_record with neither username/password nor field has no credential")
+	}
+}
+
 func TestWASAuthRecordAcceptsServerRecord(t *testing.T) {
 	err := diffFor(t, resourceWASAuthRecord(), map[string]interface{}{
 		"name": "storefront-basic-auth",

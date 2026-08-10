@@ -4,10 +4,27 @@ import "testing"
 
 func TestWASScanScheduleRequiresCoreFields(t *testing.T) {
 	r := resourceWASScanSchedule()
-	for _, attr := range []string{"name", "web_app_id", "type", "start_date", "time_zone", "occurrence_type"} {
+	for _, attr := range []string{"name", "web_app_id", "type", "start_date", "time_zone_code", "occurrence_type"} {
 		if s := r.Schema[attr]; s == nil || !s.Required {
 			t.Errorf("%s should be required", attr)
 		}
+	}
+}
+
+func TestWASScanScheduleAuthRecordIDAndUseDefaultConflict(t *testing.T) {
+	s := resourceWASScanSchedule().Schema
+	if len(s["web_app_auth_record_id"].ConflictsWith) == 0 {
+		t.Error("web_app_auth_record_id must conflict with web_app_auth_record_use_default")
+	}
+	if len(s["web_app_auth_record_use_default"].ConflictsWith) == 0 {
+		t.Error("web_app_auth_record_use_default must conflict with web_app_auth_record_id")
+	}
+}
+
+func TestWASScanScheduleActiveDefaultsTrue(t *testing.T) {
+	s := resourceWASScanSchedule().Schema["active"]
+	if s == nil || s.Default != true {
+		t.Error("active should default to true")
 	}
 }
 

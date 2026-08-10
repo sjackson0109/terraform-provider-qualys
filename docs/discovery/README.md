@@ -143,7 +143,7 @@ the well-grounded part of Phase 4.
 
 Still not implemented, and why:
 
-- **`qualys_was_auth_record`** — `webappauthrecord` create/get/update/delete/search
+- **`qualys_was_auth_record`** — `webauthrecord` create/get/update/delete/search
   are confirmed to exist and secrets are confirmed masked on read, but no source
   obtained during discovery surfaces the actual field names for the
   form/server/Selenium/OAuth2 credential payload. Per this discovery's evidence

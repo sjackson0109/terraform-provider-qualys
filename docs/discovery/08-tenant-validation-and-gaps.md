@@ -225,6 +225,338 @@ See **[doc 11](11-verified-parameter-reference.md)** for the full parameter list
   `clientSecret`, `seleniumScript`, …) — same two sources name these fields too,
   but they were left out of this pass to keep the shipped surface verifiable in one
   sitting. Verify the whole resource against a live tenant before depending on it.
+- **Fifth pass — a user-supplied primary-source excerpt, direct from the official WAS
+  API User Guide (Chapter 3 "Authentication API", p.102, "Current authentication
+  record count").** This is the first Confirmed (not merely Corroborated) evidence
+  for this object, and it corrected a real mistake: the endpoint path is
+  `/qps/rest/3.0/count/was/webauthrecord` — **not** `webappauthrecord`, the name this
+  discovery had assumed since the first research pass and which `qualys_was_auth_record`
+  was built against. Fixed across the client, tests and docs. The same excerpt confirms
+  the count/search filter fields (`id`, `updateDate`, `name`, `lastScan`,
+  `lastScanStatus={NOT_USED|SUCCESSFUL|FAILED}`, `tags.id`, `tags.name`, `credentials`,
+  `createdDate`) and, via the `credentials` filter, the record sub-type vocabulary:
+  `FORM_STANDARD`, `FORM_CERT`, `FORM_SELFINITIAL`, `SERVER_BASIC`, `SERVER_DIGEST`.
+  Added to the client as the `WASAuthForm*`/`WASAuthServer*` constants, documented as
+  likely-but-not-directly-confirmed for the create-time `type` field (a filter enum
+  confirms the vocabulary exists, not that the create payload's field spells it the
+  same way). The create/update payload shape itself remains unconfirmed by this
+  excerpt — only the count endpoint's filters were in the pasted page. **Next-most-useful
+  ask if more of the guide becomes available:** the "Create Authentication Record" and
+  "Update Authentication Record" pages (expected to follow this one in Chapter 3), and
+  the WAS Scan Schedule chapter's recurrence sub-elements.
+- **Sixth pass — a user-supplied "Create and Update Authentication Records" walkthrough
+  covering exactly the two pages the fifth pass asked for.** Treated as strong but not
+  absolute evidence: it reads as a transcription (clean Markdown/fenced code, unlike the
+  raw, messy text the fifth pass's genuine PDF copy/paste produced), not a verbatim quote.
+  It corrects a real design mistake rather than just filling a gap: a `STANDARD` form
+  record and a server record both use flat `username`/`password` elements (plus
+  `login_url` for form records) directly under `formRecord`/`serverRecord` — **not** the
+  generic `fields` list of `{name, value, secured}` entries the fourth pass's two sources
+  described. `qualys_was_auth_record` sent every credential through that generic list;
+  now only a `CUSTOM` form record does (kept, since supported-types documentation
+  separately names CUSTOM and the generic list is still the two original sources'
+  evidence for it — just not for STANDARD). Also newly confirmed: a flat `comments`
+  string element (not a list, as the fourth pass's summarised source implied), and that
+  associating an auth record with a web application is a **separate** call —
+  `update/was/webapp/<id>` with `data.WebApp.authRecords.add`/`.remove`, each a list of
+  `{id}` refs, an incremental idiom distinct from tags' authoritative "set". Added as
+  `qualys_web_application.auth_record_ids`, diffed against prior state on every apply.
+  The GET response shape for `authRecords` was not shown in either excerpt; this
+  provider's decode is inferred by analogy with how `tags` round-trips, disclosed as
+  such in code. **Still open:** whether OAuth2/Selenium records follow the same
+  flat-element pattern or the generic list.
+- ~~**WAS scan schedule recurrence sub-elements.**~~ **Closed for `DAILY`/`WEEKLY`
+  (Confirmed) — `MONTHLY` still open.** A user-supplied "Create and Update Scan
+  Schedule" walkthrough (transcribed, not a verbatim quote — strong but not absolute
+  evidence) supplied exactly the recurrence detail this discovery had been asking for
+  since the third pass, and along the way corrected a bigger structural mistake: the
+  first `qualys_was_scan_schedule` was built with `startDate`/`timeZone`/
+  `occurrenceType` as flat top-level fields, per the official Quick Reference's element
+  list, and `cancelOption` at the top level too. The walkthrough shows all of these
+  nested under a `scheduling` sub-object (`timeZone` itself wrapping a `.code`), and
+  `cancelOption` living under `target` instead. This is the second time in this
+  discovery a summarised element list (Quick Reference or a derived reference) named
+  the right elements but not their true nesting — the first was the WAS auth record's
+  fields-list-vs-flat-elements mistake, closed by the prior pass. **Pattern for future
+  passes: treat a flat element list as leads to verify, not a payload shape, until a
+  worked example confirms the nesting.** Newly confirmed alongside recurrence:
+  `cancelAfterNHours`, the full `notification` sub-object (`active`, `reschedule`,
+  `delay.nb`/`.scale`, `recipients.set.EmailAddress`, `message`), `sendMail`,
+  `sendOneMail`, `sendMailFromAddressOption`, and that activate/deactivate are dedicated
+  endpoints (resolving the "Conflicts with the Quick Reference" item doc 11 §9 recorded
+  in favour of the derived reference). `qualys_was_scan_schedule` rebuilt accordingly.
+  **Still open:** `MONTHLY` recurrence — no `monthlyOccurrence` example was supplied;
+  tag-based (multi-web-app) targeting, still not modelled at all.
+- **Eighth pass — WAS option profile wrapper key was wrong since this resource's first
+  version, and every mock-based test passed anyway.** A user-supplied "Policy
+  Compliance" walkthrough clarifies that WAS has no separate policy-compliance object —
+  it's configured through the option profile — and along the way supplied a genuine
+  create example: `<OptionProfile>`, not `<WasOptionProfile>`. This project's
+  naming-convention pattern (`WasOptionProfile` mirroring `was/optionprofile`, by
+  analogy with `WasScanSchedule` for `was/wasscanschedule`) held for the schedule object
+  but not this one — there is no reliable rule here, each wrapper key needs its own
+  evidence. **Consequence worth internalising:** this bug shipped in PR #3 and survived
+  every subsequent review and test run, because this package's unit tests mock the HTTP
+  layer — the mock server echoes back whatever key the code under test sends, so a
+  wrong wrapper key and its "verification" test both agree with each other and neither
+  is checked against reality. Unit tests here prove internal consistency, not wire
+  correctness; only a live-tenant probe (still not done for anything in this provider)
+  or a primary/worked-example source closes that gap. Fixed: wrapper key corrected to
+  `OptionProfile` in both the create/get/search decode path and the update encoder
+  (which built its payload as a raw map, so needed a separate fix). Also added:
+  `comments`, confirmed as a flat string.
+- ~~**WAS report schedules — deferred, assumed no v3 API.**~~ **Reversed; built as
+  `qualys_was_report_schedule`.** A ninth research pass — a user-supplied "Create and
+  Update Report Schedule" walkthrough, paired with a "Report Templates" walkthrough —
+  confirmed a v3 `/qps/rest/3.0/.../was/reportschedule` API exists after all,
+  contradicting this discovery's earlier passes, which found nothing and assumed only
+  the announced V4 schedule/report endpoints would cover this. Wrapper key
+  `ReportSchedule` confirmed verbatim. The report-schedule walkthrough also supplied the
+  one piece `qualys_was_scan_schedule` was still missing: a `monthlyOccurrence` example
+  (`dayOfMonth`, `everyNMonths`) — applied to scan schedule by analogy, since `DAILY`/
+  `WEEKLY` matched exactly between the two schedule types in the evidence obtained.
+  Report schedule and scan schedule now share their occurrence-encoding logic in
+  `qps/wasscanschedule.go`/`wasreportschedule.go` rather than duplicating it.
+  Separately, the report-templates walkthrough confirmed the WAS report template API
+  (`/qps/rest/3.0/.../was/reporttemplate`) is genuinely read-only (count/search/get,
+  explicitly no create/update/delete) — built as `data.qualys_was_report_templates`,
+  distinct from the existing `data.qualys_report_templates` (the legacy VM API). Its
+  wrapper key (`ReportTemplate`) was **not** shown in a worked example this time —
+  chosen because 3 of 4 confirmed wrapper keys in this codebase lack a `Was` prefix,
+  disclosed as a guess, not a repeat of the option-profile mistake.
+- ~~**Finding lifecycle actions (ignore/retest/severity override) — not implemented.**~~
+  **Partially closed.** A tenth research pass — a user-supplied "Findings Lifecycle
+  Actions" walkthrough — confirmed `ignore`/`reopen`/`fix` as `POST
+  {action}/was/finding/<id>` with a `data.Finding.comment` body, reusing the `Finding`
+  wrapper key already confirmed for get/search. `qualys_was_finding_ignore` built for
+  `ignore`/`reopen` (create=ignore, delete=reopen — a genuine declarative state: an
+  admin-accepted risk or confirmed false positive). `fix` is implemented at the client
+  level (`FixWASFinding`) but deliberately not wrapped in a resource: the same
+  walkthrough explicitly recommends against using lifecycle actions as a rescan
+  substitute, since "fixed" is meant to be scan-verified and can be reverted by a later
+  scan — administrator-declared "this is fixed" doesn't fit this provider's declarative
+  model the way `ignore` does. **`retest` and severity overrides (updateSeverity/
+  restoreSeverity) remain unimplemented** — no source has covered them yet.
+- ~~**WAS DNS override records — field names never obtained, entirely gated.**~~
+  **Closed.** An eleventh research pass — a user-supplied walkthrough, this one
+  carrying inline citations to specific docs.qualys.com pages (count/search/get/
+  create/update/delete_dns.htm) rather than reading as a plain transcription — closed
+  this gate and corrected the endpoint path this discovery had recorded:
+  `was/dnsoverride`, not the `dnsoverriderecord` guess doc 06 carried since the first
+  pass. Wrapper key `DnsOverride` confirmed verbatim. `mappings` (hostName/ipAddress
+  pairs) and `comments` (a list, not the flat string confirmed for option
+  profile/auth record — DNS override's comments field is evidenced differently, kept
+  as shown) use the same set/add/remove idiom already confirmed for tag associations;
+  this provider always sends `set`. **Two genuine API deviations, unique to this
+  object among everything built so far:** update (`POST update/was/dnsoverride`, no
+  path suffix) carries the ID inside the request body instead of the URL, and delete
+  (`POST delete/was/dnsoverride`, no path suffix) carries the ID as a filter criterion
+  instead. Built as `qualys_was_dns_override`, referenced by
+  `qualys_was_scan_schedule.dns_override_id` (already-built field, now backed by a
+  real resource instead of only an external ID). Web-application-level default DNS
+  override association (mentioned in the walkthrough's overview but with no create/
+  update example shown) is not built — same reasoning as the still-unconfirmed
+  `qualys_web_application` config fields (`defaultAuthRecord`, `cancelScansAt`, etc.).
+- ~~**WAS auth record STANDARD shape (built on lower-confidence evidence);
+  `qualys_was_scan_schedule` MONTHLY (built by analogy); Selenium/OAuth2 auth
+  records, findings retest, Burp import, and several `qualys_web_application`
+  fields — all unimplemented.**~~ **Twelfth research pass — two corrections
+  to already-shipped code, plus several new closures.** A user-supplied "Gap
+  Review" document, quoting official Qualys reference pages directly rather
+  than transcribing a walkthrough, both confirmed several previously open
+  gaps and **explicitly contradicted two things this provider had already
+  shipped**:
+  - **`qualys_was_auth_record` STANDARD shape, corrected again.** The ninth
+    research pass's transcribed walkthrough had shown `STANDARD` form
+    credentials as flat `username`/`password` elements, and this provider's
+    schema followed suit. The Gap Review document quotes the official
+    Qualys `STANDARD` create example directly: it uses the same
+    `fields`/`set`/`WebAppAuthFormRecordField` list as `CUSTOM`. Fixed in
+    `qps/wasauthrecord.go` — `username`/`password` are now encoded into
+    that list (as fields named `"username"`/`"password"`) for both
+    sub-types; `login_url` remains a flat element, since the correction
+    only concerned the credential fields. This is the second time a
+    transcribed walkthrough got a nesting detail wrong that a direct quote
+    of the official page corrected — see the standing caution below.
+  - **`qualys_was_scan_schedule` MONTHLY, reverted.** An earlier pass added
+    `day_of_month`/`every_n_months` to `qualys_was_scan_schedule` by
+    analogy with `qualys_was_report_schedule`'s confirmed MONTHLY shape,
+    reasoning that DAILY/WEEKLY matched exactly between the two schedule
+    types. The Gap Review document explicitly rejects that inference:
+    "Do not derive the WasScanSchedule MONTHLY payload solely from report
+    scheduling... keep this gap open until either the wasscanschedule.xsd
+    confirms the structure, or an official WasScanSchedule MONTHLY request
+    example is obtained." Reverted: `day_of_month`/`every_n_months` are
+    removed from the `qualys_was_scan_schedule` schema, `MONTHLY` is
+    removed from its `occurrence_type` validator, and
+    `CreateWASScanSchedule`/`UpdateWASScanSchedule` now reject a MONTHLY
+    request outright rather than send an unconfirmed payload.
+    `qualys_was_report_schedule` keeps MONTHLY — its payload shape is
+    independently confirmed, not borrowed.
+  - **Newly closed, all Confirmed by the same document:** Selenium form
+    auth records (`seleniumScript`/`seleniumCreds`) and a dedicated OAuth2
+    auth record (`oauth2Record`, flat grant-specific fields, explicitly
+    *not* the generic field list) — both added to `qualys_was_auth_record`.
+    Findings `retest`/`retestStatus` (`RetestWASFinding`,
+    `GetWASFindingRetestStatus` client methods; not a resource, same
+    async-job reasoning as scan/report launch). Burp report import
+    (`ImportWASBurp`, `POST import/was/burp` with a flat body — the one
+    WAS write call seen so far that does *not* nest under
+    `data.<WrapperKey>`). `qualys_web_application` gained `attributes`,
+    `config.cancelScansAt`/`cancelScansAfterNHours`/
+    `defaultDnsOverride.id`, a separate `dnsOverrides` collection,
+    `swaggerFile`/`postmanCollection` (mutually exclusive base64 uploads),
+    `malwareMonitoring`/`malwareNotification`, and read-only
+    `crawlingScripts`.
+  - **Explicitly still open, per the same document:** the exact
+    `WasScanSchedule` MONTHLY XML/JSON structure; whether
+    `WasScanSchedule` accepts the same tag-based multi-web-app targeting
+    confirmed for one-off WAS Multi-Scans (`tags.included`/`excluded`,
+    `ALL`/`ANY`); `progressiveScanning`'s full request/response shape;
+    `malwareScheduling`'s recurrence structure; the exact `authRecords`
+    collection wrapper on a WebApp GET (existence and content-type are now
+    confirmed, serialisation as count/list vs. something else is not);
+    Edit/Restore Finding Severity's endpoint and payload (existence
+    confirmed); the Catalog CRUD/search/promote workflow; Search List/
+    Parameter Set schemas; the exact bearer-token endpoint and whether
+    `/auth/oidc`/`/auth/oauth` differ; and whether the newly-confirmed rich
+    report-configuration fields (`display.contents`/`graphs`/`groups`,
+    `filters.searchlists`/`status`/`url`/`remediation`, `showPatched`,
+    report format enum) apply to report-template *retrieval* or only to
+    report *creation* — deliberately not bolted onto
+    `data.qualys_was_report_templates` until that's resolved, since
+    building it onto the wrong object would repeat the STANDARD/MONTHLY
+    mistake a third time.
+
+  **Standing caution reinforced by this pass:** a transcribed walkthrough
+  (however detailed) is not the same evidence tier as a direct quote of an
+  official reference page, and a shape "seen only in a companion object's
+  example" is not the same as a shape confirmed for the object in question
+  — both caused a shipped correction this session, in the same auth-record
+  file, twice. Prefer verifying every remaining "by analogy" or
+  "transcribed" item against a tenant, the object's own XSD, or a direct
+  quote before treating it as load-bearing.
+- ~~**VM per-vulnerability detection fields (`DETECTION_LIST`) — deliberately unread by `qualys_host_detections` since the endpoint's own schema was unconfirmed; Qualys KnowledgeBase field names never sourced at all.**~~
+  **Thirteenth research pass — closed via a new, separate data source rather
+  than by changing `qualys_host_detections`.** A user-supplied requirements
+  document asked for the VM equivalent of `data.qualys_was_findings`:
+  individual vulnerability findings (one host + one QID + one detection
+  instance, never aggregated), for a customer remediation-reporting
+  workflow. `hostdetection.go`'s own doc comment had flagged
+  `DETECTION_LIST`'s field names as unconfirmed since this provider's
+  earliest VM work and deliberately left them undecoded; this pass resolves
+  that gap with a **Corroborated, not Confirmed** schema — `vmdr/vmfinding.go`
+  decodes `QID`, `TYPE`, `SEVERITY`, `PORT`, `PROTOCOL`, `SSL`, `RESULTS`,
+  `STATUS`, `FIRST_FOUND_DATETIME`, `LAST_FOUND_DATETIME`,
+  `LAST_TEST_DATETIME`, `LAST_UPDATE_DATETIME`, `LAST_FIXED_DATETIME`,
+  `TIMES_FOUND`, `IS_IGNORED`, `IS_DISABLED`, reflecting Qualys's
+  long-published Host List Detection API schema from general knowledge
+  rather than a fetched or user-supplied source this session (docs.qualys.com
+  remains blocked in this sandbox). `FIRST_FOUND_DATETIME`/
+  `LAST_FOUND_DATETIME` specifically carry stronger corroboration: they are
+  two of the three field names this same doc already records as Confirmed
+  for this exact endpoint (the third, `LAST_SCAN_DATETIME`, is the
+  host-level field `qualys_host_detections` already used) — evidence this
+  provider had without ever connecting it to the per-detection schema
+  before. Two fields this session found no confident evidence for
+  (a per-detection `FQDN`, a `SERVICE` element) were deliberately left out
+  rather than guessed, continuing this project's standing rule.
+
+  A new `vmdr/knowledgebase.go` closes the previously entirely-unsourced
+  KnowledgeBase API gap (doc 08 had only ever recorded its endpoint path and
+  subscription-gated status, never a field name) the same way: `QID`,
+  `TITLE`, `CATEGORY`, `CVSS>BASE`, `CVSS_V3>BASE`, `PCI_FLAG`, `PATCHABLE`,
+  Corroborated on the same basis. It is used only for a bounded, QID-list
+  join (`GetKnowledgeBaseEntries`, one batched request for however many
+  unique QIDs a `qualys_vm_findings` read produces) — the standalone bulk-KB
+  download this doc already classified as out of scope is untouched by this
+  pass.
+
+  **Deliberately not sent as query parameters, and applied client-side
+  instead:** `qids`, the severity range, and all six date-range filters
+  (`first_found_after/before`, `last_found_after/before`,
+  `last_test_after/before`). This endpoint's Confirmed parameter list (this
+  doc, above) has never included `qids`/`severities`/a detection-date-range
+  filter for this specific endpoint, even though conventions with those
+  names exist elsewhere in the Qualys VM API — asserting one here without
+  confirmation risks a filter that silently does nothing if the name is
+  wrong, exactly the class of mistake the WAS auth-record/scan-schedule
+  corrections (this doc's twelfth pass) warn against repeating. `host_ids`,
+  `ips` and `status` remain genuine server-side parameters, all three
+  already Confirmed/used by `qualys_host_detections` against this same
+  endpoint. `asset_group_ids` is resolved to member IPs via
+  `GetAssetGroup` (already Confirmed) rather than guessing an `ag_ids`
+  parameter for this endpoint specifically — a composition of two
+  already-evidenced facts instead of a new one.
+
+  Built as `data.qualys_vm_findings`, explicitly **not** a change to
+  `qualys_host_detections` — the user's requirement was to keep host
+  inventory and vulnerability findings as separate data models, and this
+  provider's existing WAS precedent (`qualys_host_detections` vs.
+  `qualys_was_findings`) already established that split.
+- ~~**`data.qualys_was_findings` — thin single-value filtering, no dedup,
+  no KnowledgeBase enrichment, no VM-findings-style multi-value/range
+  support.**~~ **Fourteenth research pass — brought to parity with the
+  thirteenth pass's `data.qualys_vm_findings`, following the same
+  requirements document's explicit request to mirror that structure while
+  respecting WAS-specific identity and fields.** `qps/wasfinding.go` gained:
+  - `UniqueID` on `WASFinding` — Confirmed, not new evidence but a
+    connection this provider had not made before: `GetWASFindingRetestStatus`
+    (added in the twelfth pass) already decodes a `Finding.uniqueId` from
+    the same object family this file's get/search calls decode.
+  - `ID`/`QID` EQUALS filters and four `GREATER`/`LESSER` date-range
+    filters (`firstDetectedDate`/`lastDetectedDate`) — doc 11 §9 already
+    listed `id`, `qid`, `firstDetectedDate` and `lastDetectedDate` as
+    Confirmed Finding filter fields, and documents `GREATER`/`LESSER` as
+    generally valid qps operators; `qps/client.go`'s own pagination cursor
+    already depends on `id GREATER lastId` working, corroborating the
+    operator further. The specific field/operator combination for the date
+    bounds is still Corroborated, not independently Confirmed, since "not
+    every operator is valid on every field" per the same doc.
+  - `SearchWASFindings` now dedupes by finding ID and returns
+    `[]WASFindingConflict` for genuine disagreements, mirroring
+    `vmdr.ListVMFindings` exactly. This changed the method's signature
+    (`(findings, err)` → `(findings, conflicts, err)`) — a contained,
+    deliberate breaking change to an internal package method with exactly
+    two callers in this repo (both updated).
+
+  `provider/data_source_was_findings.go` was rewritten rather than
+  incrementally patched, because the requirements document specified exact
+  types for `severity`/`status`/`type`/`finding_type` that differ from what
+  was shipped (`severity` string→int, the other three string→set) — a
+  **deliberate breaking change**, called out prominently in the resource
+  description and doc rather than hidden. New filters follow the same
+  single-value-server/multi-value-client-side split established in the
+  thirteenth pass for VM findings, for the same reason: this session found
+  no Confirmed multi-value or range query parameter for `qids`, `status`,
+  `type`, `finding_type`, or the severity range on this endpoint, so
+  asserting one risks a silently-inert filter. `web_app_ids` resolves to N
+  searches (one per ID, each using the Confirmed single-value `webApp.id`
+  filter) merged and deduplicated, rather than guessing an `IN`-style
+  multi-value parameter. `finding_ids` bypasses search entirely via direct
+  `GetWASFinding` calls (already Confirmed), then applies every other
+  filter to that fixed set client-side.
+
+  KnowledgeBase enrichment reuses `vmdr.Client.GetKnowledgeBaseEntries`
+  directly rather than duplicating a WAS-specific KB client: Qualys
+  maintains one subscription-wide KnowledgeBase keyed by QID across VM, PC
+  and WAS, so the thirteenth pass's KB client already serves this data
+  source too. `vmdr.KBEntry` gained `Diagnosis`/`Consequence`/`Solution`
+  (same Corroborated tier as the rest of that type) since this document
+  explicitly asked for them under WAS enrichment; `data.qualys_vm_findings`
+  picked up the same three fields for free, a pure non-breaking addition.
+
+  **Deliberately not implemented, per the same document's own preference
+  for "finding metadata... rather than raw HTTP request/response
+  evidence":** `category`, `description`, `impact`, `solution` (as direct
+  Finding fields — `category`/`solution`-equivalent content is available
+  via enrichment instead), `payload`, `request`, `response`, `parameter`,
+  `authentication`, `ssl`, `access_path`, `external_reference`,
+  `owasp_category`, `wasc_category`, `cwe_id`, and a CVSS v2 score on the
+  Finding object itself. None have a confirmed representation on the
+  Finding object in this session's evidence; inventing wire shapes for them
+  would repeat the exact mistake this doc's twelfth pass corrected twice
+  already in the same auth-record file.
 - **`time_zone_code_list.php` output field names.** The endpoint's existence and its
   DTD name (`time_zone_code_list.dtd`) are confirmed (doc 03 §8), and it is the source
   of the `time_zone_code` values `qualys_scan_schedule` accepts. Three research passes

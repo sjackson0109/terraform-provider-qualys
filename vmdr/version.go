@@ -49,6 +49,7 @@ const (
 	capAuth           capability = "auth"
 	capVault          capability = "vault"
 	capSession        capability = "session"
+	capKnowledgeBase  capability = "knowledge_base/vuln"
 )
 
 // versionFor returns the API version this client targets for a capability.
@@ -80,6 +81,7 @@ var pinnedVersions = map[capability]apiVersion{
 	capAuth:           v2_0,
 	capVault:          v2_0,
 	capSession:        v2_0,
+	capKnowledgeBase:  v2_0,
 }
 
 // deprecatedCapabilities are those known to have a newer generation available. The

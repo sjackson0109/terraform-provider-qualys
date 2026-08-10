@@ -18,53 +18,75 @@ resource "qualys_was_scan_schedule" "storefront_weekly" {
   web_app_id = qualys_web_application.storefront.id
   type       = "VULNERABILITY"
 
-  option_profile_id = qualys_was_option_profile.standard.id
+  option_profile_id       = qualys_was_option_profile.standard.id
+  web_app_auth_record_id  = qualys_was_auth_record.storefront_login.id
+  scanner_type            = "EXTERNAL"
 
   start_date      = "2026-09-01T02:00:00Z"
-  time_zone       = "UTC"
+  time_zone_code  = "Europe/London"
   occurrence_type = "WEEKLY"
 
-  web_app_auth_record_id = qualys_was_auth_record.storefront_login.id
+  every_n_weeks = 1
+  on_days       = ["SUNDAY"]
 
-  notification = true
+  cancel_after_hours = 8
+
+  notification {
+    active       = true
+    delay_amount = 1
+    delay_scale  = "DAY"
+    recipients   = ["security@example.com"]
+    message      = "A Qualys WAS scan is scheduled to start soon."
+  }
+
+  send_mail = true
 }
 ```
 
-## Coverage note — read before using a recurring schedule
+## Provenance
 
-This resource covers the scan-schedule element model that this provider's
-discovery notes (doc 11 §8) confirm by name from Qualys's official API Quick
-Reference: a single web-application target, scan type, option profile,
-start date/time zone/occurrence type, and the simple id/boolean options
-(`proxy_id`, `dns_override_id`, `web_app_auth_record_id`, `cancel_option`,
-`send_mail`, `randomize_scan`).
+The element model is Confirmed against a user-supplied "Create and Update
+Scan Schedule" walkthrough (transcribed, not a verbatim PDF quote, so
+treated as strong but not absolute evidence) that superseded an earlier
+version built only from the official API Quick Reference. That first
+version got the shape wrong in three ways the walkthrough corrected:
 
-Two things are **not** covered, both because the field names were not
-reachable in any source obtained while building this — the WAS API User
-Guide PDF and every mirror tried (docs.qualys.com, cdn2.qualys.com,
-manualzz.com, a government procurement portal hosting a copy) are blocked by
-this environment's network egress policy:
+- `scheduling` is a real sub-object wrapping `startDate`/`timeZone`/
+  `occurrenceType`/`occurrence`/`cancelAfterNHours` — not flat top-level
+  fields.
+- `timeZone` wraps a `code`, not a flat string.
+- `cancelOption` lives under `target`, not top-level; `reschedule` lives
+  under `notification`, not top-level.
 
-1. **Tag-based (multi-web-app) targeting.** Only a single `web_app_id` is
-   supported; scheduling one job against many web applications by tag is
-   not.
-2. **Per-occurrence recurrence detail.** `occurrence_type = "WEEKLY"` tells
-   Qualys the schedule repeats weekly, but not *which* weekday, and there is
-   no `occurrence_type = "DAILY"` equivalent of "every 2 days" — the
-   every-N-days/weeks/months and weekday/day-of-month sub-elements are
-   unconfirmed and therefore unimplemented. A recurring schedule created
-   here uses whatever default cadence Qualys applies when those fields are
-   absent from the request, which has not been observed against a live
-   tenant.
+It also closed the recurrence gap for `DAILY` and `WEEKLY` schedules
+(`every_n_days`; `every_n_weeks`/`on_days`/`occurrence_count`), and surfaced
+capability this provider had not modelled at all: `cancel_after_hours`,
+the full `notification` sub-object, `send_one_mail`, and
+`send_mail_from_address_option`.
 
-The JSON wrapper class name used on the wire (`WasScanSchedule`) is inferred
-from this API's own naming convention (`WasOptionProfile` for
-`was/optionprofile`), not read from a confirmed sample payload — if wrong,
-Qualys will reject the request cleanly rather than silently misbehave.
+**`MONTHLY` is deliberately not supported by this resource.** An earlier
+version modelled it (`day_of_month`/`every_n_months`) by analogy from a
+companion `qualys_was_report_schedule` example, since `DAILY`/`WEEKLY`
+matched exactly between the two schedule types in the evidence available at
+the time. A later user-supplied "Gap Review" document explicitly corrected
+this: the MONTHLY payload shape is confirmed for report schedules, not for
+scan schedules, and should not be assumed to carry over. Both the
+`occurrence_type` validator and the underlying `qps` client now reject
+`MONTHLY` rather than send an unconfirmed payload. If you need monthly WAS
+report generation, `qualys_was_report_schedule` supports it today; a
+confirmed `WasScanSchedule` MONTHLY request example (or the
+`wasscanschedule.xsd`) would be needed to add it here.
 
-**After the first apply, open the schedule in the Qualys UI and confirm the
-cadence and target are what you expect** before relying on this for
-anything more than `ONCE` schedules, which have no recurrence ambiguity.
+Tag-based (multi-web-app) targeting is also not modelled — only a single
+`web_app_id`. The same "Gap Review" document confirms WAS supports
+tag-based multi-web-app targeting for one-off Multi-Scans
+(`tags.included`/`excluded` with `ALL`/`ANY` inclusion logic), but
+explicitly cautions against assuming `WasScanSchedule` accepts the same
+payload without independent confirmation.
+
+Activating and deactivating a schedule now confirmed as dedicated endpoints
+(`activate`/`deactivate/was/wasscanschedule/<id>`), not "via update" as an
+earlier pass guessed — `active` changes are sent through those endpoints.
 
 <!-- schema generated by tfplugindocs -->
 ## Schema
@@ -74,26 +96,39 @@ anything more than `ONCE` schedules, which have no recurrence ambiguity.
 - **name** (String) Schedule name.
 - **web_app_id** (String) ID of the `qualys_web_application` to scan.
 - **type** (String) One of `DISCOVERY`, `VULNERABILITY`.
-- **start_date** (String) When the schedule first runs. Format is not corroborated against a sample payload.
-- **time_zone** (String) Time zone for `start_date` and recurrence calculations. Not validated client-side.
-- **occurrence_type** (String) One of `ONCE`, `DAILY`, `WEEKLY`, `MONTHLY`. See the coverage note above.
+- **start_date** (String) When the schedule first runs, e.g. `2026-08-16T02:00:00Z`.
+- **time_zone_code** (String) Time zone, e.g. `Europe/London`. Not validated client-side.
+- **occurrence_type** (String) One of `ONCE`, `DAILY`, `WEEKLY`. `MONTHLY` is not supported — see the provenance note.
 
 ### Optional
 
 - **id** (String) The ID of this resource.
+- **active** (Boolean) Whether the schedule runs. Defaults to `true`. Toggling this uses the dedicated activate/deactivate endpoints.
 - **option_profile_id** (String) ID of the `qualys_was_option_profile` to scan with. Required unless the web application has a default option profile.
-- **notification** (Boolean) Email the scan's summary when it completes.
-- **reschedule** (Boolean) Re-run automatically if a scan under this schedule is skipped.
-- **randomize_scan** (Boolean) Start at a randomised time within the scheduled window.
-- **web_app_auth_record_id** (String) ID of the `qualys_was_auth_record` to authenticate with.
+- **web_app_auth_record_id** (String) ID of the `qualys_was_auth_record` to authenticate with. Conflicts with `web_app_auth_record_use_default`.
+- **web_app_auth_record_use_default** (Boolean) Use the web application's default authentication record. Conflicts with `web_app_auth_record_id`.
+- **scanner_type** (String) One of `EXTERNAL`, `INTERNAL`.
+- **scanner_friendly_name** (String) Internal scanner appliance name. Used with `scanner_type = "INTERNAL"`.
+- **cancel_option** (String) One of `DEFAULT`, `SPECIFIC`.
 - **proxy_id** (String) ID of a WAS proxy configuration. Not managed by this provider.
 - **dns_override_id** (String) ID of a DNS override record. Not managed by this provider.
-- **cancel_option** (String) One of `DEFAULT`, `SPECIFIC`.
-- **send_mail** (Boolean) Email scan-launch notifications for this schedule.
+- **cancel_after_hours** (Number) Automatically terminate a scan under this schedule after this many hours.
+- **every_n_days** (Number) Repeat every N days. Used with `occurrence_type = "DAILY"`.
+- **every_n_weeks** (Number) Repeat every N weeks. Used with `occurrence_type = "WEEKLY"`.
+- **on_days** (Set of String) Days of the week to run on. Used with `occurrence_type = "WEEKLY"`.
+- **occurrence_count** (Number) End the schedule after this many occurrences. Used with `occurrence_type = "WEEKLY"`.
+- **notification** (Block List, Max: 1) Email notification sent before a scan runs.
+  - **active** (Boolean)
+  - **reschedule** (Boolean) Also notify when a scan is rescheduled rather than run as planned.
+  - **delay_amount** / **delay_scale** (Number / String) How long before the scan to notify.
+  - **recipients** (Set of String)
+  - **message** (String)
+- **send_mail** (Boolean) Email a scan-completion notification.
+- **send_one_mail** (Boolean) Consolidate the completion notification into a single email.
+- **send_mail_from_address_option** (String) One of `QUALYS_SUPPORT`, `OWNER`. Requires `send_mail`.
 
 ### Read-Only
 
-- **active** (Boolean)
 - **created** (String)
 
 ## Import

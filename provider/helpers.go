@@ -58,6 +58,25 @@ func stringSet(d *schema.ResourceData, key string) []string {
 	return out
 }
 
+// stringSetFromInterface converts the raw interface{} d.GetChange returns
+// for a TypeSet attribute (a *schema.Set) into a plain string slice. Unlike
+// stringSet, this takes the value directly rather than reading it from
+// ResourceData, since GetChange's old/new values aren't otherwise
+// accessible through GetOk.
+func stringSetFromInterface(raw interface{}) []string {
+	set, ok := raw.(*schema.Set)
+	if !ok {
+		return nil
+	}
+	out := make([]string, 0, set.Len())
+	for _, v := range set.List() {
+		if s, ok := v.(string); ok && s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
 // stringList reads a TypeList of strings from resource data.
 func stringList(d *schema.ResourceData, key string) []string {
 	raw, ok := d.GetOk(key)

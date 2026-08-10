@@ -3,30 +3,66 @@
 page_title: "qualys_was_auth_record Resource - terraform-provider-qualys"
 subcategory: ""
 description: |-
-  A Qualys WAS authentication record: form or server credentials the crawler uses to authenticate against a web application during a scan.
+  A Qualys WAS authentication record: form, server or OAuth2 credentials the crawler uses to authenticate against a web application during a scan.
 ---
 
 # qualys_was_auth_record (Resource)
 
-A Qualys WAS authentication record: form or server credentials the crawler
-uses to authenticate against a web application during a scan.
+A Qualys WAS authentication record: form, server or OAuth2 credentials the
+crawler uses to authenticate against a web application during a scan.
 
 ## Example Usage
 
 ```terraform
+# STANDARD form record: a login page with a known username/password field.
+# Sent through the record's generic field list, not as flat elements — see
+# the provenance note below.
 resource "qualys_was_auth_record" "storefront_login" {
   name = "Storefront login"
 
   form_record {
+    sub_type  = "STANDARD"
+    login_url = "https://shop.example.com/login"
+    username  = "scanner"
+    password  = var.storefront_scanner_password
+    ssl_only  = true
+  }
+}
+
+# CUSTOM form record: field names aren't fixed, so list them explicitly.
+resource "qualys_was_auth_record" "legacy_app_login" {
+  name = "Legacy app login"
+
+  form_record {
+    sub_type = "CUSTOM"
     field {
-      name  = "username"
+      name  = "user"
       value = "scanner"
     }
     field {
-      name    = "password"
-      value   = var.storefront_scanner_password
+      name    = "pass"
+      value   = var.legacy_app_scanner_password
       secured = true
     }
+  }
+}
+
+# SELENIUM form record: the crawler drives a Selenium IDE script.
+resource "qualys_was_auth_record" "spa_login" {
+  name = "Single-page app login"
+
+  form_record {
+    sub_type = "SELENIUM"
+    selenium_script {
+      name  = "spaLogin"
+      data  = file("${path.module}/selenium/spa-login.side")
+      regex = "logged-in"
+    }
+    # Optional: substitutes @@authusername@@/@@authpassword@@ placeholders
+    # in the script above, so credentials can rotate without editing it.
+    selenium_creds = true
+    username        = "scanner"
+    password        = var.spa_scanner_password
   }
 }
 
@@ -39,42 +75,90 @@ resource "qualys_was_auth_record" "internal_app_basic_auth" {
     domain   = "CORP"
   }
 }
+
+# OAuth2 client-credentials grant: no interactive login at all.
+resource "qualys_was_auth_record" "api_oauth2" {
+  name = "Partner API OAuth2"
+
+  oauth2_record {
+    grant_type       = "CLIENT_CREDS"
+    access_token_url = "https://auth.example.com/oauth/token"
+    client_id        = "scanner-client"
+    client_secret    = var.oauth2_client_secret
+    scope            = "scan"
+  }
+}
+
+# Associating a record with a web application is a separate step.
+resource "qualys_web_application" "storefront" {
+  name = "Storefront"
+  url  = "https://shop.example.com"
+
+  auth_record_ids = [qualys_was_auth_record.storefront_login.id]
+}
 ```
 
 ## Provenance
 
 This resource was gated for a long time: the WAS API confirms that
-`webappauthrecord` create/get/update/delete/search all exist and that secrets
+`webauthrecord` create/get/update/delete/search all exist and that secrets
 are masked on read, but no source obtained during this provider's original
-discovery pass named the actual field names. It is now built from two
-independent, non-official sources that agree — the WAS API guide's derived
-reference (a `fields` list of `{name, value, secured}` entries under a
-`formRecord`/`serverRecord` sub-object) and an open-source Qualys API
-client's data model — rather than the official WAS API User Guide PDF
-itself, which was unreachable while building this (network egress to
-`docs.qualys.com`/`cdn2.qualys.com` is blocked in this environment).
+discovery pass named the actual field names. It went through three evidence
+revisions since:
 
-Only form and server records are implemented. Selenium script and OAuth2
-records are not — their field names are known from the same sources but
-were left out of this pass to keep the surface verifiable in one sitting.
+1. First built from two independent, non-official sources — the WAS API
+   guide's derived reference and an open-source Qualys API client's data
+   model — which described every credential (including a standard
+   username/password) as a generic `fields` list of `{name, value, secured}`
+   entries.
+2. A user-supplied primary-source excerpt (Chapter 3, p.102, "Current
+   authentication record count") confirmed the endpoint path
+   (`/qps/rest/3.0/.../was/webauthrecord`, not this resource's original
+   `/was/webappauthrecord` guess) and the record sub-type vocabulary. A
+   second user-supplied excerpt — a transcribed "Create and Update
+   Authentication Records" walkthrough, not a verbatim PDF quote — then
+   (incorrectly) showed `STANDARD` form and server records using flat
+   `username`/`password` elements rather than the generic `fields` list, and
+   the schema was revised to match.
+3. A later user-supplied "Gap Review" document, quoting the official Qualys
+   `STANDARD` create example directly, **corrected step 2**: `STANDARD`
+   credentials go through the same `fields`/`set`/`WebAppAuthFormRecordField`
+   list as `CUSTOM` — this resource sends `username`/`password` through
+   that list now, not as flat elements. `login_url` remains a flat element;
+   only the credential fields moved. The same document confirmed `SELENIUM`
+   form records (`seleniumScript`, `seleniumCreds`) and a dedicated
+   `oauth2_record` (a flat, grant-specific object — `NONE`/`AUTH_CODE`/
+   `IMPLICIT`/`PASSWORD`/`CLIENT_CREDS` — explicitly **not** modelled through
+   the generic field list), both added in this pass.
 
-**Verify against a tenant before relying on this in production.** If Qualys
-rejects a field, `sub_type`, or the top-level shape, that is expected: the
-schema records what two secondary sources agree on, not a confirmed 1:1
-match with the API.
+**Verify against a tenant before relying on this in production**, especially
+the grant-specific field requirements for `oauth2_record` (see the schema
+below) — those are enforced by the API, not this provider.
 
 ## Credentials are write-only
 
-`server_record.password` and `form_record.field.value` (whether or not
+`server_record.password`, `form_record.password`, `form_record.field.value`,
+`oauth2_record.client_secret` and `oauth2_record.password` (whether or not
 marked `secured`) are sent to Qualys and never read back:
 
 - A credential changed outside Terraform is **not** detected as drift.
 - The value still lives in Terraform state, because Terraform stores what
   you configured. Protect state accordingly.
 
-Exactly one of `form_record` or `server_record` must be set. A record with
-neither has no credential for the crawler to use, so the provider rejects it
-at plan time.
+Exactly one of `form_record`, `server_record` or `oauth2_record` must be
+set. A `form_record` needs either `username`+`password` (a `STANDARD`
+record), at least one `field` block (a `CUSTOM` record), or a
+`selenium_script` block (a `SELENIUM` record); a `server_record` always
+needs `username`+`password`; an `oauth2_record` always needs `grant_type`.
+The provider rejects a `form_record`/`server_record`/`oauth2_record` choice
+satisfying none of these at plan time — Qualys would otherwise accept some
+of them with no credential for the crawler to use.
+
+## Associating with a web application
+
+Creating an authentication record does not attach it to any web
+application. Set `auth_record_ids` on `qualys_web_application` to manage the
+association — see the example above.
 
 <!-- schema generated by tfplugindocs -->
 ## Schema
@@ -86,20 +170,38 @@ at plan time.
 ### Optional
 
 - **id** (String) The ID of this resource.
+- **comments** (String)
 - **tag_ids** (Set of String) Asset tag IDs (see `qualys_asset_tag`) associated with this record.
-- **form_record** (Block List, Max: 1) Form-based authentication: field/value pairs the crawler fills into a login page. Conflicts with `server_record`.
-  - **field** (Block List, Min: 1) One login-form field. Repeat for each field the login form needs (typically a username and a password field).
-    - **name** (String) The login form's field name (as it appears in the page's HTML).
-    - **value** (String, Sensitive) Value to fill in.
-    - **secured** (Boolean) Whether this field holds a credential.
-  - **sub_type** (String) Authentication style, for example `STANDARD`. Not validated client-side.
+- **form_record** (Block List, Max: 1) Form-based authentication. Conflicts with `server_record` and `oauth2_record`.
+  - **sub_type** (String) `STANDARD`, `CUSTOM` or `SELENIUM`, or `CERT`/`SELFINITIAL`. Not validated client-side.
+  - **login_url** (String) URL of the login page. Used with a `STANDARD` record.
+  - **username** (String) Used with a `STANDARD` record, or a `SELENIUM` record with `selenium_creds`. Sent through the generic field list. Write-only.
+  - **password** (String, Sensitive) Used with a `STANDARD` record, or a `SELENIUM` record with `selenium_creds`. Sent through the generic field list. Write-only.
   - **ssl_only** (Boolean) Only submit credentials over HTTPS.
   - **auth_vault** (Boolean) Store this record in the Qualys password vault.
-- **server_record** (Block List, Max: 1) Server-based authentication (HTTP Basic/NTLM/Digest-style). Conflicts with `form_record`.
+  - **field** (Block List) One additional login-form field, for a `CUSTOM` record.
+    - **name** (String) The login form's field name.
+    - **value** (String, Sensitive) Value to fill in.
+    - **secured** (Boolean) Whether this field holds a credential.
+  - **selenium_script** (Block List, Max: 1) Selenium IDE script, for a `SELENIUM` record.
+    - **name** (String)
+    - **data** (String) Selenium IDE script content (HTML/XML).
+    - **regex** (String) Pattern confirming successful authentication.
+  - **selenium_creds** (Boolean) Substitute `@@authusername@@`/`@@authpassword@@` placeholders in the script with `username`/`password`.
+- **server_record** (Block List, Max: 1) Server-based authentication (HTTP Basic/Digest-style). Conflicts with `form_record` and `oauth2_record`.
   - **username** (String)
   - **password** (String, Sensitive)
   - **domain** (String)
-  - **sub_type** (String) Authentication style. Not validated client-side.
+  - **sub_type** (String) `BASIC` or `DIGEST`. Not validated client-side.
+- **oauth2_record** (Block List, Max: 1) OAuth2 authentication. Conflicts with `form_record` and `server_record`.
+  - **grant_type** (String, Required within block) One of `NONE`, `AUTH_CODE`, `IMPLICIT`, `PASSWORD`, `CLIENT_CREDS`.
+  - **access_token_url** (String) Required for `PASSWORD`/`CLIENT_CREDS`, optional for `AUTH_CODE`.
+  - **client_id** / **client_secret** (String / String, Sensitive) Optional for most grants.
+  - **scope** (String) Optional.
+  - **redirect_url** (String) Required for `AUTH_CODE`/`IMPLICIT`.
+  - **username** / **password** (String / String, Sensitive) Required for `PASSWORD`.
+  - **access_token_expired_msg_pattern** (String) Optional.
+  - **selenium_script** (Block List, Max: 1) Required for `AUTH_CODE`/`IMPLICIT`. Same shape as `form_record.selenium_script`.
 
 ### Read-Only
 
@@ -109,9 +211,9 @@ at plan time.
 
 WAS authentication records are imported by their numeric Qualys ID. Import
 never recovers credential values — Qualys masks them — so after importing,
-add the `form_record` or `server_record` block to configuration with the
-real values before the next apply, or Terraform will plan to change them
-from empty.
+add the `form_record`, `server_record` or `oauth2_record` block to
+configuration with the real values before the next apply, or Terraform will
+plan to change them from empty.
 
 ```shell
 terraform import qualys_was_auth_record.storefront_login 12345678

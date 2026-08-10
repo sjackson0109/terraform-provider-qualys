@@ -26,6 +26,20 @@ resource "qualys_was_option_profile" "standard" {
 }
 ```
 
+## Provenance
+
+This is also where WAS policy-compliance settings live (PCI DSS, OWASP Top
+10, sensitive content, SSL/TLS, crawling, exclusions, …): Qualys does not
+model policy compliance as a separate object, it's configured through this
+same option profile. A user-supplied create/update example confirmed that
+and caught a real bug in the process — the wire wrapper key is
+`OptionProfile`, not the `WasOptionProfile` this resource used since its
+first version, which would have made every create/update fail against a
+live tenant despite passing this project's mock-based tests (the mocks
+echoed back whatever key the code sent, so they never actually validated
+the shape against reality). `comments` is new, confirmed as a flat string
+by the same example.
+
 ## Server-side defaults
 
 Every field below except `name` is optional and computed: leaving one unset
@@ -48,6 +62,7 @@ time rather than at plan time.
 
 ### Optional
 
+- **comments** (String)
 - **bruteforce_option** (String) Brute-force authentication testing mode. Accepted values are not yet confirmed against official documentation, so this field is not validated client-side; an invalid value is rejected by the API at apply time.
 - **detect_credit_card_numbers** (Boolean) Flag credit card numbers found in application responses as sensitive content.
 - **detect_social_security_numbers** (Boolean) Flag social security numbers found in application responses as sensitive content.

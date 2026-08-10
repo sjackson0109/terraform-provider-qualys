@@ -19,6 +19,7 @@ const (
 type WASOptionProfile struct {
 	ID                       string
 	Name                     string
+	Comments                 string
 	MaxCrawlRequests         int
 	Performance              string
 	BruteforceOption         string
@@ -31,6 +32,7 @@ type WASOptionProfile struct {
 // WASOptionProfileInput is the desired state of a WAS option profile.
 type WASOptionProfileInput struct {
 	Name                     string
+	Comments                 string
 	MaxCrawlRequests         int
 	Performance              string
 	BruteforceOption         string
@@ -48,6 +50,7 @@ type sensitiveContentWire struct {
 type wasOptionProfileWire struct {
 	ID                     json.Number           `json:"id,omitempty"`
 	Name                   string                `json:"name,omitempty"`
+	Comments               string                `json:"comments,omitempty"`
 	MaxCrawlRequests       int                   `json:"maxCrawlRequests,omitempty"`
 	Performance            string                `json:"performance,omitempty"`
 	BruteforceOption       string                `json:"bruteforceOption,omitempty"`
@@ -56,14 +59,19 @@ type wasOptionProfileWire struct {
 	SensitiveContent       *sensitiveContentWire `json:"sensitiveContent,omitempty"`
 }
 
+// wasOptionProfileData is the "data" envelope. The wrapper key is
+// OptionProfile — corrected from an earlier WasOptionProfile guess (this
+// API's naming convention held for WasScanSchedule but not here) after a
+// user-supplied create example showed <OptionProfile> verbatim.
 type wasOptionProfileData struct {
-	OptionProfile *wasOptionProfileWire `json:"WasOptionProfile,omitempty"`
+	OptionProfile *wasOptionProfileWire `json:"OptionProfile,omitempty"`
 }
 
 func (w *wasOptionProfileWire) toProfile() *WASOptionProfile {
 	out := &WASOptionProfile{
 		ID:                       w.ID.String(),
 		Name:                     w.Name,
+		Comments:                 w.Comments,
 		MaxCrawlRequests:         w.MaxCrawlRequests,
 		Performance:              w.Performance,
 		BruteforceOption:         w.BruteforceOption,
@@ -80,6 +88,7 @@ func (w *wasOptionProfileWire) toProfile() *WASOptionProfile {
 func wasOptionProfileInputToWire(in WASOptionProfileInput) *wasOptionProfileWire {
 	return &wasOptionProfileWire{
 		Name:                   in.Name,
+		Comments:               in.Comments,
 		MaxCrawlRequests:       in.MaxCrawlRequests,
 		Performance:            in.Performance,
 		BruteforceOption:       in.BruteforceOption,
@@ -129,6 +138,7 @@ func (c *Client) UpdateWASOptionProfile(ctx context.Context, id string, in WASOp
 	}
 	profile := map[string]interface{}{
 		"name":                     in.Name,
+		"comments":                 in.Comments,
 		"maxCrawlRequests":         in.MaxCrawlRequests,
 		"performance":              in.Performance,
 		"bruteforceOption":         in.BruteforceOption,
@@ -140,7 +150,7 @@ func (c *Client) UpdateWASOptionProfile(ctx context.Context, id string, in WASOp
 		},
 	}
 	return c.call(ctx, http.MethodPost, "/qps/rest/3.0/update/was/optionprofile/"+id,
-		&ServiceRequest{Data: map[string]interface{}{"WasOptionProfile": profile}}, nil, false)
+		&ServiceRequest{Data: map[string]interface{}{"OptionProfile": profile}}, nil, false)
 }
 
 // DeleteWASOptionProfile removes a WAS option profile.

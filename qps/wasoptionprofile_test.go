@@ -15,7 +15,7 @@ func TestCreateWASOptionProfileSendsJSONEnvelope(t *testing.T) {
 	c, srv := testClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotPath = r.URL.Path
 		fmt.Fprint(w, `{"ServiceResponse":{"responseCode":"SUCCESS",
-		  "data":[{"WasOptionProfile":{"id":42,"name":"Standard","performance":"MEDIUM"}}]}}`)
+		  "data":[{"OptionProfile":{"id":42,"name":"Standard","performance":"MEDIUM"}}]}}`)
 	}))
 	defer srv.Close()
 
@@ -54,7 +54,7 @@ func TestUpdateWASOptionProfileSendsClearedFields(t *testing.T) {
 
 	sreq, _ := body["ServiceRequest"].(map[string]interface{})
 	data, _ := sreq["data"].(map[string]interface{})
-	profile, _ := data["WasOptionProfile"].(map[string]interface{})
+	profile, _ := data["OptionProfile"].(map[string]interface{})
 	if profile == nil {
 		t.Fatalf("no WasOptionProfile in payload: %v", body)
 	}
