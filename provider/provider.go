@@ -70,6 +70,7 @@ func Provider() *schema.Provider {
 			"qualys_host_detections":      dataSourceHostDetections(),
 			"qualys_report_templates":     dataSourceReportTemplates(),
 			"qualys_domains":              dataSourceDomains(),
+			"qualys_vm_findings":          dataSourceVMFindings(),
 			"qualys_was_findings":         dataSourceWASFindings(),
 			"qualys_was_report_templates": dataSourceWASReportTemplates(),
 		},

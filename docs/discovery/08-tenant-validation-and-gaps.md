@@ -436,6 +436,64 @@ See **[doc 11](11-verified-parameter-reference.md)** for the full parameter list
   file, twice. Prefer verifying every remaining "by analogy" or
   "transcribed" item against a tenant, the object's own XSD, or a direct
   quote before treating it as load-bearing.
+- ~~**VM per-vulnerability detection fields (`DETECTION_LIST`) — deliberately unread by `qualys_host_detections` since the endpoint's own schema was unconfirmed; Qualys KnowledgeBase field names never sourced at all.**~~
+  **Thirteenth research pass — closed via a new, separate data source rather
+  than by changing `qualys_host_detections`.** A user-supplied requirements
+  document asked for the VM equivalent of `data.qualys_was_findings`:
+  individual vulnerability findings (one host + one QID + one detection
+  instance, never aggregated), for a customer remediation-reporting
+  workflow. `hostdetection.go`'s own doc comment had flagged
+  `DETECTION_LIST`'s field names as unconfirmed since this provider's
+  earliest VM work and deliberately left them undecoded; this pass resolves
+  that gap with a **Corroborated, not Confirmed** schema — `vmdr/vmfinding.go`
+  decodes `QID`, `TYPE`, `SEVERITY`, `PORT`, `PROTOCOL`, `SSL`, `RESULTS`,
+  `STATUS`, `FIRST_FOUND_DATETIME`, `LAST_FOUND_DATETIME`,
+  `LAST_TEST_DATETIME`, `LAST_UPDATE_DATETIME`, `LAST_FIXED_DATETIME`,
+  `TIMES_FOUND`, `IS_IGNORED`, `IS_DISABLED`, reflecting Qualys's
+  long-published Host List Detection API schema from general knowledge
+  rather than a fetched or user-supplied source this session (docs.qualys.com
+  remains blocked in this sandbox). `FIRST_FOUND_DATETIME`/
+  `LAST_FOUND_DATETIME` specifically carry stronger corroboration: they are
+  two of the three field names this same doc already records as Confirmed
+  for this exact endpoint (the third, `LAST_SCAN_DATETIME`, is the
+  host-level field `qualys_host_detections` already used) — evidence this
+  provider had without ever connecting it to the per-detection schema
+  before. Two fields this session found no confident evidence for
+  (a per-detection `FQDN`, a `SERVICE` element) were deliberately left out
+  rather than guessed, continuing this project's standing rule.
+
+  A new `vmdr/knowledgebase.go` closes the previously entirely-unsourced
+  KnowledgeBase API gap (doc 08 had only ever recorded its endpoint path and
+  subscription-gated status, never a field name) the same way: `QID`,
+  `TITLE`, `CATEGORY`, `CVSS>BASE`, `CVSS_V3>BASE`, `PCI_FLAG`, `PATCHABLE`,
+  Corroborated on the same basis. It is used only for a bounded, QID-list
+  join (`GetKnowledgeBaseEntries`, one batched request for however many
+  unique QIDs a `qualys_vm_findings` read produces) — the standalone bulk-KB
+  download this doc already classified as out of scope is untouched by this
+  pass.
+
+  **Deliberately not sent as query parameters, and applied client-side
+  instead:** `qids`, the severity range, and all six date-range filters
+  (`first_found_after/before`, `last_found_after/before`,
+  `last_test_after/before`). This endpoint's Confirmed parameter list (this
+  doc, above) has never included `qids`/`severities`/a detection-date-range
+  filter for this specific endpoint, even though conventions with those
+  names exist elsewhere in the Qualys VM API — asserting one here without
+  confirmation risks a filter that silently does nothing if the name is
+  wrong, exactly the class of mistake the WAS auth-record/scan-schedule
+  corrections (this doc's twelfth pass) warn against repeating. `host_ids`,
+  `ips` and `status` remain genuine server-side parameters, all three
+  already Confirmed/used by `qualys_host_detections` against this same
+  endpoint. `asset_group_ids` is resolved to member IPs via
+  `GetAssetGroup` (already Confirmed) rather than guessing an `ag_ids`
+  parameter for this endpoint specifically — a composition of two
+  already-evidenced facts instead of a new one.
+
+  Built as `data.qualys_vm_findings`, explicitly **not** a change to
+  `qualys_host_detections` — the user's requirement was to keep host
+  inventory and vulnerability findings as separate data models, and this
+  provider's existing WAS precedent (`qualys_host_detections` vs.
+  `qualys_was_findings`) already established that split.
 - **`time_zone_code_list.php` output field names.** The endpoint's existence and its
   DTD name (`time_zone_code_list.dtd`) are confirmed (doc 03 §8), and it is the source
   of the `time_zone_code` values `qualys_scan_schedule` accepts. Three research passes

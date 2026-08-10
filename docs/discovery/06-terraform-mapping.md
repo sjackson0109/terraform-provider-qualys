@@ -47,6 +47,7 @@ configuration; vault-backed records are the recommended pattern.
 | `data.qualys_tagged_assets` | `search/am/hostasset` by tag; CSAM gateway QQL (`not tags.name:"X"`) for the untagged case | tag membership review; tag-compliance gaps |
 | `data.qualys_host_assets` | host list | inventory, stale-asset review |
 | `data.qualys_host_detections` | host detection list | stale-asset/purge subsystem input |
+| `data.qualys_vm_findings` | host detection list (`DETECTION_LIST`, same endpoint as `qualys_host_detections`) | **Built.** Individual VM vulnerability findings (one host + one QID + one detection instance, never aggregated), for a downstream remediation-reporting workflow. Kept as a wholly separate data model from `qualys_host_detections`, which stays host-summary-only — see doc 08's research-pass entry for the evidence tier (Corroborated, not Confirmed) and the deliberate design choices (host_ids/ips/status sent server-side; asset_group_ids resolved to member IPs via the already-Confirmed `GetAssetGroup`; qids/severity-range/date-range filtered client-side rather than guessing unconfirmed query parameters). Optional batched KnowledgeBase enrichment (`data.qualys_vm_findings.enrich_with_knowledgebase`) |
 | `data.qualys_networks` | network list | explicit network selection (workbook rule) |
 | `data.qualys_scanner_appliances` | appliance list | scanner selection, readiness checks |
 | `data.qualys_option_profiles` | OP list (VM/PC) | profile IDs for scans/schedules |
@@ -76,7 +77,7 @@ demonstrated — none was.
 | WAS Burp report import (`ImportWASBurp`, confirmed) | one-shot import into accumulating findings state | client method built (`POST import/was/burp`, flat body — not the usual `data.<Wrapper>` nesting) |
 | Connector "run" (v3) | trigger | post-migration helper |
 | Appliance readiness poll | verification, not state | `wait_for_online` option / validation helper |
-| KnowledgeBase download | subscription-gated bulk read | out of provider scope (P3 helper at most) |
+| KnowledgeBase bulk download (a standalone "export the whole KB" operation) | subscription-gated bulk read | out of provider scope (P3 helper at most). **Narrower, batched KB lookups by QID are now built** — see `vmdr.GetKnowledgeBaseEntries`, used only to enrich `data.qualys_vm_findings` — that is a bounded join, not a bulk export, so it did not need this classification |
 
 **Unsupported / legacy (recorded, not planned):** VM report-schedule create/update/delete
 (GUI-only), distribution-group CRUD (no API), network delete (no API), appliance
