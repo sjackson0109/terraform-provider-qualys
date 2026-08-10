@@ -1,25 +1,58 @@
 # terraform-provider-qualys
 
-A Terraform provider for [Qualys](https://www.qualys.com/) VMDR configuration.
+A Terraform provider for [Qualys](https://www.qualys.com/) VMDR and WAS
+(Web Application Scanning) configuration.
 
 ## Supported resources
 
+VM/PA (asset, network and scanning configuration):
+
 | Resource | Purpose |
 |---|---|
-| `qualys_asset_group` | Named sets of scan targets, referenced by scans, schedules and reports |
+| `qualys_asset_group` | A named set of scan targets, referenced by scans, schedules and reports |
 | `qualys_asset_tag` | Static and dynamic asset tags, shared across VM, AssetView and WAS |
-| `qualys_static_search_list` | Explicit sets of vulnerability QIDs |
+| `qualys_static_search_list` | An explicit set of vulnerability QIDs |
 | `qualys_vm_option_profile` | VM scan behaviour: ports, detection depth, performance, authentication |
 | `qualys_network` | Qualys networks, for overlapping IP space |
 | `qualys_ip_registration` | Registers addresses with the subscription and enables them for scanning |
-| `qualys_scan_schedule` | Recurring VM scans |
-| `qualys_virtual_scanner` | Virtual scanner appliances, exporting the activation code for VM deployment |
-| `qualys_auth_record_windows` | Windows scan authentication records |
-| `qualys_auth_record_unix` | Unix/Linux (and Cisco IOS, Checkpoint) scan authentication records |
+| `qualys_scan_schedule` | A recurring VM scan |
+| `qualys_virtual_scanner` | A virtual scanner appliance, exporting the activation code for VM deployment |
+| `qualys_auth_record_windows` | A Windows scan authentication record |
+| `qualys_auth_record_unix` | A Unix/Linux (SSH) scan authentication record |
 | `qualys_gcp_connector` | CloudView GCP connector (see *Deprecation* below) |
 
-Data sources: `qualys_asset_groups`, `qualys_asset_tags`, `qualys_networks`,
-`qualys_host_assets`, `qualys_scanner_appliances`, `qualys_vaults`, `qualys_gcp_connector`.
+WAS (Web Application Scanning):
+
+| Resource | Purpose |
+|---|---|
+| `qualys_web_application` | The scan target that option profiles, auth records and scan schedules reference |
+| `qualys_was_option_profile` | WAS scan behaviour, referenced by web application scans and scan schedules |
+| `qualys_was_auth_record` | Form (`STANDARD`/`CUSTOM`/`SELENIUM`), server or OAuth2 credentials for authenticated crawling |
+| `qualys_was_dns_override` | Resolves one or more hostnames to user-defined IP addresses during crawling and scanning |
+| `qualys_was_scan_schedule` | A recurring WAS scan against a single web application |
+| `qualys_was_report_schedule` | A recurring, automated WAS report generation and delivery |
+| `qualys_was_finding_ignore` | Declares a WAS finding ignored, with an audit-trail comment |
+
+## Supported data sources
+
+| Data source | Purpose |
+|---|---|
+| `qualys_asset_groups` | Look up asset groups |
+| `qualys_asset_tags` | Look up asset tags |
+| `qualys_networks` | Look up networks |
+| `qualys_host_assets` | Look up registered host assets |
+| `qualys_host_detections` | Look up hosts together with their last VM scan time (stale-asset review) |
+| `qualys_vm_findings` | Look up individual VM vulnerability findings, one host + one QID + one detection instance |
+| `qualys_scanner_appliances` | Look up scanner appliances |
+| `qualys_vaults` | Look up credential vaults |
+| `qualys_scan_schedules` | Look up VM scan schedules |
+| `qualys_option_profiles` | Look up VM scan option profiles |
+| `qualys_report_templates` | Look up VM/PA report templates |
+| `qualys_domains` | Look up asset domains and their netblocks |
+| `qualys_web_applications` | Look up WAS web applications |
+| `qualys_was_findings` | Look up individual WAS scan findings, optionally enriched from the Qualys KnowledgeBase |
+| `qualys_was_report_templates` | Look up WAS report templates |
+| `qualys_gcp_connector` | Look up a CloudView GCP connector by ID |
 
 ### Operations the provider deliberately does not model
 
@@ -28,9 +61,14 @@ resources would misrepresent them:
 
 - **Launching a scan or report** produces a run with no stable identity;
   re-running creates a new one rather than updating the old. Use
-  `qualys_scan_schedule` for recurring scans.
+  `qualys_scan_schedule` / `qualys_was_scan_schedule` for recurring scans, and
+  `qualys_was_report_schedule` for recurring WAS reports.
 - **Purging host data** is destructive and irreversible. It is available as an
   opt-in on `qualys_ip_registration` destroy, not as a resource of its own.
+- **Retesting or overriding the severity of a WAS finding** are lifecycle
+  actions, not declarative state, and are not modelled as resources; ignoring
+  a finding is (`qualys_was_finding_ignore`), since accepted-risk/false-positive
+  is a state Terraform can own.
 
 Some objects also cannot be deleted through the API at all — networks and
 registered IP addresses among them. Those resources warn on destroy and explain
@@ -90,11 +128,22 @@ A few behaviours are deliberate and worth knowing before you read the code:
   out response does not prove the operation did not take effect, and repeating a
   purge or delete on that assumption is not safe.
 - **Member lists are authoritative.** Removing an entry from configuration
-  removes it in Qualys; the provider uses the API's `set_*` parameters rather
-  than the additive ones.
+  removes it in Qualys; the provider uses the API's `set_*`/`set` parameters
+  rather than the additive ones, except where an object's own API confirms an
+  add/remove idiom instead (e.g. WAS auth-record ↔ web-application association).
 - **API versions are per capability.** Qualys versions each API independently
   and deprecates on a published schedule. The provider pins a version per
   capability and logs a one-time warning when a newer generation exists.
+- **Findings data sources never aggregate.** `qualys_vm_findings` and
+  `qualys_was_findings` each return one row per individual finding — never
+  grouped by host, QID or web application — with a deterministic identity and
+  ordering, since downstream automation typically serialises the result into a
+  canonical dataset that must stay stable between reads of unchanged data.
+- **Evidence-graded documentation.** Where a field or wire shape comes from an
+  official, directly verified source it is documented as such; where it comes
+  from a derived or unofficial source it is marked `Corroborated`, with the
+  reasoning kept in [`docs/discovery/`](docs/discovery/) rather than presented
+  as more certain than it is.
 
 ## Deprecation
 
@@ -118,5 +167,6 @@ whenever you can, and prefer the generated output on any conflict.
 ## References
 
 - Qualys API (VM and PA) documentation — <https://docs.qualys.com/en/vm/qweb-all-api/>
+- Qualys WAS API documentation — <https://docs.qualys.com/en/was/api/>
 - API discovery notes for this provider — [`docs/discovery/`](docs/discovery/)
-- Based on original work from <https://code.stanford.edu/xuwang/terraform-provider-qualys>
+- See [`LICENSE`](LICENSE) for this project's licensing and provenance.
