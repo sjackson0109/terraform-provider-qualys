@@ -196,6 +196,24 @@ func dataSourceVMFindings() *schema.Resource {
 							Type:        schema.TypeBool,
 							Computed:    true,
 						},
+						"diagnosis": {
+							Description: "KnowledgeBase description of the vulnerability. Populated " +
+								"only when `enrich_with_knowledgebase = true`.",
+							Type:     schema.TypeString,
+							Computed: true,
+						},
+						"consequence": {
+							Description: "KnowledgeBase description of impact. Populated only when " +
+								"`enrich_with_knowledgebase = true`.",
+							Type:     schema.TypeString,
+							Computed: true,
+						},
+						"solution": {
+							Description: "KnowledgeBase remediation guidance. Populated only when " +
+								"`enrich_with_knowledgebase = true`.",
+							Type:     schema.TypeString,
+							Computed: true,
+						},
 					},
 				},
 			},
@@ -280,7 +298,11 @@ func dataSourceVMFindingsRead(ctx context.Context, d *schema.ResourceData, meta 
 
 	var kb map[string]*vmdr.KBEntry
 	if d.Get("enrich_with_knowledgebase").(bool) {
-		kb, err = fetchKnowledgeBase(ctx, c, findings)
+		qids := make([]string, 0, len(findings))
+		for _, f := range findings {
+			qids = append(qids, f.QID)
+		}
+		kb, err = fetchKnowledgeBase(ctx, c, qids)
 		if err != nil {
 			return append(diags, diag.FromErr(fmt.Errorf("enriching with the KnowledgeBase: %w", err))...)
 		}
@@ -324,6 +346,9 @@ func dataSourceVMFindingsRead(ctx context.Context, d *schema.ResourceData, meta 
 			row["cvss_v3_base"] = entry.CVSSV3Base
 			row["pci_flag"] = entry.PCIFlag
 			row["patchable"] = entry.Patchable
+			row["diagnosis"] = entry.Diagnosis
+			row["consequence"] = entry.Consequence
+			row["solution"] = entry.Solution
 		}
 		out = append(out, row)
 	}
@@ -471,24 +496,22 @@ func numericLess(a, b string) bool {
 	return a < b
 }
 
-// fetchKnowledgeBase collects the unique QIDs across findings and fetches
-// their KnowledgeBase entries in one batched call — never one call per
-// finding, per the resource's documented enrichment contract.
-func fetchKnowledgeBase(ctx context.Context, c *vmdr.Client, findings []*vmdr.VMFinding) (map[string]*vmdr.KBEntry, error) {
-	seen := make(map[string]bool)
-	var qids []string
-	for _, f := range findings {
-		if f.QID == "" || seen[f.QID] {
-			continue
-		}
-		seen[f.QID] = true
-		qids = append(qids, f.QID)
-	}
-	if len(qids) == 0 {
+// fetchKnowledgeBase fetches KnowledgeBase entries for the given QIDs
+// (which may repeat and include empties — this de-duplicates them) in one
+// batched call, never one call per finding. Shared by both
+// data.qualys_vm_findings and data.qualys_was_findings: Qualys maintains
+// one subscription-wide KnowledgeBase keyed by QID across VM, PC and WAS,
+// so a single client (vmdr.Client.GetKnowledgeBaseEntries) and this one
+// join helper serve both data sources' enrichment. Callers collect QIDs
+// from their own finding slice — see collectQIDs — since the finding type
+// differs (vmdr.VMFinding vs qps.WASFinding) but the QID string does not.
+func fetchKnowledgeBase(ctx context.Context, c *vmdr.Client, qids []string) (map[string]*vmdr.KBEntry, error) {
+	unique := uniqueNonEmpty(qids)
+	if len(unique) == 0 {
 		return nil, nil
 	}
 
-	entries, err := c.GetKnowledgeBaseEntries(ctx, qids)
+	entries, err := c.GetKnowledgeBaseEntries(ctx, unique)
 	if err != nil {
 		return nil, err
 	}
@@ -497,4 +520,19 @@ func fetchKnowledgeBase(ctx context.Context, c *vmdr.Client, findings []*vmdr.VM
 		out[e.QID] = e
 	}
 	return out, nil
+}
+
+// uniqueNonEmpty returns values with empties dropped and duplicates
+// collapsed, preserving first-seen order.
+func uniqueNonEmpty(values []string) []string {
+	seen := make(map[string]bool, len(values))
+	out := make([]string, 0, len(values))
+	for _, v := range values {
+		if v == "" || seen[v] {
+			continue
+		}
+		seen[v] = true
+		out = append(out, v)
+	}
+	return out
 }

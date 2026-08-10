@@ -9,8 +9,11 @@ import (
 
 // KBEntry is one Qualys KnowledgeBase vulnerability record: the
 // human-readable metadata behind a QID (title, category, CVSS scores,
-// compliance/patch flags). It enriches a VMFinding, which carries only the
-// detection instance, not the vulnerability's static description.
+// compliance/patch flags, and the prose description fields). It enriches a
+// VMFinding or a WAS finding (qps.WASFinding) alike — both are QID-based,
+// and Qualys maintains one subscription-wide KnowledgeBase shared across
+// VM, PC and WAS, keyed by QID — so this single client and type serve both
+// data sources' enrichment rather than each maintaining its own copy.
 //
 // Evidence tier: Corroborated, not Confirmed — the same caveat as
 // VMFinding's DETECTION_LIST schema applies here. This session could not
@@ -29,6 +32,13 @@ type KBEntry struct {
 	CVSSV3Base float64
 	PCIFlag    bool
 	Patchable  bool
+
+	// Diagnosis/Consequence/Solution are the KnowledgeBase's prose fields:
+	// what the vulnerability is, its impact, and how to remediate it. Same
+	// evidence tier as the rest of this type.
+	Diagnosis   string
+	Consequence string
+	Solution    string
 }
 
 type kbEntryWire struct {
@@ -41,8 +51,11 @@ type kbEntryWire struct {
 	CVSSV3 struct {
 		Base string `xml:"BASE"`
 	} `xml:"CVSS_V3"`
-	PCIFlag   string `xml:"PCI_FLAG"`
-	Patchable string `xml:"PATCHABLE"`
+	PCIFlag     string `xml:"PCI_FLAG"`
+	Patchable   string `xml:"PATCHABLE"`
+	Diagnosis   string `xml:"DIAGNOSIS"`
+	Consequence string `xml:"CONSEQUENCE"`
+	Solution    string `xml:"SOLUTION"`
 }
 
 type kbListOutput struct {
@@ -63,13 +76,16 @@ func (o *kbListOutput) entries() []*KBEntry {
 	out := make([]*KBEntry, 0, len(o.Response.Vulns))
 	for _, v := range o.Response.Vulns {
 		out = append(out, &KBEntry{
-			QID:        strings.TrimSpace(v.QID),
-			Title:      strings.TrimSpace(v.Title),
-			Category:   strings.TrimSpace(v.Category),
-			CVSSV2Base: atofSafe(v.CVSS.Base),
-			CVSSV3Base: atofSafe(v.CVSSV3.Base),
-			PCIFlag:    boolFromFlag(v.PCIFlag),
-			Patchable:  boolFromFlag(v.Patchable),
+			QID:         strings.TrimSpace(v.QID),
+			Title:       strings.TrimSpace(v.Title),
+			Category:    strings.TrimSpace(v.Category),
+			CVSSV2Base:  atofSafe(v.CVSS.Base),
+			CVSSV3Base:  atofSafe(v.CVSSV3.Base),
+			PCIFlag:     boolFromFlag(v.PCIFlag),
+			Patchable:   boolFromFlag(v.Patchable),
+			Diagnosis:   strings.TrimSpace(v.Diagnosis),
+			Consequence: strings.TrimSpace(v.Consequence),
+			Solution:    strings.TrimSpace(v.Solution),
 		})
 	}
 	return out

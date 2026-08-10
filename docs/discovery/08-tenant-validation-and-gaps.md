@@ -494,6 +494,69 @@ See **[doc 11](11-verified-parameter-reference.md)** for the full parameter list
   inventory and vulnerability findings as separate data models, and this
   provider's existing WAS precedent (`qualys_host_detections` vs.
   `qualys_was_findings`) already established that split.
+- ~~**`data.qualys_was_findings` — thin single-value filtering, no dedup,
+  no KnowledgeBase enrichment, no VM-findings-style multi-value/range
+  support.**~~ **Fourteenth research pass — brought to parity with the
+  thirteenth pass's `data.qualys_vm_findings`, following the same
+  requirements document's explicit request to mirror that structure while
+  respecting WAS-specific identity and fields.** `qps/wasfinding.go` gained:
+  - `UniqueID` on `WASFinding` — Confirmed, not new evidence but a
+    connection this provider had not made before: `GetWASFindingRetestStatus`
+    (added in the twelfth pass) already decodes a `Finding.uniqueId` from
+    the same object family this file's get/search calls decode.
+  - `ID`/`QID` EQUALS filters and four `GREATER`/`LESSER` date-range
+    filters (`firstDetectedDate`/`lastDetectedDate`) — doc 11 §9 already
+    listed `id`, `qid`, `firstDetectedDate` and `lastDetectedDate` as
+    Confirmed Finding filter fields, and documents `GREATER`/`LESSER` as
+    generally valid qps operators; `qps/client.go`'s own pagination cursor
+    already depends on `id GREATER lastId` working, corroborating the
+    operator further. The specific field/operator combination for the date
+    bounds is still Corroborated, not independently Confirmed, since "not
+    every operator is valid on every field" per the same doc.
+  - `SearchWASFindings` now dedupes by finding ID and returns
+    `[]WASFindingConflict` for genuine disagreements, mirroring
+    `vmdr.ListVMFindings` exactly. This changed the method's signature
+    (`(findings, err)` → `(findings, conflicts, err)`) — a contained,
+    deliberate breaking change to an internal package method with exactly
+    two callers in this repo (both updated).
+
+  `provider/data_source_was_findings.go` was rewritten rather than
+  incrementally patched, because the requirements document specified exact
+  types for `severity`/`status`/`type`/`finding_type` that differ from what
+  was shipped (`severity` string→int, the other three string→set) — a
+  **deliberate breaking change**, called out prominently in the resource
+  description and doc rather than hidden. New filters follow the same
+  single-value-server/multi-value-client-side split established in the
+  thirteenth pass for VM findings, for the same reason: this session found
+  no Confirmed multi-value or range query parameter for `qids`, `status`,
+  `type`, `finding_type`, or the severity range on this endpoint, so
+  asserting one risks a silently-inert filter. `web_app_ids` resolves to N
+  searches (one per ID, each using the Confirmed single-value `webApp.id`
+  filter) merged and deduplicated, rather than guessing an `IN`-style
+  multi-value parameter. `finding_ids` bypasses search entirely via direct
+  `GetWASFinding` calls (already Confirmed), then applies every other
+  filter to that fixed set client-side.
+
+  KnowledgeBase enrichment reuses `vmdr.Client.GetKnowledgeBaseEntries`
+  directly rather than duplicating a WAS-specific KB client: Qualys
+  maintains one subscription-wide KnowledgeBase keyed by QID across VM, PC
+  and WAS, so the thirteenth pass's KB client already serves this data
+  source too. `vmdr.KBEntry` gained `Diagnosis`/`Consequence`/`Solution`
+  (same Corroborated tier as the rest of that type) since this document
+  explicitly asked for them under WAS enrichment; `data.qualys_vm_findings`
+  picked up the same three fields for free, a pure non-breaking addition.
+
+  **Deliberately not implemented, per the same document's own preference
+  for "finding metadata... rather than raw HTTP request/response
+  evidence":** `category`, `description`, `impact`, `solution` (as direct
+  Finding fields — `category`/`solution`-equivalent content is available
+  via enrichment instead), `payload`, `request`, `response`, `parameter`,
+  `authentication`, `ssl`, `access_path`, `external_reference`,
+  `owasp_category`, `wasc_category`, `cwe_id`, and a CVSS v2 score on the
+  Finding object itself. None have a confirmed representation on the
+  Finding object in this session's evidence; inventing wire shapes for them
+  would repeat the exact mistake this doc's twelfth pass corrected twice
+  already in the same auth-record file.
 - **`time_zone_code_list.php` output field names.** The endpoint's existence and its
   DTD name (`time_zone_code_list.dtd`) are confirmed (doc 03 §8), and it is the source
   of the `time_zone_code` values `qualys_scan_schedule` accepts. Three research passes

@@ -3,77 +3,251 @@
 page_title: "qualys_was_findings Data Source - terraform-provider-qualys"
 subcategory: ""
 description: |-
-  Look up Qualys WAS scan findings.
+  Look up individual Qualys WAS scan findings.
 ---
 
 # qualys_was_findings (Data Source)
 
-Look up Qualys WAS scan findings: vulnerabilities, sensitive-content
+Look up individual Qualys WAS scan findings: vulnerabilities, sensitive-content
 exposures and information-gathered items reported against web applications.
-Read-only — to manage a finding's ignored state, see
-`qualys_was_finding_ignore`. `retest` and severity overrides are not
-implemented.
+Each returned object is exactly one independent Qualys finding — never
+aggregated by QID, web application or URL. Read-only: it cannot create,
+modify, ignore, reopen, retest or override the severity of a finding. To
+manage a finding's ignored state, see `qualys_was_finding_ignore`.
+
+This is the WAS counterpart to `data.qualys_vm_findings`. The two share
+terminology and structure (`qid`, `severity`, `status`, `cvss_v3_base`,
+`finding_key`, `enrich_with_knowledgebase`) wherever the underlying Qualys
+concepts line up, without forcing identical shapes where they do not: WAS
+findings already carry a stable Qualys-assigned `id`, so `finding_key` is
+simply that ID — not a constructed composite key the way VM's
+`host:qid:protocol:port` is.
+
+## ⚠️ Breaking change from earlier versions of this data source
+
+`severity` changed from a string to a number; `status`, `type` and
+`finding_type` changed from a single string to a set of strings, to support
+the range/multi-value filtering this revision adds. Existing configurations
+using the old single-string form need updating:
+
+```diff
+ data "qualys_was_findings" "active" {
+-  status = "ACTIVE"
++  status = ["ACTIVE"]
+-  severity = "4"
++  severity = 4
+ }
+```
 
 ## Example Usage
 
-```terraform
-data "qualys_was_findings" "storefront_active" {
-  web_app_id = qualys_web_application.storefront.id
-  status     = "ACTIVE"
-  is_ignored = false
-}
+Retrieve all findings:
 
-output "storefront_high_severity_count" {
-  value = length([
-    for f in data.qualys_was_findings.storefront_active.findings : f
-    if f.severity >= 4
-  ])
+```terraform
+data "qualys_was_findings" "customer" {}
+```
+
+Retrieve findings for one web application:
+
+```terraform
+data "qualys_was_findings" "customer_portal" {
+  web_app_id = qualys_web_application.customer_portal.id
 }
 ```
 
-## Scope
+Retrieve active vulnerabilities only:
 
-Filter fields and finding attributes are the set doc 11 (this provider's
-discovery notes, §9) confirms by name from a compiled reference derived from
-the WAS API documentation tree — `Corroborated (non-official)` evidence, not
-read directly from the official WAS API User Guide. If Qualys returns
-additional fields this data source does not surface, or rejects a filter
-field name, that reflects the gap between this evidence and the primary
-source, not an intentional omission beyond what is documented here.
+```terraform
+data "qualys_was_findings" "active" {
+  type       = ["VULNERABILITY"]
+  status     = ["ACTIVE"]
+  is_ignored = false
+}
+```
+
+Retrieve high-severity findings:
+
+```terraform
+data "qualys_was_findings" "high" {
+  minimum_severity = 4
+}
+```
+
+Multiple web applications, feeding a downstream remediation dataset:
+
+```terraform
+data "qualys_was_findings" "customer" {
+  web_app_ids = [
+    qualys_web_application.customer_portal.id,
+    qualys_web_application.staff_portal.id,
+    qualys_web_application.partner_portal.id,
+  ]
+  minimum_severity = 2
+  is_ignored       = false
+}
+
+output "customer_was_findings" {
+  value     = data.qualys_was_findings.customer.findings
+  sensitive = true
+}
+```
+
+The surrounding automation (e.g. a GitHub Actions workflow) may serialise
+this Terraform output into a canonical customer-results JSON. This provider
+does not generate XLSX or JSON files itself.
+
+## Finding identity
+
+`id` is the Qualys finding ID, used directly as the primary identity — no
+replacement UUID or constructed key is generated. `finding_key` is exposed
+alongside it, equal to `id`, purely for naming symmetry with
+`data.qualys_vm_findings`'s `finding_key` (which, unlike this one, *is* a
+constructed composite key, since VM detections have no single-field
+Qualys-assigned identity the way WAS findings do).
+
+An exact duplicate finding returned across a search's pagination boundary,
+or across two `web_app_ids` searches, is collapsed to one record. If two
+decoded records share an `id` but disagree on their other fields, the first
+one seen is kept and a Terraform warning diagnostic is emitted describing
+the conflict, rather than either record silently winning.
+
+## Filtering strategy
+
+Filters fall into two groups, and the schema documents each field's group
+individually:
+
+- **Server-side, single value:** `web_app_id`, a single `qids`/`status`/
+  `type`/`finding_type` entry, `severity`, `is_ignored`, and the four date
+  bounds all use Confirmed or Corroborated Qualys query filters directly.
+- **Client-side, after a broader retrieval:** `web_app_ids` (one search per
+  ID, merged), two-or-more `qids`/`status`/`type`/`finding_type` values,
+  and `minimum_severity`/`maximum_severity` are all applied in this
+  provider rather than sent as an unconfirmed multi-value/range query
+  parameter — this session found no confirmed evidence for `IN`/range
+  filtering on these specific fields, and asserting an unconfirmed
+  parameter name risks a filter that silently does nothing if the name is
+  wrong.
+
+`finding_ids`, when set, bypasses search entirely: each ID is fetched
+directly (`get/was/finding/<id>`), and every other configured filter is
+then applied to that fixed set client-side. An ID no longer visible to the
+caller is simply omitted, not an error.
+
+## Ordering
+
+`findings` is sorted by numeric Qualys finding ID — already a globally
+unique, consistently sortable identity, so no secondary sort key (such as
+`web_app_id`) is needed. Two reads of unchanged data return the list in the
+same order.
+
+## Supported statuses, types and sources
+
+`status` is returned exactly as Qualys reports it — `NEW`, `ACTIVE`,
+`REOPENED`, `FIXED`, `PROTECTED` — never translated into a downstream
+remediation workflow's vocabulary. `type` is one of `VULNERABILITY`,
+`SENSITIVE_CONTENT`, `INFORMATION_GATHERED`. `finding_type` (the finding's
+source) is one of `QUALYS`, `MANUAL`, `BURP`.
+
+## Pagination
+
+All matching records are retrieved, following the qps API's `hasMoreRecords`/
+id-cursor continuation, unless `max_results` is set. `max_results`, when
+set, truncates the *returned* collection to that many findings from the
+front of the deterministic ID order — it does not stop pagination early.
+
+## KnowledgeBase enrichment
+
+Setting `enrich_with_knowledgebase = true` joins each finding's QID against
+the Qualys KnowledgeBase — the same subscription-wide catalog
+`data.qualys_vm_findings` enriches from, since Qualys keys it by QID across
+VM, PC and WAS — to populate `title`, `category`, `cvss_v2_base`,
+`pci_flag`, `patchable`, `diagnosis`, `consequence` and `solution`. Unique
+QIDs across all matching findings are collected first and fetched in one
+batched request, never one per finding. A QID with no KnowledgeBase entry
+leaves those fields empty/zero for that finding, not an error. Enrichment
+never changes a finding's identity (`id`/`finding_key`).
+
+The KnowledgeBase API is a separately-authorized Qualys add-on. If your
+subscription lacks it, leave `enrich_with_knowledgebase` at its default
+(`false`) — every other field remains fully populated.
+
+## What is not implemented, and why
+
+A requirements document asked for a richer field set — `category`,
+`description`, `impact`, `solution`, `payload`, `request`, `response`,
+`parameter`, `authentication`, `ssl`, `access_path`, `external_reference`,
+`owasp_category`, `wasc_category`, `cwe_id` — directly on each finding, plus
+a CVSS v2 score. None of these have a confirmed representation on the WAS
+Finding object in this session's evidence (docs.qualys.com is blocked in
+this sandbox), so none are implemented here rather than guessed. `category`
+and `solution` (as `diagnosis`/`consequence`/`solution`), along with CVSS
+v2, are available today through `enrich_with_knowledgebase` instead, since
+that data genuinely lives in Qualys's KnowledgeBase for the fields this
+session could confirm. The rest — payload/request/response/parameter/
+authentication/access_path/OWASP/WASC/CWE — remain an open gap; this is a
+deliberately safer initial implementation that favours finding metadata
+over raw HTTP request/response evidence, consistent with the requirements'
+own guidance.
+
+## Empty results
+
+No matching findings is not an error: `findings` is simply `[]`.
+
+## Terraform state
+
+Every field returned here is persisted in Terraform state once this data
+source is read, including internal application URLs (`url`), application
+names (`web_app_name`), and vulnerability detail (severity, QID, status,
+and — when enrichment is enabled — KnowledgeBase prose). Protect Terraform
+state accordingly (remote state with access controls and encryption at
+rest), and mark any output that re-exposes these fields `sensitive = true`,
+as the multi-application example above does.
 
 <!-- schema generated by tfplugindocs -->
 ## Schema
 
 ### Optional
 
-- **id** (String) The ID of this resource.
-- **web_app_id** (String) Restrict to findings on this web application.
-- **severity** (String) Restrict to this severity level (1-5).
-- **status** (String) One of `NEW`, `ACTIVE`, `REOPENED`, `FIXED`, `PROTECTED`.
-- **type** (String) One of `VULNERABILITY`, `SENSITIVE_CONTENT`, `INFORMATION_GATHERED`.
-- **finding_type** (String) One of `QUALYS`, `MANUAL`, `BURP`.
+- **web_app_id** (String) Restrict to findings on this web application. Conflicts with `web_app_ids` and `finding_ids`.
+- **web_app_ids** (Set of String) Restrict to findings on these web applications. See "Filtering strategy" above. Conflicts with `web_app_id` and `finding_ids`.
+- **finding_ids** (Set of String) Retrieve exactly these findings by ID, bypassing search. Conflicts with `web_app_id` and `web_app_ids`.
+- **qids** (Set of String) Restrict to these QIDs.
+- **severity** (Number) Restrict to exactly this severity (1-5). Validated at plan time.
+- **minimum_severity** / **maximum_severity** (Number) Restrict to this severity range (1-5). Validated at plan time.
+- **status** (Set of String) `NEW`, `ACTIVE`, `REOPENED`, `FIXED`, `PROTECTED`.
+- **type** (Set of String) `VULNERABILITY`, `SENSITIVE_CONTENT`, `INFORMATION_GATHERED`.
+- **finding_type** (Set of String) `QUALYS`, `MANUAL`, `BURP`.
 - **is_ignored** (Boolean) Restrict to findings with this ignored state.
+- **first_detected_after** / **first_detected_before** (String) RFC3339.
+- **last_detected_after** / **last_detected_before** (String) RFC3339.
+- **enrich_with_knowledgebase** (Boolean) Join KnowledgeBase metadata. Defaults to `false`. See "KnowledgeBase enrichment" above.
+- **max_results** (Number) Truncate the returned collection to this many findings. Every matching record is still retrieved first.
 
 ### Read-Only
 
-- **findings** (List of Object) Matching findings, ordered by ID for stable output. (see [below for nested schema](#nestedatt--findings))
+- **id** (String) The ID of this data source (a digest of the matching findings' IDs).
+- **findings** (List of Object) Matching findings, ordered by numeric finding ID. (see [below for nested schema](#nestedatt--findings))
 
 <a id="nestedatt--findings"></a>
 ### Nested Schema for `findings`
 
 Read-Only:
 
-- **id** (String)
+- **finding_key** (String) Equal to `id` — see "Finding identity" above.
+- **id** (String) The Qualys finding ID.
+- **unique_id** (String)
 - **qid** (String)
 - **name** (String)
 - **type** (String)
 - **severity** (Number)
 - **status** (String)
 - **finding_type** (String)
+- **web_app_id** / **web_app_name** (String)
 - **url** (String)
-- **web_app_id** (String)
-- **web_app_name** (String)
-- **first_detected_date** (String)
-- **last_detected_date** (String)
+- **first_detected_date** / **last_detected_date** (String)
 - **is_ignored** (Boolean)
 - **cvss_v3_base** (Number)
+- **title** / **category** (String) Populated only when `enrich_with_knowledgebase = true`.
+- **cvss_v2_base** (Number) Populated only when `enrich_with_knowledgebase = true`.
+- **pci_flag** / **patchable** (Boolean) Populated only when `enrich_with_knowledgebase = true`.
+- **diagnosis** / **consequence** / **solution** (String) Populated only when `enrich_with_knowledgebase = true`.

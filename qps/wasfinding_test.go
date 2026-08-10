@@ -10,6 +10,22 @@ import (
 	"testing"
 )
 
+// hasIDCursor reports whether a decoded ServiceRequest body carries the
+// "id GREATER <n>" pagination cursor SearchAll adds to every page after
+// the first.
+func hasIDCursor(body map[string]interface{}) bool {
+	sreq, _ := body["ServiceRequest"].(map[string]interface{})
+	filters, _ := sreq["filters"].(map[string]interface{})
+	criteria, _ := filters["Criteria"].([]interface{})
+	for _, raw := range criteria {
+		c, _ := raw.(map[string]interface{})
+		if c["field"] == "id" && c["operator"] == "GREATER" {
+			return true
+		}
+	}
+	return false
+}
+
 func TestSearchWASFindingsSendsFilters(t *testing.T) {
 	var gotBody map[string]interface{}
 	c, srv := testClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -23,11 +39,14 @@ func TestSearchWASFindingsSendsFilters(t *testing.T) {
 	defer srv.Close()
 
 	ignored := false
-	findings, err := c.SearchWASFindings(context.Background(), WASFindingFilter{
+	findings, conflicts, err := c.SearchWASFindings(context.Background(), WASFindingFilter{
 		WebAppID: "555", Status: WASFindingStatusActive, IsIgnored: &ignored,
 	})
 	if err != nil {
 		t.Fatalf("SearchWASFindings: %v", err)
+	}
+	if len(conflicts) != 0 {
+		t.Fatalf("unexpected conflicts: %+v", conflicts)
 	}
 	if len(findings) != 1 {
 		t.Fatalf("got %d findings, want 1", len(findings))
@@ -157,6 +176,107 @@ func TestGetWASFindingRetestStatusDecodesRetestDetail(t *testing.T) {
 	}
 }
 
+func TestSearchWASFindingsSendsIDQIDAndDateCriteria(t *testing.T) {
+	var gotBody map[string]interface{}
+	c, srv := testClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(b, &gotBody)
+		fmt.Fprint(w, `{"ServiceResponse":{"responseCode":"SUCCESS","hasMoreRecords":"false","data":[]}}`)
+	}))
+	defer srv.Close()
+
+	_, _, err := c.SearchWASFindings(context.Background(), WASFindingFilter{
+		ID:                 "1",
+		QID:                "150001",
+		FirstDetectedAfter: "2026-01-01T00:00:00Z",
+		LastDetectedBefore: "2026-12-31T00:00:00Z",
+	})
+	if err != nil {
+		t.Fatalf("SearchWASFindings: %v", err)
+	}
+
+	sreq, _ := gotBody["ServiceRequest"].(map[string]interface{})
+	filters, _ := sreq["filters"].(map[string]interface{})
+	criteria, _ := filters["Criteria"].([]interface{})
+	if len(criteria) != 4 {
+		t.Fatalf("expected 4 filter criteria (id, qid, firstDetectedDate GREATER, lastDetectedDate LESSER), got %v", criteria)
+	}
+
+	var sawGreater, sawLesser bool
+	for _, raw := range criteria {
+		c, _ := raw.(map[string]interface{})
+		if c["field"] == "firstDetectedDate" && c["operator"] == "GREATER" {
+			sawGreater = true
+		}
+		if c["field"] == "lastDetectedDate" && c["operator"] == "LESSER" {
+			sawLesser = true
+		}
+	}
+	if !sawGreater || !sawLesser {
+		t.Errorf("criteria = %v, want GREATER on firstDetectedDate and LESSER on lastDetectedDate", criteria)
+	}
+}
+
+// An exact duplicate finding returned on both sides of a pagination
+// boundary must collapse to one, not appear twice.
+func TestSearchWASFindingsCollapsesExactDuplicateAcrossPages(t *testing.T) {
+	c, srv := testClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		var body map[string]interface{}
+		_ = json.Unmarshal(b, &body)
+		if !hasIDCursor(body) {
+			fmt.Fprint(w, `{"ServiceResponse":{"responseCode":"SUCCESS","hasMoreRecords":"true","lastId":1,
+			  "data":[{"Finding":{"id":1,"qid":150001,"severity":3}}]}}`)
+			return
+		}
+		// Same finding repeated verbatim on page 2 (a legitimate overlap
+		// pattern for id-cursor pagination), then the true final record.
+		fmt.Fprint(w, `{"ServiceResponse":{"responseCode":"SUCCESS","hasMoreRecords":"false",
+		  "data":[{"Finding":{"id":1,"qid":150001,"severity":3}},{"Finding":{"id":2,"qid":150002,"severity":2}}]}}`)
+	}))
+	defer srv.Close()
+
+	findings, conflicts, err := c.SearchWASFindings(context.Background(), WASFindingFilter{})
+	if err != nil {
+		t.Fatalf("SearchWASFindings: %v", err)
+	}
+	if len(findings) != 2 {
+		t.Fatalf("got %d findings, want 2 (the id=1 duplicate collapsed)", len(findings))
+	}
+	if len(conflicts) != 0 {
+		t.Fatalf("an exact duplicate must not be reported as a conflict: %+v", conflicts)
+	}
+}
+
+// Two records sharing an ID but disagreeing on other fields (e.g. status
+// changed between pages) must be flagged, not silently merged.
+func TestSearchWASFindingsReportsConflictOnDisagreement(t *testing.T) {
+	c, srv := testClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		var body map[string]interface{}
+		_ = json.Unmarshal(b, &body)
+		if !hasIDCursor(body) {
+			fmt.Fprint(w, `{"ServiceResponse":{"responseCode":"SUCCESS","hasMoreRecords":"true","lastId":1,
+			  "data":[{"Finding":{"id":1,"qid":150001,"status":"NEW"}}]}}`)
+			return
+		}
+		fmt.Fprint(w, `{"ServiceResponse":{"responseCode":"SUCCESS","hasMoreRecords":"false",
+		  "data":[{"Finding":{"id":1,"qid":150001,"status":"FIXED"}}]}}`)
+	}))
+	defer srv.Close()
+
+	findings, conflicts, err := c.SearchWASFindings(context.Background(), WASFindingFilter{})
+	if err != nil {
+		t.Fatalf("SearchWASFindings: %v", err)
+	}
+	if len(findings) != 1 || findings[0].Status != "NEW" {
+		t.Fatalf("findings = %+v, want 1 with the first-seen status kept", findings)
+	}
+	if len(conflicts) != 1 || conflicts[0].ID != "1" || conflicts[0].First.Status != "NEW" || conflicts[0].Other.Status != "FIXED" {
+		t.Fatalf("conflicts = %+v", conflicts)
+	}
+}
+
 func TestSearchWASFindingsWithNoFilterOmitsFilters(t *testing.T) {
 	var gotBody map[string]interface{}
 	c, srv := testClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -166,7 +286,7 @@ func TestSearchWASFindingsWithNoFilterOmitsFilters(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	if _, err := c.SearchWASFindings(context.Background(), WASFindingFilter{}); err != nil {
+	if _, _, err := c.SearchWASFindings(context.Background(), WASFindingFilter{}); err != nil {
 		t.Fatalf("SearchWASFindings: %v", err)
 	}
 

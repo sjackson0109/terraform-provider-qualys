@@ -18,7 +18,10 @@ func TestGetKnowledgeBaseEntriesBatchesIntoOneRequest(t *testing.T) {
 		fmt.Fprint(w, `<KNOWLEDGE_BASE_VULN_LIST_OUTPUT><RESPONSE><VULN_LIST>
 		  <VULN><QID>105015</QID><TITLE>SSL Weak Cipher</TITLE><CATEGORY>General remote services</CATEGORY>
 		    <CVSS><BASE>4.3</BASE></CVSS><CVSS_V3><BASE>5.9</BASE></CVSS_V3>
-		    <PCI_FLAG>1</PCI_FLAG><PATCHABLE>0</PATCHABLE></VULN>
+		    <PCI_FLAG>1</PCI_FLAG><PATCHABLE>0</PATCHABLE>
+		    <DIAGNOSIS>The remote service supports weak ciphers.</DIAGNOSIS>
+		    <CONSEQUENCE>An attacker may decrypt traffic.</CONSEQUENCE>
+		    <SOLUTION>Disable weak cipher suites.</SOLUTION></VULN>
 		  <VULN><QID>38170</QID><TITLE>SSH Weak MAC</TITLE><CATEGORY>General remote services</CATEGORY>
 		    <CVSS><BASE>2.6</BASE></CVSS><PCI_FLAG>0</PCI_FLAG><PATCHABLE>1</PATCHABLE></VULN>
 		</VULN_LIST></RESPONSE></KNOWLEDGE_BASE_VULN_LIST_OUTPUT>`)
@@ -50,6 +53,11 @@ func TestGetKnowledgeBaseEntriesBatchesIntoOneRequest(t *testing.T) {
 	e := byQID["105015"]
 	if e == nil || e.Title != "SSL Weak Cipher" || e.CVSSV2Base != 4.3 || e.CVSSV3Base != 5.9 || !e.PCIFlag || e.Patchable {
 		t.Errorf("entry 105015 = %+v", e)
+	}
+	if e.Diagnosis != "The remote service supports weak ciphers." ||
+		e.Consequence != "An attacker may decrypt traffic." ||
+		e.Solution != "Disable weak cipher suites." {
+		t.Errorf("entry 105015 prose fields = %+v", e)
 	}
 	e2 := byQID["38170"]
 	if e2 == nil || e2.CVSSV3Base != 0 || e2.PCIFlag || !e2.Patchable {
