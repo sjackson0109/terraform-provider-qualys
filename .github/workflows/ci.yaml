@@ -8,7 +8,8 @@ on:
   pull_request:
 
 jobs:
-  build_test:
+  syntax_and_build:
+    name: Format, vet, build, test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -16,15 +17,28 @@ jobs:
       - name: Setup Golang
         uses: actions/setup-go@c4a742cab115ed795e34d4513e2cf7d472deb55f # v3.3.1
         with:
-          go-version-file: go.mod
-      - name: Build-test
+          # go.mod's `go 1.13` directive predates this provider's current
+          # dependencies (terraform-plugin-sdk/v2, resty/v2) and is kept
+          # unbumped as a separate concern from this workflow; pinning an
+          # explicit, modern toolchain here avoids CI depending on whether
+          # a decade-old Go release can still build them.
+          go-version: '1.21'
+      - name: Check gofmt (syntax/style)
+        run: ./scripts/gofmtcheck.sh
+      - name: go vet
+        run: go vet ./...
+      - name: Build
         env:
           GOPATH: ${{ github.workspace }}/go
           LOCAL: true
-        run: make
+        run: make build-only
+      - name: Test
+        env:
+          LOCAL: true
+        run: go test ./...
   release:
     if: startsWith(github.ref, 'refs/tags')
-    needs: [ build_test ]
+    needs: [ syntax_and_build ]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -36,6 +50,6 @@ jobs:
       - name: Setup Golang
         uses: actions/setup-go@c4a742cab115ed795e34d4513e2cf7d472deb55f # v3.3.1
         with:
-          go-version: 1.16
+          go-version: '1.21' # matches syntax_and_build; see its comment above
       - name: Release
         run: scripts/goreleaser.sh
