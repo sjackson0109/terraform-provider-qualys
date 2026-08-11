@@ -71,7 +71,15 @@ func TestResourceGcpConnector_update(t *testing.T) {
 }
 
 func getHclConfig(projectId uuid.UUID, name string) string {
+	// The empty provider block is required, not decorative: without one, a
+	// modern Terraform CLI refuses to configure a provider whose schema
+	// marks every argument Required (even with a DefaultFunc reading the
+	// QUALYS_* env vars testServer sets) and fails pre-apply with "Provider
+	// ... requires explicit configuration" before the plugin's own
+	// Configure/DefaultFunc logic ever runs.
 	return fmt.Sprintf(`
+provider "qualys" {}
+
 resource "qualys_gcp_connector" "test" {
     name                  = "%s"
     description           = "test description"

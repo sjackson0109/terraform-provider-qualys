@@ -48,7 +48,12 @@ func TestDataSourceGcpConnector_basic(t *testing.T) {
 }
 
 func getHclDataSourceConfig(connectorId string) string {
+	// See getHclConfig's comment in resource_gcp_connector_test.go: the
+	// empty provider block is required for a modern Terraform CLI to
+	// configure this provider at all in an acceptance test.
 	return fmt.Sprintf(`
+provider "qualys" {}
+
 data "qualys_gcp_connector" "test" {
 	connector_id          = "%s"
 }
