@@ -29,7 +29,13 @@ jobs:
         run: go vet ./...
       - name: Build
         env:
-          GOPATH: ${{ github.workspace }}/go
+          # Must be outside the checked-out working tree: the Makefile's
+          # `$(GOPATH)/bin/...` lookup needs GOPATH set to a known location,
+          # but pointing it at github.workspace (the repo checkout itself)
+          # put the module cache at go/pkg/mod inside the repo — which a
+          # later `go test ./...`, run from the same directory, then tried
+          # to treat as part of this module's own source tree.
+          GOPATH: ${{ runner.temp }}/go
           LOCAL: true
         run: make build-only
       - name: Test
