@@ -580,6 +580,25 @@ See **[doc 11](11-verified-parameter-reference.md)** for the full parameter list
   (read-only) is built; a resource is not, until this closes.
 - Tagging: `CLOUD_ASSET` ruleType; `lastVulnScan` hostasset filter.
 - V2 user API existence (`/api/2.0/fo/user/` — third-party claim only).
+- **`user.php` `add`/`edit` (user create/update) parameters, and all of the
+  Business Unit API (`business_unit.php` — list/add/edit, or whether it is
+  even API-accessible rather than UI/Manager-only).** The eighth pass closed
+  the read side of users (`user_list.php`, now Confirmed — see below) but
+  found nothing on either of these. This is the current blocker on
+  Terraform-managed MSP-style tenant onboarding (customer users + business
+  units + asset scoping in one apply): a `qualys_user` resource cannot be
+  built without confirmed `add`/`edit` parameters (does `business_unit_id`
+  really exist as a settable field? what does `asset_group_ids` look like
+  on write, versus the read-side `ASSIGNED_ASSET_GROUPS` title list?), and
+  a `qualys_business_unit` resource cannot be built at all without first
+  confirming the endpoint exists and what it accepts.
+- **Whether Business Unit membership itself gates asset/scan/report
+  visibility, or whether it is purely organisational and asset group
+  assignment does the actual scoping.** The eighth pass's `user_list.php`
+  sample is suggestive (see the Confirmed entry below) but not conclusive —
+  needs either an official access-control/permissions page or empirical
+  confirmation against a tenant with two business units and cross-checking
+  what a Unit Manager can list via the API.
 - Formal deprecation status of `/msp/scheduled_scans.php`, `/msp/user.php`,
   `/msp/asset_group_list.php`.
 - Scan-list/appliance-list/OP-list truncation mechanisms (none surfaced — absence
@@ -650,6 +669,47 @@ model makes it a design decision to postpone, not a missing fact). Imperative
 operations (scan/report launch and lifecycle actions) remain intentionally
 un-modelled as resources per doc 06's classification, which this pass does
 not revisit.
+
+### Eighth pass — user-supplied primary-source excerpt for "List Users" (`user_list.php`), prompted by an MSP business-unit/user-visibility question
+
+The user asked how to set up business units and users so that a customer
+logging in sees only their own assets, scans and results, and how an MSP
+parent account sees across all business units — a capability area this
+project had never researched (only the endpoint's existence was known,
+via doc 03's `/msp/user_list.php` reference, deferred P3 in doc 06). Rather
+than build against general knowledge of Qualys's MSP model — which this
+project has no confirmed evidence for and would have meant fabricating a
+schema, exactly what this discovery process exists to prevent — the user
+was asked for targeted search queries and supplied a primary-source excerpt
+from the official "List Users" API page in response.
+
+**Confirmed** by that excerpt: the DTD name (`user_list_output.dtd`), the
+full request parameter table (`external_id_contains`, `external_id_assigned`
+— mutually exclusive — and `show_access_permissions`), and a complete
+sample response covering two users (a Manager and a Scanner) with every
+field this project's `vmdr.User`/`data.qualys_users` now expose. Built
+directly against this excerpt with no gaps filled by inference on the
+field-name level.
+
+**Not Confirmed, but a genuine and useful clue**: comparing the two sample
+users shows the Manager carries no `ASSIGNED_ASSET_GROUPS` element at all,
+while the Scanner does, and both users' `BUSINESS_UNIT` value is literally
+"Unassigned". That is consistent with asset-group assignment being the real
+access-scoping mechanism and Business Unit being closer to an organisational
+label — which would mean an MSP-style "customer only sees their own assets"
+setup is really about assigning the right asset groups per user, not just
+attaching them to a business unit. This is a working hypothesis from one
+document's sample data, not a stated fact in the excerpt, and it does not
+yet answer the MSP parent-account cross-business-unit visibility half of the
+original question at all. Recorded as `Unverified` above pending either a
+Business Unit API document or empirical confirmation against a tenant with
+more than one business unit.
+
+**Still open, and the actual blocker on building anything write-side for
+this capability area**: `user.php` create/edit parameters, and the entire
+Business Unit API (existence, endpoint, parameters, response shape). See
+the `Unverified` entries above for the specific search queries that would
+close each.
 
 > Resolution path: re-run targeted checks from an environment with direct access to
 > docs.qualys.com (the discovery environment's network policy blocked it — see README),

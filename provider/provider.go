@@ -80,6 +80,7 @@ func Provider() *schema.Provider {
 			"qualys_reports":             dataSourceReports(),
 			"qualys_report_schedules":    dataSourceReportSchedules(),
 			"qualys_tenant_capabilities": dataSourceTenantCapabilities(),
+			"qualys_users":               dataSourceUsers(),
 		},
 
 		ResourcesMap: map[string]*schema.Resource{
