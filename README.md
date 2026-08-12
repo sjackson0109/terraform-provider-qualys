@@ -63,6 +63,7 @@ WAS (Web Application Scanning):
 | `qualys_reports` | Look up generated VM/PA reports |
 | `qualys_report_schedules` | Look up scheduled report definitions (list-only: there is no report schedule write API) |
 | `qualys_tenant_capabilities` | Probe the subscription's installed platform and per-module versions |
+| `qualys_users` | Look up subscription users, roles, business unit and assigned asset groups |
 
 ### Operations the provider deliberately does not model
 
@@ -105,10 +106,21 @@ for the full, evidence-graded list. The current set:
   names exist for this project to build against.
 - **`time_zone_code_list.php` output fields**: the endpoint's existence is
   confirmed, its response schema is not.
-- **VM/PA users and distribution groups**: `/msp/user_list.php` read access
-  exists, but write-side user management uses a legacy, differently-authenticated
-  V1 API this project has deliberately deferred rather than build against
-  thin evidence (tracked as P3 in [`docs/discovery/06-terraform-mapping.md`](docs/discovery/06-terraform-mapping.md)).
+- **VM/PA user and Business Unit write operations, and distribution groups.**
+  Read access to users is built (`data.qualys_users`, Confirmed against a
+  primary-source excerpt). User creation/edit (`user.php` `add`/`edit`) and
+  all Business Unit management (`business_unit.php`) remain completely
+  unresearched — no endpoint, parameters or response shape confirmed for
+  either. This is the current blocker on an MSP-style "customer only sees
+  their own assets" setup: `data.qualys_users` shows that visibility looks
+  like it is driven by asset group assignment rather than automatic
+  business-unit membership (see the data source's own doc for the
+  evidence), but that hasn't been corroborated by an actual Business Unit
+  API reference yet, and there is no way to create a user or a business
+  unit from Terraform until the write-side APIs are confirmed.
+
+  See [`docs/discovery/08-tenant-validation-and-gaps.md`](docs/discovery/08-tenant-validation-and-gaps.md)
+  for the full evidence trail and what's needed to close this next.
 
 Full documentation is under [`docs/`](docs/), with runnable configuration in
 [`examples/`](examples/).
