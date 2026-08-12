@@ -587,6 +587,69 @@ See **[doc 11](11-verified-parameter-reference.md)** for the full parameter list
 - Not-found error codes per endpoint (needed for Terraform state removal semantics).
 - Exact per-tier rate/concurrency numbers; complete per-POD platform URL table.
 - qps (WAS/AM) and CloudView rate-limit header behaviour.
+- **WAS Catalog, search list and parameter set response/request field names.**
+  Doc 11 §9 (a derived secondary source) confirms the endpoints
+  (`/qps/rest/3.0/<op>/was/catalog[/<id>]`, `.../was/searchlist`,
+  `.../was/parameter`) and their CRUD verbs exist, but names no fields at
+  all beyond "same CRUD pattern" for the latter two, and no create verb at
+  all for Catalog (only count/search/get/update/delete — consistent with
+  catalog entries being scan-discovered, not user-created). **Deliberately
+  not built this pass**, unlike the seventh pass's Corroborated-tier
+  builds below: those had at least a DTD filename or an internally
+  consistent request/response naming convention to build against; this has
+  neither.
+- **`/qps/rest/portal/version` response schema.** Doc 11 names this as the
+  recommended tenant capability probe but gives no field list, DTD, or
+  class name. `qps.GetPortalVersion` (seventh pass, below) decodes it
+  generically rather than assert field names.
+- **Vault update/delete selector parameter name (`id` vs `ids`).** Doc 03
+  §11 confirms vault CRUD exists on `/api/2.0/fo/vault/` but does not print
+  the update/delete selector field, unlike scan and report schedules on
+  the same API family, which do confirm `id` (singular) for the equivalent
+  call. `vmdr.UpdateVault`/`DeleteVault` (seventh pass) use `id` by analogy
+  with those two, not by direct confirmation for this endpoint.
+- **Excluded-IP list response element names.** Doc 03 §1 confirms the
+  `list` action and its `ips` request parameter exist, but no source found
+  by this project names the response's XML elements — not even a DTD
+  filename, which is why this is listed as a harder gap than the
+  Corroborated-tier VM scan/report/report-schedule lists below.
+  `qualys_excluded_ips` (seventh pass) does not attempt to decode it; see
+  its resource doc for the consequence.
+
+### Seventh pass — building out the remaining gap-list items identified from doc 06's Deliverable 4/5/6 tables
+
+Closed a batch of items previously listed only as candidates, at whatever
+evidence tier each one's own research trail actually supports — most at
+Confirmed (reusing doc 03 §11's already-Confirmed authentication record type
+slugs and vault CRUD fields, and doc 03 §1/§14's confirmed excluded-IP and
+host-tagging parameters), a few at Corroborated (VM scan/report/report-schedule
+list response field names, inferring from this codebase's own
+consistently-held convention that a Qualys response field name matches its
+request filter's spelling — the same reasoning basis, not the same claim,
+as the DETECTION_LIST precedent in `vmfinding.go`).
+
+Built: 28 additional `qualys_auth_record_*` resources (every remaining
+Confirmed type slug from doc 03 §11); `qualys_vault` (create/update/delete,
+with per-vault-type parameters left as a generic passthrough map rather than
+a fabricated schema — see doc comment on `vmdr.VaultInput`);
+`qualys_excluded_ips`; `qualys_host_tag_assignment` and
+`data.qualys_tagged_assets`; `data.qualys_auth_records`; `data.qualys_scans`;
+`data.qualys_reports`; `data.qualys_report_schedules`; and
+`data.qualys_tenant_capabilities` (the doc 08 §7-recommended
+`GET /qps/rest/portal/version` probe, decoded as a generic flattened map
+since this session found no field schema for it at all).
+
+Explicitly not built in this pass, and not silently dropped either: WAS
+Catalog/search lists/parameter sets (no field-name evidence — see the
+`Unverified` entry above), the WAS finding rich fields and severity override
+(already-known unresolved from earlier passes), Domain V2 write parameters
+(already-known unresolved), `time_zone_code_list.php` fields (already-known
+unresolved), and VM/PA user/distribution-group write APIs (deliberately
+deferred, doc 06 P3, not a research gap — the legacy V1 API's different auth
+model makes it a design decision to postpone, not a missing fact). Imperative
+operations (scan/report launch and lifecycle actions) remain intentionally
+un-modelled as resources per doc 06's classification, which this pass does
+not revisit.
 
 > Resolution path: re-run targeted checks from an environment with direct access to
 > docs.qualys.com (the discovery environment's network policy blocked it — see README),

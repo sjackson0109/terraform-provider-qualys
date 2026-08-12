@@ -73,6 +73,13 @@ func Provider() *schema.Provider {
 			"qualys_vm_findings":          dataSourceVMFindings(),
 			"qualys_was_findings":         dataSourceWASFindings(),
 			"qualys_was_report_templates": dataSourceWASReportTemplates(),
+
+			"qualys_tagged_assets":       dataSourceTaggedAssets(),
+			"qualys_auth_records":        dataSourceAuthRecords(),
+			"qualys_scans":               dataSourceScans(),
+			"qualys_reports":             dataSourceReports(),
+			"qualys_report_schedules":    dataSourceReportSchedules(),
+			"qualys_tenant_capabilities": dataSourceTenantCapabilities(),
 		},
 
 		ResourcesMap: map[string]*schema.Resource{
@@ -87,6 +94,44 @@ func Provider() *schema.Provider {
 			"qualys_virtual_scanner":     resourceVirtualScanner(),
 			"qualys_auth_record_windows": resourceWindowsAuthRecord(),
 			"qualys_auth_record_unix":    resourceUnixAuthRecord(),
+
+			// The remaining confirmed authentication record types (doc 03 §11)
+			// share the identical generic CRUD shape Windows and Unix already
+			// use, so they are registered directly against the factory rather
+			// than each getting its own named wrapper function.
+			"qualys_auth_record_network_ssh":     resourceAuthRecord(vmdr.AuthNetworkSSH, "Network (SSH)", nil),
+			"qualys_auth_record_oracle":          resourceAuthRecord(vmdr.AuthOracle, "Oracle", nil),
+			"qualys_auth_record_oracle_listener": resourceAuthRecord(vmdr.AuthOracleListener, "Oracle Listener", nil),
+			"qualys_auth_record_snmp":            resourceAuthRecord(vmdr.AuthSNMP, "SNMP", nil),
+			"qualys_auth_record_mssql":           resourceAuthRecord(vmdr.AuthMSSQL, "Microsoft SQL Server", nil),
+			"qualys_auth_record_mysql":           resourceAuthRecord(vmdr.AuthMySQL, "MySQL", nil),
+			"qualys_auth_record_postgresql":      resourceAuthRecord(vmdr.AuthPostgre, "PostgreSQL", nil),
+			"qualys_auth_record_sybase":          resourceAuthRecord(vmdr.AuthSybase, "Sybase", nil),
+			"qualys_auth_record_ibm_db2":         resourceAuthRecord(vmdr.AuthIBMDB2, "IBM DB2", nil),
+			"qualys_auth_record_informix":        resourceAuthRecord(vmdr.AuthInformix, "Informix", nil),
+			"qualys_auth_record_mariadb":         resourceAuthRecord(vmdr.AuthMariaDB, "MariaDB", nil),
+			"qualys_auth_record_mongodb":         resourceAuthRecord(vmdr.AuthMongoDB, "MongoDB", nil),
+			"qualys_auth_record_neo4j":           resourceAuthRecord(vmdr.AuthNeo4j, "Neo4j", nil),
+			"qualys_auth_record_sapiq":           resourceAuthRecord(vmdr.AuthSAPIQ, "SAP IQ", nil),
+			"qualys_auth_record_sap_hana":        resourceAuthRecord(vmdr.AuthSAPHANA, "SAP HANA", nil),
+			"qualys_auth_record_vmware":          resourceAuthRecord(vmdr.AuthVMware, "VMware ESX/ESXi", nil),
+			"qualys_auth_record_vcenter":         resourceAuthRecord(vmdr.AuthVCenter, "VMware vCenter", nil),
+			"qualys_auth_record_http":            resourceAuthRecord(vmdr.AuthHTTP, "HTTP", nil),
+			"qualys_auth_record_apache":          resourceAuthRecord(vmdr.AuthApache, "Apache", nil),
+			"qualys_auth_record_nginx":           resourceAuthRecord(vmdr.AuthNginx, "Nginx", nil),
+			"qualys_auth_record_ms_iis":          resourceAuthRecord(vmdr.AuthMSIIS, "Microsoft IIS", nil),
+			"qualys_auth_record_ibm_websphere":   resourceAuthRecord(vmdr.AuthIBMWebSphere, "IBM WebSphere", nil),
+			"qualys_auth_record_tomcat":          resourceAuthRecord(vmdr.AuthTomcat, "Apache Tomcat", nil),
+			"qualys_auth_record_oracle_weblogic": resourceAuthRecord(vmdr.AuthOracleWebLogic, "Oracle WebLogic", nil),
+			"qualys_auth_record_jboss":           resourceAuthRecord(vmdr.AuthJBoss, "JBoss", nil),
+			"qualys_auth_record_kubernetes":      resourceAuthRecord(vmdr.AuthKubernetes, "Kubernetes", nil),
+			"qualys_auth_record_docker":          resourceAuthRecord(vmdr.AuthDocker, "Docker", nil),
+			"qualys_auth_record_palo_alto":       resourceAuthRecord(vmdr.AuthPaloAlto, "Palo Alto Firewall", nil),
+
+			"qualys_vault":               resourceVault(),
+			"qualys_excluded_ips":        resourceExcludedIPs(),
+			"qualys_host_tag_assignment": resourceHostTagAssignment(),
+
 			"qualys_web_application":     resourceWebApplication(),
 			"qualys_was_option_profile":  resourceWASOptionProfile(),
 			"qualys_was_auth_record":     resourceWASAuthRecord(),

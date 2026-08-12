@@ -38,6 +38,33 @@ const (
 	AuthVMware  AuthRecordType = "vmware"
 	AuthHTTP    AuthRecordType = "http"
 	AuthDocker  AuthRecordType = "docker"
+
+	// The following are confirmed by doc 03 §11 (the same Scan Authentication
+	// page as the ten types above) but were not wired into a Terraform
+	// resource when this package was first built. They share the identical
+	// generic CRUD shape as every other type here — see authRecordGeneric
+	// and authParams — so adding a resource for each is a schema-only change
+	// in provider/resource_auth_record.go, not a new client capability.
+	AuthNetworkSSH     AuthRecordType = "network_ssh"
+	AuthOracleListener AuthRecordType = "oracle_listener"
+	AuthSybase         AuthRecordType = "sybase"
+	AuthIBMDB2         AuthRecordType = "ibm_db2"
+	AuthInformix       AuthRecordType = "informixdb"
+	AuthMariaDB        AuthRecordType = "mariadb"
+	AuthMongoDB        AuthRecordType = "mongodb"
+	AuthNeo4j          AuthRecordType = "neo4j"
+	AuthSAPIQ          AuthRecordType = "sapiq"
+	AuthSAPHANA        AuthRecordType = "sap_hana"
+	AuthVCenter        AuthRecordType = "vcenter"
+	AuthApache         AuthRecordType = "apache"
+	AuthNginx          AuthRecordType = "nginx"
+	AuthMSIIS          AuthRecordType = "ms_iis"
+	AuthIBMWebSphere   AuthRecordType = "ibm_websphere"
+	AuthTomcat         AuthRecordType = "tomcat"
+	AuthOracleWebLogic AuthRecordType = "oracle_weblogic"
+	AuthJBoss          AuthRecordType = "jboss"
+	AuthKubernetes     AuthRecordType = "kubernetes"
+	AuthPaloAlto       AuthRecordType = "palo_alto_firewall"
 )
 
 // AuthRecord is an authentication record.
@@ -303,6 +330,126 @@ type vaultListOutput struct {
 }
 
 func (o *vaultListOutput) warning() *warning { return o.Response.Warning }
+
+// VaultInput is the desired state of a vault.
+//
+// Title and Type are the only fields doc 03 §11 confirms ("title+type req"
+// on create). Every vault type (CyberArk, Thycotic, HashiCorp, Azure Key
+// Vault, ...) needs its own connection parameters — endpoint URL, safe
+// name, auth method, and so on — but this session found no confirmed
+// per-type parameter names for any of them (doc 03 §11 records the type
+// list as Confirmed and the per-type schemas as explicitly Unverified).
+// Rather than invent field names for even one vault type, Parameters is a
+// generic passthrough: whatever key/value pairs the caller supplies are
+// sent as additional form fields verbatim, using whatever names the
+// caller's own Qualys vault-configuration documentation specifies. This is
+// deliberately not a fabricated per-type schema — it is a hole left open
+// on purpose. Verify the field names for your vault type against a tenant
+// (or Qualys support) before relying on this.
+type VaultInput struct {
+	Title      string
+	Type       string
+	Parameters map[string]string
+}
+
+func vaultParams(in VaultInput) (url.Values, error) {
+	if strings.TrimSpace(in.Title) == "" {
+		return nil, fmt.Errorf("qualys vmdr: vault title is required")
+	}
+	if strings.TrimSpace(in.Type) == "" {
+		return nil, fmt.Errorf("qualys vmdr: vault type is required")
+	}
+	p := url.Values{}
+	p.Set("title", in.Title)
+	p.Set("type", in.Type)
+	for k, v := range in.Parameters {
+		p.Set(k, v)
+	}
+	return p, nil
+}
+
+// CreateVault creates a vault and returns its ID.
+func (c *Client) CreateVault(ctx context.Context, in VaultInput) (string, error) {
+	params, err := vaultParams(in)
+	if err != nil {
+		return "", err
+	}
+
+	var out simpleReturn
+	if err := c.do(ctx, request{
+		capability:    capVault,
+		path:          "vault/",
+		action:        "create",
+		params:        params,
+		nonIdempotent: true, // creating twice would duplicate the object
+	}, &out); err != nil {
+		return "", err
+	}
+
+	id, ok := out.itemValue("ID")
+	if !ok || strings.TrimSpace(id) == "" {
+		return "", fmt.Errorf("qualys vmdr: vault was created but the API returned no ID "+
+			"(response: %q); import it to bring it under management", out.Response.Text)
+	}
+	return strings.TrimSpace(id), nil
+}
+
+// UpdateVault applies desired state. The vault type cannot be changed after
+// creation (doc 03 §11 does not document a way to change it, and every
+// other Qualys object with a similarly foundational type field treats it as
+// immutable); callers that need a different type should replace the vault.
+//
+// The "id" selector name below is an inference, not a confirmed field name
+// for this specific endpoint: doc 03 §11 confirms CRUD exists on
+// /api/2.0/fo/vault/ but does not print the update/delete selector
+// parameter, unlike scan schedules and report schedules on the same API
+// family, which do confirm "id" (singular) for the equivalent call. Verify
+// against a tenant before relying on update/delete for a production vault.
+func (c *Client) UpdateVault(ctx context.Context, id string, in VaultInput) error {
+	if strings.TrimSpace(id) == "" {
+		return fmt.Errorf("qualys vmdr: vault id is required for update")
+	}
+	params, err := vaultParams(in)
+	if err != nil {
+		return err
+	}
+	params.Set("id", id)
+	return c.do(ctx, request{
+		capability: capVault,
+		path:       "vault/",
+		action:     "update",
+		params:     params,
+	}, nil)
+}
+
+// DeleteVault removes a vault. Any authentication record still referencing
+// it loses its credential, the same way an authentication record whose
+// vault_id is deleted out from under it would.
+func (c *Client) DeleteVault(ctx context.Context, id string) error {
+	params := url.Values{}
+	params.Set("id", id)
+	return c.do(ctx, request{
+		capability:    capVault,
+		path:          "vault/",
+		action:        "delete",
+		params:        params,
+		nonIdempotent: true,
+	}, nil)
+}
+
+// GetVault returns one vault, or ErrNotFound.
+func (c *Client) GetVault(ctx context.Context, id string) (*Vault, error) {
+	vaults, err := c.ListVaults(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, v := range vaults {
+		if v.ID == id {
+			return v, nil
+		}
+	}
+	return nil, fmt.Errorf("qualys vmdr: vault %s: %w", id, ErrNotFound)
+}
 
 // ListVaults returns the vaults configured for the subscription.
 func (c *Client) ListVaults(ctx context.Context) ([]*Vault, error) {

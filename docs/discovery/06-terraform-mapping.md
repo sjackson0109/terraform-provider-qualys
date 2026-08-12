@@ -13,11 +13,11 @@ Deliverables 4, 5 and 6. Grounded in the per-operation classifications of doc 03
 | `qualys_ip_registration` | `/api/2.0/fo/asset/ip/` add/update | **no delete API** — destroy is state-only (optional opt-in purge); CIDR expanded client-side | P1 |
 | `qualys_network` | `/api/2.0/fo/network/` create/update | **no delete API** — destroy warns + removes from state; network declared explicitly (workbook rule) | P1 |
 | `qualys_virtual_scanner` | `/api/2.0/fo/appliance/` create/update/delete + `assign_network_id` | exports `activation_code` (sensitive) for the infra provider deploying the VM; optional readiness wait | P1 |
-| `qualys_host_tag_assignment` | `qps/rest/2.0/update/am/hostasset` tags.add/remove | assignment object (host ↔ tag set) | P1 |
-| `qualys_auth_record_windows` / `qualys_auth_record_unix` (then further types) | `/api/2.0/fo/auth/<type>/` | **write-only** credential arguments; vault reference support; Windows domain type forces replacement | P1–P2 |
-| `qualys_vault` | `/api/2.0/fo/vault/` | per-type config; write-only secrets | P2 |
-| `qualys_domain` | `/api/2.0/fo/asset/domain/` | Basic-auth-only client path | P2 |
-| `qualys_excluded_ips` | `/api/2.0/fo/asset/excluded_ip/` add/remove | supports `expiry_days` | P3 |
+| `qualys_host_tag_assignment` | `qps/rest/2.0/update/am/hostasset` tags.add/remove | assignment object (host ↔ tag set) | done |
+| `qualys_auth_record_windows` / `qualys_auth_record_unix` / 28 further types | `/api/2.0/fo/auth/<type>/` | **write-only** credential arguments; vault reference support; Windows domain type forces replacement. **All 30 Confirmed type slugs from doc 03 §11 are now built** — the 28 beyond Windows/Unix registered directly against the existing generic `resourceAuthRecord` factory, no new client code needed | done |
+| `qualys_vault` | `/api/2.0/fo/vault/` | `title`/`type` managed (Confirmed); per-vault-type connection parameters are a generic passthrough map, not a fabricated per-type schema (still `Unverified` — see doc 08) | done |
+| `qualys_domain` | `/api/2.0/fo/asset/domain/` | Basic-auth-only client path; write parameters remain `Unverified` (doc 08) — only `data.qualys_domains` (read) is built | deferred (write side blocked) |
+| `qualys_excluded_ips` | `/api/2.0/fo/asset/excluded_ip/` add/remove | supports `expiry_days`. **Built**, but write-only with respect to drift: the list response's element names are unconfirmed, so Read does not decode remote state (see the resource's doc) | done |
 | `qualys_web_application` | `qps/rest/3.0/.../was/webapp` | JSON/XML ServiceRequest; TagList association. `auth_record_ids` uses its own `authRecords.add`/`.remove` call, an incremental idiom distinct from tags' "set". A "Gap Review" document later confirmed and closed several more gaps: `attributes` (map, "set" idiom), `config.cancelScansAt`/`cancelScansAfterNHours`/`defaultDnsOverride.id`, `dnsOverrides` (separate "set" collection from the default), `swaggerFile`/`postmanCollection` (base64 file uploads, mutually exclusive), `malwareMonitoring`/`malwareNotification` flags, and read-only `crawlingScripts`. `malwareScheduling` recurrence is deliberately NOT modelled — the same document says its structure should come from a dedicated example, not be inferred. A genuine landmine is reproduced faithfully: `config` sent without a cancellation element clears any existing default-cancellation setting | P2 |
 | `qualys_was_option_profile` | `.../was/optionprofile` | full CRUD incl. delete. Also where WAS policy-compliance settings live — no separate policy object exists. **Wire wrapper key was wrong since PR #3** (`WasOptionProfile` guessed, `OptionProfile` confirmed by a user-supplied example); fixed | P2 |
 | `qualys_was_auth_record` | `.../was/webauthrecord` | **Built.** Form (`STANDARD`/`CUSTOM`, both via the generic `fields`/`set`/`WebAppAuthFormRecordField` list; `SELENIUM` via `seleniumScript`/`seleniumCreds`), server (flat username/password/domain), and OAuth2 (`oauth2Record`, flat grant-specific fields, NOT the generic list) records; secrets masked on read → write-only. **A "Gap Review" document corrected a prior pass's STANDARD shape**: an earlier walkthrough showed STANDARD credentials as flat `username`/`password` elements, but the official create example — quoted directly this time — uses the same fields list as CUSTOM. Fixed; see doc 08's twelfth research pass. Endpoint path and sub-type vocabulary remain confirmed via a primary-source excerpt (Ch.3 p.102) | done |
@@ -30,7 +30,7 @@ Deliverables 4, 5 and 6. Grounded in the per-operation classifications of doc 03
 | `qualys_report_template_scan` / `_patch` | `/api/2.0/fo/report/template/scan|patch/` | XML-body schemas; deferred until schema effort justified | deferred |
 | ~~`qualys_user`~~ | `/msp/user.php` (V1) | **Out of scope** — legacy generation, and deprecated items are not being built on | dropped |
 | `qualys_was_dns_override` | `/qps/rest/3.0/.../was/dnsoverride` | **Built.** Path corrected from an earlier `dnsoverriderecord` guess. Confirmed against a user-supplied walkthrough with inline docs.qualys.com citations; update/delete take no ID in the URL path (a real deviation from every other WAS object) — ID travels in the body for update, as a filter criterion for delete | done |
-| `qualys_was_search_list` / `qualys_was_parameter_set` | `.../was/searchlist`, `.../was/parameter` | referenced by WAS option profiles | P3 |
+| `qualys_was_search_list` / `qualys_was_parameter_set` | `.../was/searchlist`, `.../was/parameter` | referenced by WAS option profiles. **Deliberately not built**: doc 11 §9 confirms the endpoints and CRUD verbs exist but names no request/response fields at all beyond "same CRUD pattern" — building against that would mean fabricating a schema, which this project's evidence discipline refuses to do | blocked (no field-name evidence) |
 
 **Scan authentication approach (task question):** support **both** — resources that
 create/manage records with write-only credential arguments (preferred with vault
@@ -44,7 +44,7 @@ configuration; vault-backed records are the recommended pattern.
 |---|---|---|
 | `data.qualys_asset_groups` | asset group list | reference AG IDs for scans/schedules/reports |
 | `data.qualys_asset_tags` | `search/am/tag` | reference tag IDs for targeting |
-| `data.qualys_tagged_assets` | `search/am/hostasset` by tag; CSAM gateway QQL (`not tags.name:"X"`) for the untagged case | tag membership review; tag-compliance gaps |
+| `data.qualys_tagged_assets` | `search/am/hostasset` by tag; CSAM gateway QQL (`not tags.name:"X"`) for the untagged case | **Built** (tag lookup only; the untagged-case QQL query is not implemented). tag membership review; tag-compliance gaps |
 | `data.qualys_host_assets` | host list | inventory, stale-asset review |
 | `data.qualys_host_detections` | host detection list | stale-asset/purge subsystem input |
 | `data.qualys_vm_findings` | host detection list (`DETECTION_LIST`, same endpoint as `qualys_host_detections`) | **Built.** Individual VM vulnerability findings (one host + one QID + one detection instance, never aggregated), for a downstream remediation-reporting workflow. Kept as a wholly separate data model from `qualys_host_detections`, which stays host-summary-only — see doc 08's research-pass entry for the evidence tier (Corroborated, not Confirmed) and the deliberate design choices (host_ids/ips/status sent server-side; asset_group_ids resolved to member IPs via the already-Confirmed `GetAssetGroup`; qids/severity-range/date-range filtered client-side rather than guessing unconfirmed query parameters). Optional batched KnowledgeBase enrichment (`data.qualys_vm_findings.enrich_with_knowledgebase`) |
@@ -53,12 +53,13 @@ configuration; vault-backed records are the recommended pattern.
 | `data.qualys_option_profiles` | OP list (VM/PC) | profile IDs for scans/schedules |
 | `data.qualys_scan_schedules` | schedule list | audit existing schedules |
 | `data.qualys_report_templates` | `/msp/report_template_list.php` | template IDs (only list surface that exists) |
-| `data.qualys_report_schedules` | schedule/report list | visibility of GUI-managed schedules (no resource possible) |
-| `data.qualys_auth_records` | auth list (all types/per type) | reference existing records |
-| `data.qualys_users` | `/msp/user_list.php` | owner/recipient validation |
-| `data.qualys_scans` / `data.qualys_reports` | scan/report list | job visibility for imperative subsystems |
-| `data.qualys_time_zone_codes` | `/msp/time_zone_code_list.php` | validate `time_zone_code` inputs |
+| `data.qualys_report_schedules` | schedule/report list | **Built.** visibility of GUI-managed schedules (no resource possible) |
+| `data.qualys_auth_records` | auth list (all types/per type) | **Built** (one type per read, matching the per-type API). reference existing records |
+| `data.qualys_users` | `/msp/user_list.php` | owner/recipient validation. **Deferred (P3)**, not built this pass — the write-side legacy V1 user API's different auth model makes read-only user lookup lower value on its own; revisit alongside a future `qualys_user` resource decision |
+| `data.qualys_scans` / `data.qualys_reports` | scan/report list | **Built.** job visibility for imperative subsystems |
+| `data.qualys_time_zone_codes` | `/msp/time_zone_code_list.php` | validate `time_zone_code` inputs. **Still blocked**: doc 08 records three research passes finding no field-name evidence for this endpoint's output |
 | `data.qualys_gcp_connector` (existing) | CloudView | maintain |
+| `data.qualys_tenant_capabilities` | `GET /qps/rest/portal/version` | **Built.** Doc 08 §7's recommended tenant capability probe; decoded as a generic flattened map since no field schema for the response was found by this project |
 
 ## Deliverable 6 — Imperative operations (NOT normal Terraform resources)
 

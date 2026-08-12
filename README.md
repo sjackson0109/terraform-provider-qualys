@@ -19,6 +19,10 @@ VM/PA (asset, network and scanning configuration):
 | `qualys_virtual_scanner` | A virtual scanner appliance, exporting the activation code for VM deployment |
 | `qualys_auth_record_windows` | A Windows scan authentication record |
 | `qualys_auth_record_unix` | A Unix/Linux (SSH) scan authentication record |
+| `qualys_auth_record_*` (28 more) | Every other Confirmed scan authentication record type — databases, web/app servers, network devices, hypervisors, containers; see [`docs/resources/auth_record_other_types.md`](docs/resources/auth_record_other_types.md) |
+| `qualys_vault` | A credential vault; `title`/`type` are managed, per-type connection parameters pass through verbatim |
+| `qualys_excluded_ips` | Excludes IPs from scanning |
+| `qualys_host_tag_assignment` | Assigns asset tags to an AssetView/CSAM host asset |
 | `qualys_gcp_connector` | CloudView GCP connector (see *Deprecation* below) |
 
 WAS (Web Application Scanning):
@@ -53,6 +57,12 @@ WAS (Web Application Scanning):
 | `qualys_was_findings` | Look up individual WAS scan findings, optionally enriched from the Qualys KnowledgeBase |
 | `qualys_was_report_templates` | Look up WAS report templates |
 | `qualys_gcp_connector` | Look up a CloudView GCP connector by ID |
+| `qualys_tagged_assets` | Look up AssetView/CSAM host assets by tag |
+| `qualys_auth_records` | Look up scan authentication records of one type |
+| `qualys_scans` | Look up VM scan jobs |
+| `qualys_reports` | Look up generated VM/PA reports |
+| `qualys_report_schedules` | Look up scheduled report definitions (list-only: there is no report schedule write API) |
+| `qualys_tenant_capabilities` | Probe the subscription's installed platform and per-module versions |
 
 ### Operations the provider deliberately does not model
 
@@ -73,6 +83,32 @@ resources would misrepresent them:
 Some objects also cannot be deleted through the API at all — networks and
 registered IP addresses among them. Those resources warn on destroy and explain
 what remains, rather than failing or pretending to have removed something.
+
+### Known gaps that remain unbuilt
+
+A handful of API surfaces are still not modelled, deliberately, because this
+project found no confirmed request/response field names for them and refuses
+to guess wire shapes — see [`docs/discovery/08-tenant-validation-and-gaps.md`](docs/discovery/08-tenant-validation-and-gaps.md)
+for the full, evidence-graded list. The current set:
+
+- **WAS Catalog, search lists and parameter sets.** The endpoints and CRUD
+  verbs are documented (`/qps/rest/3.0/.../was/catalog`, `.../searchlist`,
+  `.../parameter`), but no source found by this project names their request
+  or response field names beyond "same CRUD pattern" — not enough to build
+  against without fabricating a schema.
+- **WAS finding severity override**, raw HTTP finding fields (`payload`,
+  `request`, `response`), `malwareScheduling`'s recurrence structure, and
+  tag-based multi-app WAS scan targeting: each confirmed to exist, none with
+  a confirmed payload shape.
+- **Domain V2 write operations** (`add`/`update`/`delete`): `data.qualys_domains`
+  covers the confirmed read side; no confirmed create/update/delete parameter
+  names exist for this project to build against.
+- **`time_zone_code_list.php` output fields**: the endpoint's existence is
+  confirmed, its response schema is not.
+- **VM/PA users and distribution groups**: `/msp/user_list.php` read access
+  exists, but write-side user management uses a legacy, differently-authenticated
+  V1 API this project has deliberately deferred rather than build against
+  thin evidence (tracked as P3 in [`docs/discovery/06-terraform-mapping.md`](docs/discovery/06-terraform-mapping.md)).
 
 Full documentation is under [`docs/`](docs/), with runnable configuration in
 [`examples/`](examples/).
