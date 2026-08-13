@@ -59,6 +59,7 @@ configuration; vault-backed records are the recommended pattern.
 | `data.qualys_scans` / `data.qualys_reports` | scan/report list | **Built.** job visibility for imperative subsystems |
 | `data.qualys_time_zone_codes` | `/msp/time_zone_code_list.php` | validate `time_zone_code` inputs. **Still blocked**: doc 08 records three research passes finding no field-name evidence for this endpoint's output |
 | `data.qualys_gcp_connector` (existing) | CloudView | maintain |
+| `data.qualys_am_users` / `qualys_user_scope_assignment` | `/qps/rest/2.0/get\|search\|update/am/user` (Administration RBAC API) | **Built** (ninth pass, Corroborated non-official — reverse-engineered from the open-source `qualysdk` project, the same evidence tier already used for `qualys_was_auth_record`). A different, modern user object from `data.qualys_users`: no `business_unit` field, scoped entirely by `scopeTags`/`roleList`. No confirmed create endpoint — only get/search/update — so only the scope-assignment half is a resource, parallel to `qualys_host_tag_assignment`. See doc 08's ninth pass |
 | `data.qualys_tenant_capabilities` | `GET /qps/rest/portal/version` | **Built.** Doc 08 §7's recommended tenant capability probe; decoded as a generic flattened map since no field schema for the response was found by this project |
 
 ## Deliverable 6 — Imperative operations (NOT normal Terraform resources)

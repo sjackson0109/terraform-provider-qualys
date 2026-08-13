@@ -23,6 +23,7 @@ VM/PA (asset, network and scanning configuration):
 | `qualys_vault` | A credential vault; `title`/`type` are managed, per-type connection parameters pass through verbatim |
 | `qualys_excluded_ips` | Excludes IPs from scanning |
 | `qualys_host_tag_assignment` | Assigns asset tags to an AssetView/CSAM host asset |
+| `qualys_user_scope_assignment` | Assigns scope tags and roles to a subscription user via the Administration RBAC API |
 | `qualys_gcp_connector` | CloudView GCP connector (see *Deprecation* below) |
 
 WAS (Web Application Scanning):
@@ -63,7 +64,8 @@ WAS (Web Application Scanning):
 | `qualys_reports` | Look up generated VM/PA reports |
 | `qualys_report_schedules` | Look up scheduled report definitions (list-only: there is no report schedule write API) |
 | `qualys_tenant_capabilities` | Probe the subscription's installed platform and per-module versions |
-| `qualys_users` | Look up subscription users, roles, business unit and assigned asset groups |
+| `qualys_users` | Look up subscription users, roles, business unit and assigned asset groups (legacy `/msp/user_list.php`) |
+| `qualys_am_users` | Look up subscription users, scope tags and roles via the modern Administration RBAC API |
 
 ### Operations the provider deliberately does not model
 
@@ -106,18 +108,27 @@ for the full, evidence-graded list. The current set:
   names exist for this project to build against.
 - **`time_zone_code_list.php` output fields**: the endpoint's existence is
   confirmed, its response schema is not.
-- **VM/PA user and Business Unit write operations, and distribution groups.**
-  Read access to users is built (`data.qualys_users`, Confirmed against a
-  primary-source excerpt). User creation/edit (`user.php` `add`/`edit`) and
-  all Business Unit management (`business_unit.php`) remain completely
-  unresearched — no endpoint, parameters or response shape confirmed for
-  either. This is the current blocker on an MSP-style "customer only sees
-  their own assets" setup: `data.qualys_users` shows that visibility looks
-  like it is driven by asset group assignment rather than automatic
-  business-unit membership (see the data source's own doc for the
-  evidence), but that hasn't been corroborated by an actual Business Unit
-  API reference yet, and there is no way to create a user or a business
-  unit from Terraform until the write-side APIs are confirmed.
+- **Legacy VM/PA user creation, Business Unit management, and distribution
+  groups.** Read access to legacy users is built (`data.qualys_users`,
+  Confirmed against a primary-source excerpt); a modern, tag/role-scoped
+  alternative user API is also built (`data.qualys_am_users` and
+  `qualys_user_scope_assignment`, Corroborated against the open-source
+  [qualysdk](https://github.com/0x41424142/qualysdk) project — see below).
+  Legacy user creation/edit (`user.php` `add`/`edit`) and all Business Unit
+  management (`business_unit.php`) remain completely unresearched — three
+  separate research passes (official docs, web search summaries, and this
+  same third-party SDK, which has no Business Unit module at all) found
+  nothing. `add_user.htm`/`edit_user.htm` do not appear to exist as pages at
+  all (confirmed absent via archive.org, not just unreachable).
+
+  What *is* now built points at a different answer to "customer only sees
+  their own assets" than Business Units: the Administration RBAC API scopes
+  a user entirely through tags and roles, with no Business Unit field at
+  all, which converges with the AM/CSAM tagging model this provider already
+  uses everywhere else (`qualys_asset_tag`, `qualys_host_tag_assignment`).
+  Whether that's the actual replacement for the legacy Business Unit model,
+  or a parallel and unrelated permission system, is not confirmed either —
+  see doc 08's ninth research pass.
 
   See [`docs/discovery/08-tenant-validation-and-gaps.md`](docs/discovery/08-tenant-validation-and-gaps.md)
   for the full evidence trail and what's needed to close this next.

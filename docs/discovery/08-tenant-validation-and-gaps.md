@@ -591,7 +591,25 @@ See **[doc 11](11-verified-parameter-reference.md)** for the full parameter list
   really exist as a settable field? what does `asset_group_ids` look like
   on write, versus the read-side `ASSIGNED_ASSET_GROUPS` title list?), and
   a `qualys_business_unit` resource cannot be built at all without first
-  confirming the endpoint exists and what it accepts.
+  confirming the endpoint exists and what it accepts. **The ninth pass
+  checked further and came back emptier, not fuller**: the user-suggested
+  pages `docs.qualys.com/en/vm/api/users/users/add_user.htm` and
+  `edit_user.htm` (surfaced by a web search summary in the eighth pass, and
+  never independently fetched) were checked against archive.org by the user
+  directly and appear **never to have existed** — a 503 aside, no snapshot
+  of either URL was found at any point in Wayback Machine history. Web
+  search result summaries are themselves not primary sources (this
+  project's own standing rule — see the caveat on the eighth pass's search
+  summaries below) and this is a concrete case of one being wrong: those
+  URLs were reported by the search summarizer as real documentation pages,
+  and they are not. The open-source `qualysdk` project (see the ninth
+  pass's Confirmed entry below) was also checked specifically for a
+  business-unit module and has none at all — its `admin` module covers only
+  users, roles and tags, no Business Unit concept anywhere in the codebase.
+  `business_unit.php` (the legacy XML endpoint) and any modern Business
+  Unit equivalent both remain completely unresearched with zero positive
+  evidence from any of the three passes so far (official docs, web search,
+  open-source SDK).
 - **Whether Business Unit membership itself gates asset/scan/report
   visibility, or whether it is purely organisational and asset group
   assignment does the actual scoping.** The eighth pass's `user_list.php`
@@ -710,6 +728,63 @@ this capability area**: `user.php` create/edit parameters, and the entire
 Business Unit API (existence, endpoint, parameters, response shape). See
 the `Unverified` entries above for the specific search queries that would
 close each.
+
+### Ninth pass — reverse-engineering the open-source `qualysdk` project's `admin` module
+
+Prompted directly by the user, who both ruled out the eighth pass's
+`add_user.htm`/`edit_user.htm` leads (checked against archive.org — see the
+updated `Unverified` entry above) and suggested reverse-engineering
+[`github.com/0x41424142/qualysdk`](https://github.com/0x41424142/qualysdk):
+already this discovery's evidence source for `qualys_was_auth_record`
+(fourth/fifth/sixth passes), so a known-tractable, previously-productive
+source rather than a fresh gamble. Cloned via this environment's anonymous
+GitHub git-read path (`raw.githubusercontent.com`/`github.com` are not
+blocked the way `docs.qualys.com` is) and searched directly rather than
+guessing at plausible module names.
+
+**Confirmed present, no Business Unit module of any kind**: `qualysdk/admin/`
+contains only `rbac.py` (users, roles, tags) — no `business_unit.py`, no
+`business_unit` string anywhere in the codebase. This doesn't prove the
+Qualys API has no Business Unit surface — it proves this one third-party
+project's author never needed one — but it is a second independent miss
+(alongside the eighth pass's dead `add_user.htm`/`edit_user.htm` leads),
+which is worth recording as evidence, not just an absence.
+
+**Corroborated (non-official) — built this pass**: a completely different,
+modern user API from `user_list.php`, at `/qps/rest/2.0/get|search|update/
+am/user` — the same `/qps/rest/2.0/.../am/...` surface this provider's
+`qps` package already targets for tags and host assets, not a new module.
+`get_user_details`/`search_users`/`update_user` in `qualysdk/admin/rbac.py`,
+cross-checked against that project's own `docs/admin.md` (consistent with
+the code, not just restating it — the same two-artifact evidentiary bar
+already accepted for `qualys_was_auth_record`). Response shape: `id`,
+`username`, `firstName`, `lastName`, `emailAddress`, `title`, `scopeTags`
+and `roleList` (each a list of `{TagData: {id,name}}` / `{RoleData:
+{id,name}}` under a `"list"` key — or, per the source's own defensive
+decode logic, a bare `{id,name}` object when there is exactly one). No
+`business_unit` field anywhere on this object. `search_users` takes
+Criteria on `id` (EQUALS/GREATER/LESSER), `username` (EQUALS), `roleName`
+(EQUALS) — the same `Filters`/`Criteria` idiom this provider's `qps`
+package already uses for tags and web apps. `update_user` adds/removes
+`scopeTags`/`roleList` entries by ID or by name — Confirmed by the source
+itself refusing to send a request with no add/remove entries. Built as
+`qps.User`, `qps.GetUser`, `qps.SearchUsers`, `qps.UpdateUserScope`,
+`data.qualys_am_users`, and `qualys_user_scope_assignment` (parallel to
+`qualys_host_tag_assignment`, since there is no create endpoint to build a
+full resource against).
+
+**Genuinely useful, still not proof**: a modern user API that scopes
+access entirely through tags and roles — with literally no Business Unit
+concept — is consistent with this discovery's eighth-pass hypothesis that
+tag/asset-group assignment, not Business Unit membership, is what actually
+gates visibility. It is not proof of that hypothesis: this could equally be
+a modern API that simply doesn't expose Business Unit as a field while the
+underlying platform still enforces it some other way, or the legacy
+Business Unit model and this tag/role model could be two different,
+partially-overlapping systems. Whether `qualys_user_scope_assignment`'s
+`tag_ids` is really the mechanism for "customer only sees their own
+assets" remains Unverified until confirmed against a tenant with more than
+one business unit, or by an official RBAC/scoping document.
 
 > Resolution path: re-run targeted checks from an environment with direct access to
 > docs.qualys.com (the discovery environment's network policy blocked it — see README),
