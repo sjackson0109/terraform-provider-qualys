@@ -81,6 +81,7 @@ func Provider() *schema.Provider {
 			"qualys_report_schedules":    dataSourceReportSchedules(),
 			"qualys_tenant_capabilities": dataSourceTenantCapabilities(),
 			"qualys_users":               dataSourceUsers(),
+			"qualys_am_users":            dataSourceAMUsers(),
 		},
 
 		ResourcesMap: map[string]*schema.Resource{
@@ -129,9 +130,10 @@ func Provider() *schema.Provider {
 			"qualys_auth_record_docker":          resourceAuthRecord(vmdr.AuthDocker, "Docker", nil),
 			"qualys_auth_record_palo_alto":       resourceAuthRecord(vmdr.AuthPaloAlto, "Palo Alto Firewall", nil),
 
-			"qualys_vault":               resourceVault(),
-			"qualys_excluded_ips":        resourceExcludedIPs(),
-			"qualys_host_tag_assignment": resourceHostTagAssignment(),
+			"qualys_vault":                 resourceVault(),
+			"qualys_excluded_ips":          resourceExcludedIPs(),
+			"qualys_host_tag_assignment":   resourceHostTagAssignment(),
+			"qualys_user_scope_assignment": resourceUserScopeAssignment(),
 
 			"qualys_web_application":     resourceWebApplication(),
 			"qualys_was_option_profile":  resourceWASOptionProfile(),
