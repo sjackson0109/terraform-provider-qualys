@@ -44,7 +44,7 @@ func resourceWASReportSchedule() *schema.Resource {
 				Required: true,
 			},
 			"web_app_id": {
-				Description: "ID of the `qualys_web_application` to report on.",
+				Description: "ID of the `qualys_was_application` to report on.",
 				Type:        schema.TypeString,
 				Required:    true,
 			},

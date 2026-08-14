@@ -1,5 +1,5 @@
 # A nightly scan of an asset group, from Qualys' external scanners.
-resource "qualys_scan_schedule" "nightly_web" {
+resource "qualys_vm_scan_schedule" "nightly_web" {
   title             = "nightly-web-scan"
   option_profile_id = qualys_vm_option_profile.web_tier.id
 
@@ -26,7 +26,7 @@ resource "qualys_scan_schedule" "nightly_web" {
 
 # A weekly scan targeting assets by tag. Note weekdays takes day *names*, while
 # day_of_week (used with week_of_month for monthly schedules) takes a number.
-resource "qualys_scan_schedule" "weekly_tagged" {
+resource "qualys_vm_scan_schedule" "weekly_tagged" {
   title             = "weekly-production-scan"
   option_profile_id = qualys_vm_option_profile.web_tier.id
 

@@ -260,7 +260,7 @@ See **[doc 11](11-verified-parameter-reference.md)** for the full parameter list
   associating an auth record with a web application is a **separate** call —
   `update/was/webapp/<id>` with `data.WebApp.authRecords.add`/`.remove`, each a list of
   `{id}` refs, an incremental idiom distinct from tags' authoritative "set". Added as
-  `qualys_web_application.auth_record_ids`, diffed against prior state on every apply.
+  `qualys_was_application.auth_record_ids`, diffed against prior state on every apply.
   The GET response shape for `authRecords` was not shown in either excerpt; this
   provider's decode is inferred by analogy with how `tags` round-trips, disclosed as
   such in code. **Still open:** whether OAuth2/Selenium records follow the same
@@ -320,7 +320,7 @@ See **[doc 11](11-verified-parameter-reference.md)** for the full parameter list
   Separately, the report-templates walkthrough confirmed the WAS report template API
   (`/qps/rest/3.0/.../was/reporttemplate`) is genuinely read-only (count/search/get,
   explicitly no create/update/delete) — built as `data.qualys_was_report_templates`,
-  distinct from the existing `data.qualys_report_templates` (the legacy VM API). Its
+  distinct from the existing `data.qualys_vm_report_templates` (the legacy VM API). Its
   wrapper key (`ReportTemplate`) was **not** shown in a worked example this time —
   chosen because 3 of 4 confirmed wrapper keys in this codebase lack a `Was` prefix,
   disclosed as a guess, not a repeat of the option-profile mistake.
@@ -356,10 +356,10 @@ See **[doc 11](11-verified-parameter-reference.md)** for the full parameter list
   real resource instead of only an external ID). Web-application-level default DNS
   override association (mentioned in the walkthrough's overview but with no create/
   update example shown) is not built — same reasoning as the still-unconfirmed
-  `qualys_web_application` config fields (`defaultAuthRecord`, `cancelScansAt`, etc.).
+  `qualys_was_application` config fields (`defaultAuthRecord`, `cancelScansAt`, etc.).
 - ~~**WAS auth record STANDARD shape (built on lower-confidence evidence);
   `qualys_was_scan_schedule` MONTHLY (built by analogy); Selenium/OAuth2 auth
-  records, findings retest, Burp import, and several `qualys_web_application`
+  records, findings retest, Burp import, and several `qualys_was_application`
   fields — all unimplemented.**~~ **Twelfth research pass — two corrections
   to already-shipped code, plus several new closures.** A user-supplied "Gap
   Review" document, quoting official Qualys reference pages directly rather
@@ -402,7 +402,7 @@ See **[doc 11](11-verified-parameter-reference.md)** for the full parameter list
     async-job reasoning as scan/report launch). Burp report import
     (`ImportWASBurp`, `POST import/was/burp` with a flat body — the one
     WAS write call seen so far that does *not* nest under
-    `data.<WrapperKey>`). `qualys_web_application` gained `attributes`,
+    `data.<WrapperKey>`). `qualys_was_application` gained `attributes`,
     `config.cancelScansAt`/`cancelScansAfterNHours`/
     `defaultDnsOverride.id`, a separate `dnsOverrides` collection,
     `swaggerFile`/`postmanCollection` (mutually exclusive base64 uploads),
@@ -559,12 +559,12 @@ See **[doc 11](11-verified-parameter-reference.md)** for the full parameter list
   already in the same auth-record file.
 - **`time_zone_code_list.php` output field names.** The endpoint's existence and its
   DTD name (`time_zone_code_list.dtd`) are confirmed (doc 03 §8), and it is the source
-  of the `time_zone_code` values `qualys_scan_schedule` accepts. Three research passes
+  of the `time_zone_code` values `qualys_vm_scan_schedule` accepts. Three research passes
   (this discovery's original pass, plus two fresh web searches specifically for this
   gap) found no page or sample output naming its XML fields — unlike the sibling
   `report_template_list.php`, whose fields a fresh search *did* surface (doc 11-style
   evidence: official page + sample XML). **Gates `data.qualys_time_zone_codes`** —
-  `time_zone_code` stays a free-text string on `qualys_scan_schedule` (unvalidated
+  `time_zone_code` stays a free-text string on `qualys_vm_scan_schedule` (unvalidated
   client-side, exactly like `bruteforce_option` on `qualys_was_option_profile`) rather
   than being checked against a guessed enum.
 - **Domain V2 (`/api/2.0/fo/asset/domain/`) add/update/delete parameter names.**
@@ -671,7 +671,7 @@ with per-vault-type parameters left as a generic passthrough map rather than
 a fabricated schema — see doc comment on `vmdr.VaultInput`);
 `qualys_excluded_ips`; `qualys_host_tag_assignment` and
 `data.qualys_tagged_assets`; `data.qualys_auth_records`; `data.qualys_scans`;
-`data.qualys_reports`; `data.qualys_report_schedules`; and
+`data.qualys_reports`; `data.qualys_vm_report_schedules`; and
 `data.qualys_tenant_capabilities` (the doc 08 §7-recommended
 `GET /qps/rest/portal/version` probe, decoded as a generic flattened map
 since this session found no field schema for it at all).
@@ -786,7 +786,29 @@ partially-overlapping systems. Whether `qualys_user_scope_assignment`'s
 assets" remains Unverified until confirmed against a tenant with more than
 one business unit, or by an official RBAC/scoping document.
 
-> Resolution path: re-run targeted checks from an environment with direct access to
+### Tenth pass — resource naming consistency (no new API evidence)
+
+Not a research pass in the usual sense: the user flagged that `qualys_scan_schedule`
+was inconsistent with `qualys_was_scan_schedule` (VM/PA objects that also exist in
+WAS are consistently `vm_`/`was_`-prefixed on both sides — see `qualys_vm_option_profile`/
+`qualys_was_option_profile`, `data.qualys_vm_findings`/`data.qualys_was_findings` —
+but the scan-schedule pair had only prefixed the WAS side) and asked for a full
+audit. Renamed four object pairs for consistency with that already-established
+convention, all pre-existing objects with no schema change:
+
+- `qualys_scan_schedule` / `data.qualys_scan_schedules` → `qualys_vm_scan_schedule` /
+  `data.qualys_vm_scan_schedules`
+- `data.qualys_report_schedules` → `data.qualys_vm_report_schedules`
+- `data.qualys_report_templates` → `data.qualys_vm_report_templates`
+- `qualys_web_application` / `data.qualys_web_applications` → `qualys_was_application` /
+  `data.qualys_was_applications` (the user's own correction to an earlier proposal
+  of `qualys_was_web_application` — WAS already stands for Web Application
+  Scanning/Service, so that would have been doubly redundant; the Qualys GUI
+  itself just calls these "Applications" within the WAS module)
+
+This is a breaking change for anyone with existing state referencing the old
+type names (`terraform state mv` required after upgrading) — flagged in the
+README rather than silently changed.
 > docs.qualys.com (the discovery environment's network policy blocked it — see README),
 > then confirm empirically against a test subscription before each affected schema is
 > frozen.

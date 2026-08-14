@@ -68,7 +68,7 @@ func resourceWASAuthRecord() *schema.Resource {
 			"(not modelled through the field list). Treat all of this as strong but not absolute " +
 			"evidence and verify against a tenant before relying on it in production.\n\n" +
 			"Associating a record with a web application is a separate step — see " +
-			"`qualys_web_application`'s `auth_record_ids`.\n\n" +
+			"`qualys_was_application`'s `auth_record_ids`.\n\n" +
 			"Credentials are write-only: Qualys masks them on read, so this provider never " +
 			"reads them back into state. A credential changed outside Terraform is not " +
 			"detected as drift, and the values still live in Terraform state because " +

@@ -23,7 +23,7 @@ func validSchedule() map[string]interface{} {
 }
 
 func TestScanScheduleAcceptsAValidDailySchedule(t *testing.T) {
-	if err := diffFor(t, resourceScanSchedule(), validSchedule()); err != nil {
+	if err := diffFor(t, resourceVMScanSchedule(), validSchedule()); err != nil {
 		t.Fatalf("valid schedule rejected: %v", err)
 	}
 }
@@ -31,7 +31,7 @@ func TestScanScheduleAcceptsAValidDailySchedule(t *testing.T) {
 func TestScanScheduleRequiresFrequencyForItsOccurrence(t *testing.T) {
 	cfg := validSchedule()
 	delete(cfg, "frequency_days")
-	if err := diffFor(t, resourceScanSchedule(), cfg); err == nil {
+	if err := diffFor(t, resourceVMScanSchedule(), cfg); err == nil {
 		t.Error("expected an error: a daily schedule needs frequency_days")
 	}
 
@@ -39,7 +39,7 @@ func TestScanScheduleRequiresFrequencyForItsOccurrence(t *testing.T) {
 	cfg["occurrence"] = "weekly"
 	delete(cfg, "frequency_days")
 	cfg["frequency_weeks"] = 1
-	if err := diffFor(t, resourceScanSchedule(), cfg); err == nil {
+	if err := diffFor(t, resourceVMScanSchedule(), cfg); err == nil {
 		t.Error("expected an error: a weekly schedule needs weekdays")
 	}
 }
@@ -54,7 +54,7 @@ func TestScanScheduleRejectsConflictingMonthlySelectors(t *testing.T) {
 	cfg["day_of_month"] = 15
 	cfg["week_of_month"] = "first"
 
-	err := diffFor(t, resourceScanSchedule(), cfg)
+	err := diffFor(t, resourceVMScanSchedule(), cfg)
 	if err == nil {
 		t.Fatal("expected an error when both monthly selectors are set")
 	}
@@ -68,19 +68,19 @@ func TestScanScheduleRejectsConflictingMonthlySelectors(t *testing.T) {
 func TestScanScheduleRequiresATargetAndAScanner(t *testing.T) {
 	cfg := validSchedule()
 	delete(cfg, "asset_group_ids")
-	if err := diffFor(t, resourceScanSchedule(), cfg); err == nil {
+	if err := diffFor(t, resourceVMScanSchedule(), cfg); err == nil {
 		t.Error("expected an error: a schedule with no target scans nothing")
 	}
 
 	cfg = validSchedule()
 	cfg["use_default_scanner"] = false
-	if err := diffFor(t, resourceScanSchedule(), cfg); err == nil {
+	if err := diffFor(t, resourceVMScanSchedule(), cfg); err == nil {
 		t.Error("expected an error: a schedule with no scanner cannot run")
 	}
 }
 
 func TestScanScheduleWeekdayNamesAreValidated(t *testing.T) {
-	elem := resourceScanSchedule().Schema["weekdays"].Elem.(*schema.Schema)
+	elem := resourceVMScanSchedule().Schema["weekdays"].Elem.(*schema.Schema)
 	v := elem.ValidateFunc
 	if _, errs := v("monday", "weekdays"); len(errs) != 0 {
 		t.Errorf("valid weekday rejected: %v", errs)

@@ -13,7 +13,7 @@ Look up Qualys WAS report templates, for referencing a template ID from
 confirms the API supports count/search/get but not create/update/delete —
 templates are managed in the Qualys UI.
 
-Distinct from `data.qualys_report_templates`, which covers the separate,
+Distinct from `data.qualys_vm_report_templates`, which covers the separate,
 legacy VM report template API (`report_template_list.php`) — the two are
 different objects on different API families.
 

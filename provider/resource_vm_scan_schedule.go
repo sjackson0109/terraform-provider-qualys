@@ -10,7 +10,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 )
 
-func resourceScanSchedule() *schema.Resource {
+func resourceVMScanSchedule() *schema.Resource {
 	return &schema.Resource{
 		Description: "A recurring Qualys VM scan.\n\n" +
 			"Schedules are the declarative way to run scans. A scan launched directly is a " +
@@ -18,10 +18,10 @@ func resourceScanSchedule() *schema.Resource {
 			"updating the old one — so this provider models schedules and not individual " +
 			"scan runs.",
 
-		CreateContext: resourceScanScheduleCreate,
-		ReadContext:   resourceScanScheduleRead,
-		UpdateContext: resourceScanScheduleUpdate,
-		DeleteContext: resourceScanScheduleDelete,
+		CreateContext: resourceVMScanScheduleCreate,
+		ReadContext:   resourceVMScanScheduleRead,
+		UpdateContext: resourceVMScanScheduleUpdate,
+		DeleteContext: resourceVMScanScheduleDelete,
 
 		Importer: &schema.ResourceImporter{
 			StateContext: schema.ImportStatePassthroughContext,
@@ -259,14 +259,14 @@ func resourceScanSchedule() *schema.Resource {
 			},
 		},
 
-		CustomizeDiff: resourceScanScheduleCustomizeDiff,
+		CustomizeDiff: resourceVMScanScheduleCustomizeDiff,
 	}
 }
 
-// resourceScanScheduleCustomizeDiff enforces the API's required-together groups
+// resourceVMScanScheduleCustomizeDiff enforces the API's required-together groups
 // at plan time. The API rejects an incomplete group, but the message it returns
 // is not always clear about which field is missing.
-func resourceScanScheduleCustomizeDiff(ctx context.Context, d *schema.ResourceDiff, meta interface{}) error {
+func resourceVMScanScheduleCustomizeDiff(ctx context.Context, d *schema.ResourceDiff, meta interface{}) error {
 	switch d.Get("occurrence").(string) {
 	case "daily":
 		if d.Get("frequency_days").(int) <= 0 {
@@ -313,7 +313,7 @@ func resourceScanScheduleCustomizeDiff(ctx context.Context, d *schema.ResourceDi
 	return nil
 }
 
-func scanScheduleInputFrom(d *schema.ResourceData) vmdr.ScanScheduleInput {
+func vmScanScheduleInputFrom(d *schema.ResourceData) vmdr.ScanScheduleInput {
 	tagIncludes := stringSet(d, "tag_include_ids")
 	return vmdr.ScanScheduleInput{
 		Title:  d.Get("title").(string),
@@ -365,20 +365,20 @@ func scanScheduleInputFrom(d *schema.ResourceData) vmdr.ScanScheduleInput {
 	}
 }
 
-func resourceScanScheduleCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+func resourceVMScanScheduleCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	c, err := vmdrClient(meta)
 	if err != nil {
 		return diag.FromErr(err)
 	}
-	id, err := c.CreateScanSchedule(ctx, scanScheduleInputFrom(d))
+	id, err := c.CreateScanSchedule(ctx, vmScanScheduleInputFrom(d))
 	if err != nil {
 		return diag.FromErr(err)
 	}
 	d.SetId(id)
-	return resourceScanScheduleRead(ctx, d, meta)
+	return resourceVMScanScheduleRead(ctx, d, meta)
 }
 
-func resourceScanScheduleRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+func resourceVMScanScheduleRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	c, err := vmdrClient(meta)
 	if err != nil {
 		return diag.FromErr(err)
@@ -422,18 +422,18 @@ func resourceScanScheduleRead(ctx context.Context, d *schema.ResourceData, meta 
 	return diag.FromErr(setAll(d, values))
 }
 
-func resourceScanScheduleUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+func resourceVMScanScheduleUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	c, err := vmdrClient(meta)
 	if err != nil {
 		return diag.FromErr(err)
 	}
-	if err := c.UpdateScanSchedule(ctx, d.Id(), scanScheduleInputFrom(d)); err != nil {
+	if err := c.UpdateScanSchedule(ctx, d.Id(), vmScanScheduleInputFrom(d)); err != nil {
 		return diag.FromErr(err)
 	}
-	return resourceScanScheduleRead(ctx, d, meta)
+	return resourceVMScanScheduleRead(ctx, d, meta)
 }
 
-func resourceScanScheduleDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+func resourceVMScanScheduleDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	c, err := vmdrClient(meta)
 	if err != nil {
 		return diag.FromErr(err)

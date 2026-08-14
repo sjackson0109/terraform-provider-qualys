@@ -1,5 +1,5 @@
 data "qualys_was_findings" "storefront_active" {
-  web_app_id = qualys_web_application.storefront.id
+  web_app_id = qualys_was_application.storefront.id
   status     = ["ACTIVE"]
   is_ignored = false
 }
@@ -14,9 +14,9 @@ output "storefront_high_severity_count" {
 # Multiple web applications, feeding a downstream remediation dataset.
 data "qualys_was_findings" "customer" {
   web_app_ids = [
-    qualys_web_application.customer_portal.id,
-    qualys_web_application.staff_portal.id,
-    qualys_web_application.partner_portal.id,
+    qualys_was_application.customer_portal.id,
+    qualys_was_application.staff_portal.id,
+    qualys_was_application.partner_portal.id,
   ]
   minimum_severity = 2
   is_ignored       = false

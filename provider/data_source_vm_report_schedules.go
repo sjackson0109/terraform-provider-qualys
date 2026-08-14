@@ -9,7 +9,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
-func dataSourceReportSchedules() *schema.Resource {
+func dataSourceVMReportSchedules() *schema.Resource {
 	return &schema.Resource{
 		Description: "Look up scheduled report definitions. Read-only, and deliberately " +
 			"has no counterpart `qualys_report_schedule` resource: doc 03 §10 confirms " +
@@ -20,7 +20,7 @@ func dataSourceReportSchedules() *schema.Resource {
 			"Evidence tier for the fields below: Corroborated, not Confirmed — see " +
 			"`vmdr.ReportSchedule`'s doc comment.",
 
-		ReadContext: dataSourceReportSchedulesRead,
+		ReadContext: dataSourceVMReportSchedulesRead,
 
 		Schema: map[string]*schema.Schema{
 			"id":     {Type: schema.TypeString, Optional: true},
@@ -45,7 +45,7 @@ func dataSourceReportSchedules() *schema.Resource {
 	}
 }
 
-func dataSourceReportSchedulesRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+func dataSourceVMReportSchedulesRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	c, err := vmdrClient(meta)
 	if err != nil {
 		return diag.FromErr(err)

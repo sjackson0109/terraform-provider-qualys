@@ -1,11 +1,11 @@
 ---
-page_title: "qualys_report_schedules Data Source - terraform-provider-qualys"
+page_title: "qualys_vm_report_schedules Data Source - terraform-provider-qualys"
 subcategory: ""
 description: |-
   Look up scheduled report definitions.
 ---
 
-# qualys_report_schedules (Data Source)
+# qualys_vm_report_schedules (Data Source)
 
 Look up scheduled report definitions. Read-only, and deliberately has no
 counterpart `qualys_report_schedule` resource: this repository's discovery
@@ -19,12 +19,12 @@ Evidence tier for the fields below: Corroborated, not Confirmed.
 ## Example Usage
 
 ```terraform
-data "qualys_report_schedules" "active" {
+data "qualys_vm_report_schedules" "active" {
   active = true
 }
 
 output "active_schedule_titles" {
-  value = [for s in data.qualys_report_schedules.active.report_schedules : s.title]
+  value = [for s in data.qualys_vm_report_schedules.active.report_schedules : s.title]
 }
 ```
 

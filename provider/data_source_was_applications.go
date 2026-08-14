@@ -9,12 +9,12 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
-func dataSourceWebApplications() *schema.Resource {
+func dataSourceWASApplications() *schema.Resource {
 	return &schema.Resource{
 		Description: "Look up Qualys WAS web applications, for referencing applications " +
 			"managed outside Terraform in scan schedules.",
 
-		ReadContext: dataSourceWebApplicationsRead,
+		ReadContext: dataSourceWASApplicationsRead,
 
 		Schema: map[string]*schema.Schema{
 			"name": {
@@ -45,7 +45,7 @@ func dataSourceWebApplications() *schema.Resource {
 	}
 }
 
-func dataSourceWebApplicationsRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+func dataSourceWASApplicationsRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	c, err := qpsClient(meta)
 	if err != nil {
 		return diag.FromErr(err)

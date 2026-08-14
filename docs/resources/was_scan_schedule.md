@@ -15,7 +15,7 @@ A recurring Qualys WAS scan against a single web application.
 ```terraform
 resource "qualys_was_scan_schedule" "storefront_weekly" {
   name       = "Storefront weekly scan"
-  web_app_id = qualys_web_application.storefront.id
+  web_app_id = qualys_was_application.storefront.id
   type       = "VULNERABILITY"
 
   option_profile_id       = qualys_was_option_profile.standard.id
@@ -94,7 +94,7 @@ earlier pass guessed — `active` changes are sent through those endpoints.
 ### Required
 
 - **name** (String) Schedule name.
-- **web_app_id** (String) ID of the `qualys_web_application` to scan.
+- **web_app_id** (String) ID of the `qualys_was_application` to scan.
 - **type** (String) One of `DISCOVERY`, `VULNERABILITY`.
 - **start_date** (String) When the schedule first runs, e.g. `2026-08-16T02:00:00Z`.
 - **time_zone_code** (String) Time zone, e.g. `Europe/London`. Not validated client-side.

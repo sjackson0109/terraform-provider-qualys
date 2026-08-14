@@ -22,7 +22,7 @@ resource "qualys_was_dns_override" "storefront_staging" {
   }
 }
 
-resource "qualys_web_application" "storefront" {
+resource "qualys_was_application" "storefront" {
   name = "Storefront"
   url  = "https://shop.example.com"
 

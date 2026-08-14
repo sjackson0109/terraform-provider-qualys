@@ -61,7 +61,7 @@ host detections (data source) ─→ stale-asset review ─→ purge (imperative
    network assignment via the separate `assign_network_id` call; optional
    `wait_for_online` with a timeout sized for the **4-hour** platform heartbeat, not
    seconds) — with documented handoff to the infrastructure provider for VM deployment.
-10. `qualys_scan_schedule` (+ data source) — full recurrence/timezone/notification
+10. `qualys_vm_scan_schedule` (+ data source) — full recurrence/timezone/notification
     model; start-time fields written as one always-complete group behind
     `set_start_time=1`; `ACTIVE` handled as a four-valued enum, not a bool;
     distribution-group IDs referenced, never raw emails.
@@ -74,7 +74,7 @@ host detections (data source) ─→ stale-asset review ─→ purge (imperative
 
 ## Phase 4 — WAS onboarding (P2)
 
-13. `qualys_web_application` (+ tags), `qualys_was_option_profile`,
+13. `qualys_was_application` (+ tags), `qualys_was_option_profile`,
     `qualys_was_auth_record`, then `qualys_was_scan_schedule` once its field model is
     verified.
 
@@ -83,7 +83,7 @@ host detections (data source) ─→ stale-asset review ─→ purge (imperative
 14. Stale-asset review & purge subsystem: `data.qualys_host_detections` +
     `data.qualys_host_assets` (stale filters) → human-confirmed purge → verification
     re-read.
-15. Reporting: `data.qualys_report_templates`, `data.qualys_report_schedules`,
+15. Reporting: `data.qualys_vm_report_templates`, `data.qualys_vm_report_schedules`,
     imperative launch/fetch helpers; excluded IPs resource.
 16. Deferred backlog: report-template CRUD resources, `qualys_user`, KB helper.
 

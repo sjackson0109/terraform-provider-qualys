@@ -334,7 +334,7 @@ Doc section: Scans → Schedules. Path `/api/2.0/fo/schedule/scan/` (PC variant
 
 | Classification | Terraform mapping | Import | Priority | Unresolved |
 |---|---|---|---|---|
-| resource + data source; legacy `/msp/scheduled_scans.php` = legacy (not used); timezone list = provider helper/validation | `qualys_scan_schedule` (start-time fields as one always-written block); `data.qualys_scan_schedules` | schedule ID | **P0–P1** (core of recurring-scan onboarding) | `before_notify_message`; `client_id/client_name` on create; list pagination/`active` filter |
+| resource + data source; legacy `/msp/scheduled_scans.php` = legacy (not used); timezone list = provider helper/validation | `qualys_vm_scan_schedule` (start-time fields as one always-written block); `data.qualys_vm_scan_schedules` | schedule ID | **P0–P1** (core of recurring-scan onboarding) | `before_notify_message`; `client_id/client_name` on create; list pagination/`active` filter |
 
 ---
 
@@ -370,7 +370,7 @@ Doc section: Reports. Path `/api/2.0/fo/report/`.
 | Report launch/cancel/fetch/delete | **imperative operation** (async job artefacts) | stale-report/reporting subsystem, not resources | P3 |
 | Report list | data source | `data.qualys_reports` | P3 |
 | Scan/patch template CRUD | resource (deferred) | `qualys_report_template_*` — XML-body resources, complex schema | deferred |
-| Template list | data source | `data.qualys_report_templates` (needed to reference `template_id`) | **P1** (schedules/reports depend on template IDs) |
+| Template list | data source | `data.qualys_vm_report_templates` (needed to reference `template_id`) | **P1** (schedules/reports depend on template IDs) |
 | Scorecard / asset-search | imperative operation | — | deferred |
 
 ---
@@ -393,7 +393,7 @@ Path `/api/2.0/fo/schedule/report/`.
 
 | Classification | Terraform mapping | Priority |
 |---|---|---|
-| data source (`data.qualys_report_schedules`) + imperative `launch_now`; schedule definition itself **unsupported** (GUI-only) | no `qualys_report_schedule` resource is possible today — record as gap in doc 08 | P3 |
+| data source (`data.qualys_vm_report_schedules`) + imperative `launch_now`; schedule definition itself **unsupported** (GUI-only) | no `qualys_report_schedule` resource is possible today — record as gap in doc 08 | P3 |
 
 ---
 
@@ -453,7 +453,7 @@ AdminBastion, HashiCorp; Azure Key Vault at least for Palo Alto records (10.1).
 
 | Object | Operations (confirmed unless noted) | Terraform mapping | Priority |
 |---|---|---|---|
-| `webapp` | `create`, `search`, `count`, `delete` (single + bulk-by-filter); `get`/`update` per URL grammar (pattern-confirmed); tags via `TagList` element | resource `qualys_web_application` + data source | P2 |
+| `webapp` | `create`, `search`, `count`, `delete` (single + bulk-by-filter); `get`/`update` per URL grammar (pattern-confirmed); tags via `TagList` element | resource `qualys_was_application` + data source | P2 |
 | `optionprofile` | `create`, `update`, `get`, `search` confirmed; `delete` confirmed via guide TOC | resource `qualys_was_option_profile` | P2 |
 | `webauthrecord` | `create` confirmed (form/server/Selenium/OAuth2); `get` masks secrets without view-permissions; update/delete/search pattern-confirmed | resource `qualys_was_auth_record` (write-only secrets) | P2 |
 | `wasscan` | `launch`, `search`, `status`, `download` confirmed. **`cancel/was/wasscan/<id>` confirmed** — takes optional boolean `cancelWithResults` to retain partial results; supported for single and *child* scans only (not parent scans), and recommended only after ~20 minutes in Running status. **`delete/was/wasscan` confirmed** as a *filtered bulk* delete (`<filters><Criteria field="id" operator="IN">` with comma-separated IDs) | imperative operation | P3 |
