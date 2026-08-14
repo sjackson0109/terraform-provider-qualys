@@ -157,7 +157,7 @@ Still not implemented, and why:
   and its DTD name are confirmed, but three research passes found no source
   naming its XML output fields (unlike the sibling `report_template_list.php`,
   where a fresh search did). `time_zone_code` stays an unvalidated free-text
-  field on `qualys_scan_schedule`; see doc 08.
+  field on `qualys_vm_scan_schedule`; see doc 08.
 - **`qualys_domain`** (write side) — the Domain V2 API's existence, auth
   requirements and list output are confirmed, and `data.qualys_domains`
   covers the read side, but no source names the add/update/delete request

@@ -72,7 +72,7 @@ resource "qualys_was_auth_record" "api_oauth2" {
 }
 
 # Associating a record with a web application is a separate step.
-resource "qualys_web_application" "storefront" {
+resource "qualys_was_application" "storefront" {
   name = "Storefront"
   url  = "https://shop.example.com"
 

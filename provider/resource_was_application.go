@@ -9,7 +9,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
-func resourceWebApplication() *schema.Resource {
+func resourceWASApplication() *schema.Resource {
 	fileElem := &schema.Resource{
 		Schema: map[string]*schema.Schema{
 			"name": {Type: schema.TypeString, Required: true},
@@ -40,10 +40,10 @@ func resourceWebApplication() *schema.Resource {
 			"one configured outside Terraform. Set `cancel_scans_at` or `cancel_scans_after_hours` " +
 			"explicitly if you need to preserve it.",
 
-		CreateContext: resourceWebApplicationCreate,
-		ReadContext:   resourceWebApplicationRead,
-		UpdateContext: resourceWebApplicationUpdate,
-		DeleteContext: resourceWebApplicationDelete,
+		CreateContext: resourceWASApplicationCreate,
+		ReadContext:   resourceWASApplicationRead,
+		UpdateContext: resourceWASApplicationUpdate,
+		DeleteContext: resourceWASApplicationDelete,
 
 		Importer: &schema.ResourceImporter{
 			StateContext: schema.ImportStatePassthroughContext,
@@ -253,7 +253,7 @@ func diffStringSets(old, new []string) (added, removed []string) {
 	return added, removed
 }
 
-func resourceWebApplicationCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+func resourceWASApplicationCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	c, err := qpsClient(meta)
 	if err != nil {
 		return diag.FromErr(err)
@@ -273,10 +273,10 @@ func resourceWebApplicationCreate(ctx context.Context, d *schema.ResourceData, m
 		}
 	}
 
-	return resourceWebApplicationRead(ctx, d, meta)
+	return resourceWASApplicationRead(ctx, d, meta)
 }
 
-func resourceWebApplicationRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+func resourceWASApplicationRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	c, err := qpsClient(meta)
 	if err != nil {
 		return diag.FromErr(err)
@@ -341,7 +341,7 @@ func resourceWebApplicationRead(ctx context.Context, d *schema.ResourceData, met
 	}))
 }
 
-func resourceWebApplicationUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+func resourceWASApplicationUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	c, err := qpsClient(meta)
 	if err != nil {
 		return diag.FromErr(err)
@@ -361,10 +361,10 @@ func resourceWebApplicationUpdate(ctx context.Context, d *schema.ResourceData, m
 		}
 	}
 
-	return resourceWebApplicationRead(ctx, d, meta)
+	return resourceWASApplicationRead(ctx, d, meta)
 }
 
-func resourceWebApplicationDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+func resourceWASApplicationDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	c, err := qpsClient(meta)
 	if err != nil {
 		return diag.FromErr(err)

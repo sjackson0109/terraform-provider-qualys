@@ -9,12 +9,12 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
-func dataSourceScanSchedules() *schema.Resource {
+func dataSourceVMScanSchedules() *schema.Resource {
 	return &schema.Resource{
 		Description: "Look up Qualys scan schedules, for auditing schedules managed outside " +
 			"Terraform or referencing them from other configuration.",
 
-		ReadContext: dataSourceScanSchedulesRead,
+		ReadContext: dataSourceVMScanSchedulesRead,
 
 		Schema: map[string]*schema.Schema{
 			"id_filter": {
@@ -51,10 +51,10 @@ func dataSourceScanSchedules() *schema.Resource {
 	}
 }
 
-// dataSourceScanSchedulesRead uses "id_filter" rather than "id" for the input
+// dataSourceVMScanSchedulesRead uses "id_filter" rather than "id" for the input
 // attribute: a computed "id" is also present (the data source's own synthetic
 // ID), and TypeString "id" is reserved by the SDK for that purpose.
-func dataSourceScanSchedulesRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+func dataSourceVMScanSchedulesRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	c, err := vmdrClient(meta)
 	if err != nil {
 		return diag.FromErr(err)

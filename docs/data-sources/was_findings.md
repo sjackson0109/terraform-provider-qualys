@@ -51,7 +51,7 @@ Retrieve findings for one web application:
 
 ```terraform
 data "qualys_was_findings" "customer_portal" {
-  web_app_id = qualys_web_application.customer_portal.id
+  web_app_id = qualys_was_application.customer_portal.id
 }
 ```
 
@@ -78,9 +78,9 @@ Multiple web applications, feeding a downstream remediation dataset:
 ```terraform
 data "qualys_was_findings" "customer" {
   web_app_ids = [
-    qualys_web_application.customer_portal.id,
-    qualys_web_application.staff_portal.id,
-    qualys_web_application.partner_portal.id,
+    qualys_was_application.customer_portal.id,
+    qualys_was_application.staff_portal.id,
+    qualys_was_application.partner_portal.id,
   ]
   minimum_severity = 2
   is_ignored       = false

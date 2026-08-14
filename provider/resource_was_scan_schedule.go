@@ -45,7 +45,7 @@ func resourceWASScanSchedule() *schema.Resource {
 				Required:    true,
 			},
 			"web_app_id": {
-				Description: "ID of the `qualys_web_application` to scan.",
+				Description: "ID of the `qualys_was_application` to scan.",
 				Type:        schema.TypeString,
 				Required:    true,
 			},
@@ -127,7 +127,7 @@ func resourceWASScanSchedule() *schema.Resource {
 			"time_zone_code": {
 				Description: "Time zone for `start_date` and recurrence calculations, e.g. " +
 					"`Europe/London`. Not validated client-side, matching " +
-					"`qualys_scan_schedule.time_zone_code`.",
+					"`qualys_vm_scan_schedule.time_zone_code`.",
 				Type:     schema.TypeString,
 				Required: true,
 			},

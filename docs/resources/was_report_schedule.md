@@ -23,7 +23,7 @@ data "qualys_was_report_templates" "executive" {
 resource "qualys_was_report_schedule" "storefront_weekly_exec" {
   name                = "Storefront weekly executive report"
   report_template_id  = one(data.qualys_was_report_templates.executive.templates).id
-  web_app_id          = qualys_web_application.storefront.id
+  web_app_id          = qualys_was_application.storefront.id
   output_format       = "PDF"
   recipients          = ["security@example.com"]
 
@@ -57,7 +57,7 @@ modelled.
 
 - **name** (String) Schedule name.
 - **report_template_id** (String) ID of the WAS report template to use.
-- **web_app_id** (String) ID of the `qualys_web_application` to report on.
+- **web_app_id** (String) ID of the `qualys_was_application` to report on.
 - **output_format** (String) One of `PDF`, `HTML`, `XML`, `CSV`.
 - **recipients** (Set of String) Email addresses to deliver the generated report to.
 - **start_date** (String) When the schedule first runs, e.g. `2026-08-16T06:00:00Z`.

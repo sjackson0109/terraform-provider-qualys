@@ -16,7 +16,7 @@ Deleting this resource reopens the finding.
 
 ```terraform
 data "qualys_was_findings" "storefront_active" {
-  web_app_id = qualys_web_application.storefront.id
+  web_app_id = qualys_was_application.storefront.id
   status     = "ACTIVE"
 }
 

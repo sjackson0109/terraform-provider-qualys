@@ -3,6 +3,33 @@
 A Terraform provider for [Qualys](https://www.qualys.com/) VMDR and WAS
 (Web Application Scanning) configuration.
 
+### Breaking: four resources/data sources renamed for naming consistency
+
+Where the same concept exists in both VM/PA and WAS, both sides are now
+consistently `vm_`/`was_`-prefixed (matching the convention `qualys_vm_option_profile`/
+`qualys_was_option_profile` and `data.qualys_vm_findings`/`data.qualys_was_findings`
+already established):
+
+| Old name | New name |
+|---|---|
+| `qualys_scan_schedule` | `qualys_vm_scan_schedule` |
+| `data.qualys_scan_schedules` | `data.qualys_vm_scan_schedules` |
+| `data.qualys_report_schedules` | `data.qualys_vm_report_schedules` |
+| `data.qualys_report_templates` | `data.qualys_vm_report_templates` |
+| `qualys_web_application` | `qualys_was_application` |
+| `data.qualys_web_applications` | `data.qualys_was_applications` |
+
+If you have existing state referencing the old names, update your
+configuration to the new resource/data source type and run, for each
+affected instance:
+
+```shell
+terraform state mv 'qualys_scan_schedule.example' 'qualys_vm_scan_schedule.example'
+```
+
+Data sources need no state migration — just update the type name in
+configuration.
+
 ## Supported resources
 
 VM/PA (asset, network and scanning configuration):
@@ -15,7 +42,7 @@ VM/PA (asset, network and scanning configuration):
 | `qualys_vm_option_profile` | VM scan behaviour: ports, detection depth, performance, authentication |
 | `qualys_network` | Qualys networks, for overlapping IP space |
 | `qualys_ip_registration` | Registers addresses with the subscription and enables them for scanning |
-| `qualys_scan_schedule` | A recurring VM scan |
+| `qualys_vm_scan_schedule` | A recurring VM scan |
 | `qualys_virtual_scanner` | A virtual scanner appliance, exporting the activation code for VM deployment |
 | `qualys_auth_record_windows` | A Windows scan authentication record |
 | `qualys_auth_record_unix` | A Unix/Linux (SSH) scan authentication record |
@@ -30,7 +57,7 @@ WAS (Web Application Scanning):
 
 | Resource | Purpose |
 |---|---|
-| `qualys_web_application` | The scan target that option profiles, auth records and scan schedules reference |
+| `qualys_was_application` | The scan target that option profiles, auth records and scan schedules reference |
 | `qualys_was_option_profile` | WAS scan behaviour, referenced by web application scans and scan schedules |
 | `qualys_was_auth_record` | Form (`STANDARD`/`CUSTOM`/`SELENIUM`), server or OAuth2 credentials for authenticated crawling |
 | `qualys_was_dns_override` | Resolves one or more hostnames to user-defined IP addresses during crawling and scanning |
@@ -50,11 +77,11 @@ WAS (Web Application Scanning):
 | `qualys_vm_findings` | Look up individual VM vulnerability findings, one host + one QID + one detection instance |
 | `qualys_scanner_appliances` | Look up scanner appliances |
 | `qualys_vaults` | Look up credential vaults |
-| `qualys_scan_schedules` | Look up VM scan schedules |
+| `qualys_vm_scan_schedules` | Look up VM scan schedules |
 | `qualys_option_profiles` | Look up VM scan option profiles |
-| `qualys_report_templates` | Look up VM/PA report templates |
+| `qualys_vm_report_templates` | Look up VM/PA report templates |
 | `qualys_domains` | Look up asset domains and their netblocks |
-| `qualys_web_applications` | Look up WAS web applications |
+| `qualys_was_applications` | Look up WAS web applications |
 | `qualys_was_findings` | Look up individual WAS scan findings, optionally enriched from the Qualys KnowledgeBase |
 | `qualys_was_report_templates` | Look up WAS report templates |
 | `qualys_gcp_connector` | Look up a CloudView GCP connector by ID |
@@ -62,7 +89,7 @@ WAS (Web Application Scanning):
 | `qualys_auth_records` | Look up scan authentication records of one type |
 | `qualys_scans` | Look up VM scan jobs |
 | `qualys_reports` | Look up generated VM/PA reports |
-| `qualys_report_schedules` | Look up scheduled report definitions (list-only: there is no report schedule write API) |
+| `qualys_vm_report_schedules` | Look up scheduled report definitions (list-only: there is no report schedule write API) |
 | `qualys_tenant_capabilities` | Probe the subscription's installed platform and per-module versions |
 | `qualys_users` | Look up subscription users, roles, business unit and assigned asset groups (legacy `/msp/user_list.php`) |
 | `qualys_am_users` | Look up subscription users, scope tags and roles via the modern Administration RBAC API |
@@ -74,7 +101,7 @@ resources would misrepresent them:
 
 - **Launching a scan or report** produces a run with no stable identity;
   re-running creates a new one rather than updating the old. Use
-  `qualys_scan_schedule` / `qualys_was_scan_schedule` for recurring scans, and
+  `qualys_vm_scan_schedule` / `qualys_was_scan_schedule` for recurring scans, and
   `qualys_was_report_schedule` for recurring WAS reports.
 - **Purging host data** is destructive and irreversible. It is available as an
   opt-in on `qualys_ip_registration` destroy, not as a resource of its own.

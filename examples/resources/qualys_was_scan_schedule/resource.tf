@@ -1,6 +1,6 @@
 resource "qualys_was_scan_schedule" "storefront_weekly" {
   name       = "Storefront weekly scan"
-  web_app_id = qualys_web_application.storefront.id
+  web_app_id = qualys_was_application.storefront.id
   type       = "VULNERABILITY"
 
   option_profile_id       = qualys_was_option_profile.standard.id

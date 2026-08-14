@@ -9,7 +9,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
-func dataSourceReportTemplates() *schema.Resource {
+func dataSourceVMReportTemplates() *schema.Resource {
 	return &schema.Resource{
 		Description: "Look up Qualys report templates, for referencing a template ID when " +
 			"launching a report. This is read-only: report templates have no create/update/" +
@@ -17,7 +17,7 @@ func dataSourceReportTemplates() *schema.Resource {
 			"do, each with its own dedicated endpoint), and this list is the only surface " +
 			"that enumerates templates of every type together.",
 
-		ReadContext: dataSourceReportTemplatesRead,
+		ReadContext: dataSourceVMReportTemplatesRead,
 
 		Schema: map[string]*schema.Schema{
 			"title_contains": {
@@ -55,7 +55,7 @@ func dataSourceReportTemplates() *schema.Resource {
 	}
 }
 
-func dataSourceReportTemplatesRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+func dataSourceVMReportTemplatesRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	c, err := vmdrClient(meta)
 	if err != nil {
 		return diag.FromErr(err)

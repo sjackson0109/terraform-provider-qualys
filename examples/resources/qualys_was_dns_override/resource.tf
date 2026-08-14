@@ -15,7 +15,7 @@ resource "qualys_was_dns_override" "customer_production" {
 
 resource "qualys_was_scan_schedule" "storefront_weekly" {
   name       = "Storefront weekly scan"
-  web_app_id = qualys_web_application.storefront.id
+  web_app_id = qualys_was_application.storefront.id
   type       = "VULNERABILITY"
 
   dns_override_id = qualys_was_dns_override.customer_production.id
