@@ -5,7 +5,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"log"
 
-	"github.com/form3tech-oss/terraform-provider-qualys/cloudview/gcp"
+	"github.com/sjackson0109/terraform-provider-qualys/cloudview/gcp"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 

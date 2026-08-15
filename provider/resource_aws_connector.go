@@ -6,7 +6,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 
-	"github.com/form3tech-oss/terraform-provider-qualys/cloudview/aws"
+	"github.com/sjackson0109/terraform-provider-qualys/cloudview/aws"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 

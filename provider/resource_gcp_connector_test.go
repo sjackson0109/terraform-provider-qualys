@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/form3tech-oss/terraform-provider-qualys/cloudview/gcp"
+	"github.com/sjackson0109/terraform-provider-qualys/cloudview/gcp"
 	"github.com/google/uuid"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"

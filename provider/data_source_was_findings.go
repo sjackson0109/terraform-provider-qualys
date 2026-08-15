@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/form3tech-oss/terraform-provider-qualys/qps"
-	"github.com/form3tech-oss/terraform-provider-qualys/vmdr"
+	"github.com/sjackson0109/terraform-provider-qualys/qps"
+	"github.com/sjackson0109/terraform-provider-qualys/vmdr"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"

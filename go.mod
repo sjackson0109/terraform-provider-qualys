@@ -1,4 +1,4 @@
-module github.com/form3tech-oss/terraform-provider-qualys
+module github.com/sjackson0109/terraform-provider-qualys
 
 go 1.13
 

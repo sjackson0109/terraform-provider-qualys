@@ -7,11 +7,11 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 
-	"github.com/form3tech-oss/terraform-provider-qualys/cloudview/aws"
-	"github.com/form3tech-oss/terraform-provider-qualys/cloudview/azure"
-	"github.com/form3tech-oss/terraform-provider-qualys/cloudview/gcp"
-	"github.com/form3tech-oss/terraform-provider-qualys/qps"
-	"github.com/form3tech-oss/terraform-provider-qualys/vmdr"
+	"github.com/sjackson0109/terraform-provider-qualys/cloudview/aws"
+	"github.com/sjackson0109/terraform-provider-qualys/cloudview/azure"
+	"github.com/sjackson0109/terraform-provider-qualys/cloudview/gcp"
+	"github.com/sjackson0109/terraform-provider-qualys/qps"
+	"github.com/sjackson0109/terraform-provider-qualys/vmdr"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 

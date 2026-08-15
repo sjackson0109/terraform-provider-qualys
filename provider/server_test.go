@@ -10,7 +10,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/form3tech-oss/terraform-provider-qualys/cloudview/gcp"
+	"github.com/sjackson0109/terraform-provider-qualys/cloudview/gcp"
 	"github.com/gorilla/mux"
 )
 
