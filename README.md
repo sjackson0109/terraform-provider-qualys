@@ -52,6 +52,8 @@ VM/PA (asset, network and scanning configuration):
 | `qualys_host_tag_assignment` | Assigns asset tags to an AssetView/CSAM host asset |
 | `qualys_user_scope_assignment` | Assigns scope tags and roles to a subscription user via the Administration RBAC API |
 | `qualys_gcp_connector` | CloudView GCP connector (see *Deprecation* below) |
+| `qualys_aws_connector` | CloudView AWS connector (see *Deprecation* below) |
+| `qualys_azure_connector` | CloudView Azure connector (see *Deprecation* below) |
 
 WAS (Web Application Scanning):
 
@@ -85,6 +87,8 @@ WAS (Web Application Scanning):
 | `qualys_was_findings` | Look up individual WAS scan findings, optionally enriched from the Qualys KnowledgeBase |
 | `qualys_was_report_templates` | Look up WAS report templates |
 | `qualys_gcp_connector` | Look up a CloudView GCP connector by ID |
+| `qualys_aws_connector` | Look up a CloudView AWS connector by ID |
+| `qualys_azure_connector` | Look up a CloudView Azure connector by ID |
 | `qualys_tagged_assets` | Look up AssetView/CSAM host assets by tag |
 | `qualys_auth_records` | Look up scan authentication records of one type |
 | `qualys_scans` | Look up VM scan jobs |
@@ -233,10 +237,11 @@ A few behaviours are deliberate and worth knowing before you read the code:
 
 ## Deprecation
 
-`qualys_gcp_connector` currently uses the CloudView connector API, which Qualys
-has announced as deprecated in favour of the Connector v3 APIs. New GCP
-connectors can already only be created from the Connectors application. This
-resource is scheduled to move to Connector v3 with a state migration.
+`qualys_gcp_connector`, `qualys_aws_connector` and `qualys_azure_connector`
+currently use the CloudView connector API, which Qualys has announced as
+deprecated in favour of the Connector v3 APIs. New connectors can already only
+be created from the Connectors application. These resources are scheduled to
+move to Connector v3 with a state migration.
 
 ## Development
 

@@ -7,6 +7,8 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 
+	"github.com/form3tech-oss/terraform-provider-qualys/cloudview/aws"
+	"github.com/form3tech-oss/terraform-provider-qualys/cloudview/azure"
 	"github.com/form3tech-oss/terraform-provider-qualys/cloudview/gcp"
 	"github.com/form3tech-oss/terraform-provider-qualys/qps"
 	"github.com/form3tech-oss/terraform-provider-qualys/vmdr"
@@ -17,9 +19,11 @@ import (
 // envelope, pagination and error model, so they are separate clients rather than
 // one client with mode switches.
 type clients struct {
-	vmdr *vmdr.Client
-	qps  *qps.Client
-	gcp  *gcp.ConnectorService
+	vmdr  *vmdr.Client
+	qps   *qps.Client
+	gcp   *gcp.ConnectorService
+	aws   *aws.ConnectorService
+	azure *azure.ConnectorService
 }
 
 func vmdrClient(meta interface{}) (*vmdr.Client, error) {
@@ -37,6 +41,22 @@ func gcpService(meta interface{}) *gcp.ConnectorService {
 		return nil
 	}
 	return c.gcp
+}
+
+func awsService(meta interface{}) *aws.ConnectorService {
+	c, ok := meta.(*clients)
+	if !ok {
+		return nil
+	}
+	return c.aws
+}
+
+func azureService(meta interface{}) *azure.ConnectorService {
+	c, ok := meta.(*clients)
+	if !ok {
+		return nil
+	}
+	return c.azure
 }
 
 // stringSet reads a TypeSet of strings from resource data.

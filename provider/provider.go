@@ -5,6 +5,8 @@ import (
 	"log"
 	"os"
 
+	"github.com/form3tech-oss/terraform-provider-qualys/cloudview/aws"
+	"github.com/form3tech-oss/terraform-provider-qualys/cloudview/azure"
 	"github.com/form3tech-oss/terraform-provider-qualys/cloudview/gcp"
 	"github.com/form3tech-oss/terraform-provider-qualys/qps"
 	"github.com/form3tech-oss/terraform-provider-qualys/vmdr"
@@ -58,6 +60,8 @@ func Provider() *schema.Provider {
 
 		DataSourcesMap: map[string]*schema.Resource{
 			"qualys_gcp_connector":        dataSourceGCPConnector(),
+			"qualys_aws_connector":        dataSourceAWSConnector(),
+			"qualys_azure_connector":      dataSourceAzureConnector(),
 			"qualys_asset_groups":         dataSourceAssetGroups(),
 			"qualys_asset_tags":           dataSourceAssetTags(),
 			"qualys_networks":             dataSourceNetworks(),
@@ -86,6 +90,8 @@ func Provider() *schema.Provider {
 
 		ResourcesMap: map[string]*schema.Resource{
 			"qualys_gcp_connector":       resourceGCPConnector(),
+			"qualys_aws_connector":       resourceAWSConnector(),
+			"qualys_azure_connector":     resourceAzureConnector(),
 			"qualys_asset_group":         resourceAssetGroup(),
 			"qualys_asset_tag":           resourceAssetTag(),
 			"qualys_static_search_list":  resourceStaticSearchList(),
@@ -184,8 +190,10 @@ func providerConfigure(_ context.Context, d *schema.ResourceData) (interface{}, 
 	return &clients{
 		vmdr: vmdrClient,
 		qps:  qpsClient,
-		// The CloudView client is retained for the existing GCP connector
-		// resource until it is migrated to the Connector v3 API.
-		gcp: gcp.NewService(baseURL, username, password),
+		// The CloudView clients are retained for the existing GCP/AWS/Azure
+		// connector resources until they are migrated to the Connector v3 API.
+		gcp:   gcp.NewService(baseURL, username, password),
+		aws:   aws.NewService(baseURL, username, password),
+		azure: azure.NewService(baseURL, username, password),
 	}, nil
 }
