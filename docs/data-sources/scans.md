@@ -1,11 +1,11 @@
 ---
-page_title: "qualys_scans Data Source - terraform-provider-qualys"
+page_title: "qualys_was_scans Data Source - terraform-provider-qualys"
 subcategory: ""
 description: |-
   Look up VM scan jobs.
 ---
 
-# qualys_scans (Data Source)
+# qualys_was_scans (Data Source)
 
 Look up VM scan jobs — for example to check a running scan's status, or find
 recent scans of a target. Read-only: launching, cancelling, pausing, resuming
@@ -20,12 +20,12 @@ field values against your tenant.
 ## Example Usage
 
 ```terraform
-data "qualys_scans" "running" {
+data "qualys_was_scans" "running" {
   state = "Running"
 }
 
 output "running_scan_refs" {
-  value = [for s in data.qualys_scans.running.scans : s.ref]
+  value = [for s in data.qualys_was_scans.running.scans : s.ref]
 }
 ```
 

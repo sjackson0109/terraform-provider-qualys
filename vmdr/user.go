@@ -44,7 +44,7 @@ type User struct {
 	State     string
 	ZipCode   string
 	// TimeZoneCode is the same code space GetKnowledgeBaseEntries/
-	// qualys_scan_schedule's time_zone_code accepts, per doc 03 §8 — Confirmed
+	// qualys_was_scan_schedule's time_zone_code accepts, per doc 03 §8 — Confirmed
 	// here only insofar as the field exists and carries values like "Auto" or
 	// "US-CA"; the full code enum remains Unverified (doc 08).
 	TimeZoneCode string

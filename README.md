@@ -91,7 +91,7 @@ WAS (Web Application Scanning):
 | `qualys_azure_connector` | Look up an Azure connector by numeric id or name |
 | `qualys_tagged_assets` | Look up AssetView/CSAM host assets by tag |
 | `qualys_auth_records` | Look up scan authentication records of one type |
-| `qualys_scans` | Look up VM scan jobs |
+| `qualys_was_scans` | Look up VM scan jobs |
 | `qualys_reports` | Look up generated VM/PA reports |
 | `qualys_vm_report_schedules` | Look up scheduled report definitions (list-only: there is no report schedule write API) |
 | `qualys_tenant_capabilities` | Probe the subscription's installed platform and per-module versions |

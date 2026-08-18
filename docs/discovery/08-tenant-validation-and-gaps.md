@@ -670,7 +670,7 @@ Confirmed type slug from doc 03 §11); `qualys_vault` (create/update/delete,
 with per-vault-type parameters left as a generic passthrough map rather than
 a fabricated schema — see doc comment on `vmdr.VaultInput`);
 `qualys_excluded_ips`; `qualys_host_tag_assignment` and
-`data.qualys_tagged_assets`; `data.qualys_auth_records`; `data.qualys_scans`;
+`data.qualys_tagged_assets`; `data.qualys_auth_records`; `data.qualys_was_scans`;
 `data.qualys_reports`; `data.qualys_vm_report_schedules`; and
 `data.qualys_tenant_capabilities` (the doc 08 §7-recommended
 `GET /qps/rest/portal/version` probe, decoded as a generic flattened map
@@ -788,7 +788,7 @@ one business unit, or by an official RBAC/scoping document.
 
 ### Tenth pass — resource naming consistency (no new API evidence)
 
-Not a research pass in the usual sense: the user flagged that `qualys_scan_schedule`
+Not a research pass in the usual sense: the user flagged that `qualys_was_scan_schedule`
 was inconsistent with `qualys_was_scan_schedule` (VM/PA objects that also exist in
 WAS are consistently `vm_`/`was_`-prefixed on both sides — see `qualys_vm_option_profile`/
 `qualys_was_option_profile`, `data.qualys_vm_findings`/`data.qualys_was_findings` —
@@ -796,7 +796,7 @@ but the scan-schedule pair had only prefixed the WAS side) and asked for a full
 audit. Renamed four object pairs for consistency with that already-established
 convention, all pre-existing objects with no schema change:
 
-- `qualys_scan_schedule` / `data.qualys_scan_schedules` → `qualys_vm_scan_schedule` /
+- `qualys_was_scan_schedule` / `data.qualys_was_scan_schedules` → `qualys_vm_scan_schedule` /
   `data.qualys_vm_scan_schedules`
 - `data.qualys_report_schedules` → `data.qualys_vm_report_schedules`
 - `data.qualys_report_templates` → `data.qualys_vm_report_templates`

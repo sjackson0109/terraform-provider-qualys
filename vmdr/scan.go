@@ -12,7 +12,7 @@ import (
 // package: doc 06 classifies VM scan lifecycle actions as imperative
 // operations with no stable update/delete semantics, not Terraform
 // resources — a decision this file does not revisit. This type exists only
-// to support a read-only qualys_scans data source (e.g. to look up a
+// to support a read-only qualys_was_scans data source (e.g. to look up a
 // running scan's status, or find recent scans of a target for reporting).
 //
 // Evidence tier: Corroborated, not Confirmed. Doc 03 §9 confirms the list
