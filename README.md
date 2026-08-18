@@ -12,8 +12,8 @@ already established):
 
 | Old name | New name |
 |---|---|
-| `qualys_scan_schedule` | `qualys_vm_scan_schedule` |
-| `data.qualys_scan_schedules` | `data.qualys_vm_scan_schedules` |
+| `qualys_was_scan_schedule` | `qualys_vm_scan_schedule` |
+| `data.qualys_was_scan_schedules` | `data.qualys_vm_scan_schedules` |
 | `data.qualys_report_schedules` | `data.qualys_vm_report_schedules` |
 | `data.qualys_report_templates` | `data.qualys_vm_report_templates` |
 | `qualys_web_application` | `qualys_was_application` |
@@ -24,7 +24,7 @@ configuration to the new resource/data source type and run, for each
 affected instance:
 
 ```shell
-terraform state mv 'qualys_scan_schedule.example' 'qualys_vm_scan_schedule.example'
+terraform state mv 'qualys_was_scan_schedule.example' 'qualys_vm_scan_schedule.example'
 ```
 
 Data sources need no state migration — just update the type name in
@@ -51,9 +51,9 @@ VM/PA (asset, network and scanning configuration):
 | `qualys_excluded_ips` | Excludes IPs from scanning |
 | `qualys_host_tag_assignment` | Assigns asset tags to an AssetView/CSAM host asset |
 | `qualys_user_scope_assignment` | Assigns scope tags and roles to a subscription user via the Administration RBAC API |
-| `qualys_gcp_connector` | CloudView GCP connector (see *Deprecation* below) |
-| `qualys_aws_connector` | CloudView AWS connector (see *Deprecation* below) |
-| `qualys_azure_connector` | CloudView Azure connector (see *Deprecation* below) |
+| `qualys_gcp_connector` | GCP asset data connector (Connector v3; see *Connector v3 migration* below) |
+| `qualys_aws_connector` | AWS asset data connector (Connector v3) |
+| `qualys_azure_connector` | Azure asset data connector (Connector v3) |
 
 WAS (Web Application Scanning):
 
@@ -86,9 +86,9 @@ WAS (Web Application Scanning):
 | `qualys_was_applications` | Look up WAS web applications |
 | `qualys_was_findings` | Look up individual WAS scan findings, optionally enriched from the Qualys KnowledgeBase |
 | `qualys_was_report_templates` | Look up WAS report templates |
-| `qualys_gcp_connector` | Look up a CloudView GCP connector by ID |
-| `qualys_aws_connector` | Look up a CloudView AWS connector by ID |
-| `qualys_azure_connector` | Look up a CloudView Azure connector by ID |
+| `qualys_gcp_connector` | Look up a GCP connector by numeric id or name |
+| `qualys_aws_connector` | Look up an AWS connector by numeric id or name |
+| `qualys_azure_connector` | Look up an Azure connector by numeric id or name |
 | `qualys_tagged_assets` | Look up AssetView/CSAM host assets by tag |
 | `qualys_auth_records` | Look up scan authentication records of one type |
 | `qualys_scans` | Look up VM scan jobs |
@@ -235,13 +235,37 @@ A few behaviours are deliberate and worth knowing before you read the code:
   reasoning kept in [`docs/discovery/`](docs/discovery/) rather than presented
   as more certain than it is.
 
-## Deprecation
+## Connector v3 migration
 
 `qualys_gcp_connector`, `qualys_aws_connector` and `qualys_azure_connector`
-currently use the CloudView connector API, which Qualys has announced as
-deprecated in favour of the Connector v3 APIs. New connectors can already only
-be created from the Connectors application. These resources are scheduled to
-move to Connector v3 with a state migration.
+now use the Connector v3 APIs (`/qps/rest/3.0/.../am/*assetdataconnector`),
+replacing the CloudView v1 API that Qualys has deprecated.
+
+Configurations are compatible: the credential attributes are unchanged (the
+GCP key file, the AWS `arn`/`external_id` pair, the four Azure
+service-principal fields), and the resources gain optional `run_frequency`,
+`disabled`, `is_remediation_enabled`, `activation` and `default_tag_ids`
+attributes. GCP's `project_id` is now derived from the key file and may be
+left unset.
+
+State migrates itself: v1 state holds a connector UUID where v3 uses numeric
+ids, and on the first refresh the provider finds the connector whose
+`cloudviewUuid` matches and adopts the numeric id. If that lookup fails
+(for example, the tenant's v3 listing does not include the connector),
+fall back to re-importing:
+
+```shell
+terraform state rm qualys_gcp_connector.example
+terraform import qualys_gcp_connector.example <numeric-connector-id>
+```
+
+The v3 wire behaviour is implemented from the official API documentation
+(evidence in [`docs/discovery/12-connector-v3-migration.md`](docs/discovery/12-connector-v3-migration.md)),
+not yet validated against a live tenant — the docs are internally
+inconsistent in places (HTTP verbs for some operations, response collection
+nesting), and the code takes the documented-safest reading of each. Reports
+from real tenants, confirming or correcting, are very welcome as issues
+or pull requests.
 
 ## Development
 

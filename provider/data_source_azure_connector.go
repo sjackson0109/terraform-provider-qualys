@@ -5,141 +5,86 @@ import (
 	"log"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
-
-	"github.com/sjackson0109/terraform-provider-qualys/cloudview/azure"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	"github.com/sjackson0109/terraform-provider-qualys/qps"
 )
 
 func dataSourceAzureConnector() *schema.Resource {
-	return &schema.Resource{
-		Description: "Returns the details of the connector instances defined by the `connector_id`",
-		ReadContext: dataSourceAzureConnectorRead,
+	s := connectorDataSourceSchema()
+	s["application_id"] = &schema.Schema{
+		Description: "The unique ID of the Azure AD application registration used to authenticate",
+		Type:        schema.TypeString,
+		Computed:    true,
+	}
+	s["directory_id"] = &schema.Schema{
+		Description: "The unique ID of the Azure Active Directory (tenant ID)",
+		Type:        schema.TypeString,
+		Computed:    true,
+	}
+	s["subscription_id"] = &schema.Schema{
+		Description: "The unique ID of the Azure subscription the connector scans",
+		Type:        schema.TypeString,
+		Computed:    true,
+	}
+	s["subscription_name"] = &schema.Schema{
+		Description: "The name of the Azure subscription associated with this connector",
+		Type:        schema.TypeString,
+		Computed:    true,
+	}
+	s["is_gov_cloud"] = &schema.Schema{
+		Description: "Whether this connector targets an Azure Government Cloud subscription",
+		Type:        schema.TypeBool,
+		Computed:    true,
+	}
 
-		Schema: map[string]*schema.Schema{
-			"connector_id": {
-				Description: "The unique ID for this connector instance",
-				Type:        schema.TypeString,
-				Required:    true,
-			},
-			"cloud_provider": {
-				Description: "The cloud provider associated with this connector",
-				Type:        schema.TypeString,
-				Computed:    true,
-			},
-			"name": {
-				Description: "Name of the connector",
-				Type:        schema.TypeString,
-				Computed:    true,
-			},
-			"description": {
-				Description: "A string describing this connector instance",
-				Type:        schema.TypeString,
-				Computed:    true,
-			},
-			"application_id": {
-				Description: "The unique ID of the Azure AD application registration used to authenticate",
-				Type:        schema.TypeString,
-				Computed:    true,
-			},
-			"directory_id": {
-				Description: "The unique ID of the Azure Active Directory (tenant ID)",
-				Type:        schema.TypeString,
-				Computed:    true,
-			},
-			"subscription_id": {
-				Description: "The unique ID of the Azure subscription associated with this connector",
-				Type:        schema.TypeString,
-				Computed:    true,
-			},
-			"subscription_name": {
-				Description: "The name of the Azure subscription associated with this connector",
-				Type:        schema.TypeString,
-				Computed:    true,
-			},
-			"is_gov_cloud": {
-				Description: "Whether this connector targets an Azure Government Cloud subscription",
-				Type:        schema.TypeBool,
-				Computed:    true,
-			},
-			"is_disabled": {
-				Description: "Whether this connector is disabled",
-				Type:        schema.TypeBool,
-				Computed:    true,
-			},
-			"tags": {
-				Description: "Tags this connector belongs to",
-				Type:        schema.TypeSet,
-				Computed:    true,
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"name": {
-							Description: "Name of tag",
-							Type:        schema.TypeString,
-							Computed:    true,
-						},
-						"uuid": {
-							Description: "ID of tag",
-							Type:        schema.TypeString,
-							Computed:    true,
-						},
-					},
-				},
-			},
-			"last_synced_on": {
-				Description: "Last sync timestamp",
-				Type:        schema.TypeString,
-				Computed:    true,
-			},
-			"total_assets": {
-				Description: "Total assets associated with this connector",
-				Type:        schema.TypeInt,
-				Computed:    true,
-			},
-			"state": {
-				Description: "State of the connector",
-				Type:        schema.TypeString,
-				Computed:    true,
-			},
-		},
+	return &schema.Resource{
+		Description: "Looks up a Connector v3 Azure connector by numeric id or by name",
+		ReadContext: dataSourceAzureConnectorRead,
+		Schema:      s,
 	}
 }
 
-func dataSourceAzureConnectorRead(_ context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	log.Printf("[DEBUG] Reading azure connector %q ", d.Get("connector_id"))
-
-	service := azureService(meta)
-	connector, err := service.Get(d.Get("connector_id").(string))
+func dataSourceAzureConnectorRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+	client, err := qpsClient(meta)
 	if err != nil {
 		return diag.FromErr(err)
 	}
 
-	d.SetId(connector.ConnectorID)
-
-	return combineErrors(
-		d.Set("cloud_provider", connector.Provider),
-		d.Set("connector_id", connector.ConnectorID),
-		d.Set("name", connector.Name),
-		d.Set("description", connector.Description),
-		d.Set("application_id", connector.ApplicationID),
-		d.Set("directory_id", connector.DirectoryID),
-		d.Set("subscription_id", connector.SubscriptionID),
-		d.Set("subscription_name", connector.SubscriptionName),
-		d.Set("is_gov_cloud", connector.IsGovCloud),
-		d.Set("is_disabled", connector.IsDisabled),
-		d.Set("tags", flattenAzureTags(connector.Tags)),
-		d.Set("last_synced_on", connector.LastSyncedOn),
-		d.Set("total_assets", connector.TotalAssets),
-		d.Set("state", connector.State),
-	)
-}
-
-func flattenAzureTags(tags []azure.Tag) []map[string]interface{} {
-	out := make([]map[string]interface{}, 0, len(tags))
-	for _, tag := range tags {
-		out = append(out, map[string]interface{}{
-			"name": tag.Name,
-			"uuid": tag.UUID,
-		})
+	var conn *qps.AzureConnector
+	if id := d.Get("connector_id").(string); id != "" {
+		log.Printf("[DEBUG] read azure connector %q", id)
+		conn, err = client.GetAzureConnector(ctx, id)
+		if err != nil {
+			return diag.FromErr(err)
+		}
+	} else {
+		name := d.Get("name").(string)
+		log.Printf("[DEBUG] search azure connector named %q", name)
+		conns, err := client.SearchAzureConnectors(ctx, nameFilter(name))
+		if err != nil {
+			return diag.FromErr(err)
+		}
+		if len(conns) == 0 {
+			return diag.Errorf("no azure connector named %q", name)
+		}
+		if len(conns) > 1 {
+			return diag.Errorf("%d azure connectors named %q; look the connector up "+
+				"by connector_id instead", len(conns), name)
+		}
+		conn = conns[0]
 	}
-	return out
+
+	d.SetId(conn.ID)
+	if err := setConnectorBaseData(d, conn.ConnectorBase); err != nil {
+		return diag.FromErr(err)
+	}
+	return combineErrors(
+		d.Set("application_id", conn.ApplicationID),
+		d.Set("directory_id", conn.DirectoryID),
+		d.Set("subscription_id", conn.SubscriptionID),
+		d.Set("subscription_name", conn.SubscriptionName),
+		d.Set("is_gov_cloud", conn.IsGovCloud),
+		d.Set("cloud_provider", "AZURE"),
+	)
 }

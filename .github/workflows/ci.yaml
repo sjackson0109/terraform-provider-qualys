@@ -41,20 +41,7 @@ jobs:
       - name: Test
         env:
           LOCAL: true
-        # The three GCP connector acceptance tests are excluded: they hit a
-        # real, pre-existing bug this CI pipeline's first successful run
-        # surfaced (tracked upstream, not fixed here as out of scope for a
-        # syntax/build-checking pipeline). providerConfigure unconditionally
-        # builds vmdr and qps clients in addition to the GCP one, and both
-        # correctly refuse a non-https base_url; the tests' local mock
-        # server (server_test.go's testServer()) only serves plain HTTP, so
-        # provider configuration fails before the GCP-specific test logic
-        # ever runs, regardless of which resource is under test. Fixing
-        # this needs either a TLS-capable mock server the vmdr/qps clients
-        # can be made to trust, or making providerConfigure construct
-        # clients lazily per-resource — both bigger changes than this
-        # workflow file should carry.
-        run: go test ./... -skip 'TestResourceGcpConnector_basic|TestResourceGcpConnector_update|TestDataSourceGcpConnector_basic'
+        run: go test ./...
   release:
     if: startsWith(github.ref, 'refs/tags')
     needs: [ syntax_and_build ]

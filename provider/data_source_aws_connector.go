@@ -5,159 +5,98 @@ import (
 	"log"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
-
-	"github.com/sjackson0109/terraform-provider-qualys/cloudview/aws"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	"github.com/sjackson0109/terraform-provider-qualys/qps"
 )
 
 func dataSourceAWSConnector() *schema.Resource {
-	return &schema.Resource{
-		Description: "Returns the details of the connector instances defined by the `connector_id`",
-		ReadContext: dataSourceAWSConnectorRead,
+	s := connectorDataSourceSchema()
+	s["arn"] = &schema.Schema{
+		Description: "The ARN of the IAM role Qualys assumes to scan this AWS account",
+		Type:        schema.TypeString,
+		Computed:    true,
+	}
+	s["external_id"] = &schema.Schema{
+		Description: "The external ID configured in the IAM role's trust policy",
+		Type:        schema.TypeString,
+		Computed:    true,
+	}
+	s["all_regions"] = &schema.Schema{
+		Description: "Whether the connector scans all AWS regions",
+		Type:        schema.TypeBool,
+		Computed:    true,
+	}
+	s["is_gov_cloud"] = &schema.Schema{
+		Description: "Whether this connector targets an AWS GovCloud account",
+		Type:        schema.TypeBool,
+		Computed:    true,
+	}
+	s["is_china_region"] = &schema.Schema{
+		Description: "Whether this connector targets an AWS China region account",
+		Type:        schema.TypeBool,
+		Computed:    true,
+	}
+	s["aws_account_id"] = &schema.Schema{
+		Description: "The AWS account ID associated with this connector",
+		Type:        schema.TypeString,
+		Computed:    true,
+	}
+	s["qualys_aws_account_id"] = &schema.Schema{
+		Description: "The Qualys-owned AWS account that assumes the role",
+		Type:        schema.TypeString,
+		Computed:    true,
+	}
 
-		Schema: map[string]*schema.Schema{
-			"connector_id": {
-				Description: "The unique ID for this connector instance",
-				Type:        schema.TypeString,
-				Required:    true,
-			},
-			"cloud_provider": {
-				Description: "The cloud provider associated with this connector",
-				Type:        schema.TypeString,
-				Computed:    true,
-			},
-			"name": {
-				Description: "Name of the connector",
-				Type:        schema.TypeString,
-				Computed:    true,
-			},
-			"description": {
-				Description: "A string describing this connector instance",
-				Type:        schema.TypeString,
-				Computed:    true,
-			},
-			"arn": {
-				Description: "The ARN of the IAM role Qualys assumes to scan this AWS account",
-				Type:        schema.TypeString,
-				Computed:    true,
-			},
-			"external_id": {
-				Description: "The external ID configured in the IAM role's trust policy",
-				Type:        schema.TypeString,
-				Computed:    true,
-			},
-			"is_portal_connector": {
-				Description: "Whether an AssetView connector is also created alongside this CloudView connector",
-				Type:        schema.TypeBool,
-				Computed:    true,
-			},
-			"is_gov_cloud": {
-				Description: "Whether this connector targets an AWS GovCloud account",
-				Type:        schema.TypeBool,
-				Computed:    true,
-			},
-			"is_china_region": {
-				Description: "Whether this connector targets an AWS China region account",
-				Type:        schema.TypeBool,
-				Computed:    true,
-			},
-			"is_disabled": {
-				Description: "Whether this connector is disabled",
-				Type:        schema.TypeBool,
-				Computed:    true,
-			},
-			"aws_account_id": {
-				Description: "The AWS account ID associated with this connector",
-				Type:        schema.TypeString,
-				Computed:    true,
-			},
-			"account_alias": {
-				Description: "The AWS account alias associated with this connector",
-				Type:        schema.TypeString,
-				Computed:    true,
-			},
-			"base_account_id": {
-				Description: "The AWS base account ID associated with this connector",
-				Type:        schema.TypeString,
-				Computed:    true,
-			},
-			"tags": {
-				Description: "Tags this connector belongs to",
-				Type:        schema.TypeSet,
-				Computed:    true,
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"name": {
-							Description: "Name of tag",
-							Type:        schema.TypeString,
-							Computed:    true,
-						},
-						"uuid": {
-							Description: "ID of tag",
-							Type:        schema.TypeString,
-							Computed:    true,
-						},
-					},
-				},
-			},
-			"last_synced_on": {
-				Description: "Last sync timestamp",
-				Type:        schema.TypeString,
-				Computed:    true,
-			},
-			"total_assets": {
-				Description: "Total assets associated with this connector",
-				Type:        schema.TypeInt,
-				Computed:    true,
-			},
-			"state": {
-				Description: "State of the connector",
-				Type:        schema.TypeString,
-				Computed:    true,
-			},
-		},
+	return &schema.Resource{
+		Description: "Looks up a Connector v3 AWS connector by numeric id or by name",
+		ReadContext: dataSourceAWSConnectorRead,
+		Schema:      s,
 	}
 }
 
-func dataSourceAWSConnectorRead(_ context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	log.Printf("[DEBUG] Reading aws connector %q ", d.Get("connector_id"))
-
-	service := awsService(meta)
-	connector, err := service.Get(d.Get("connector_id").(string))
+func dataSourceAWSConnectorRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+	client, err := qpsClient(meta)
 	if err != nil {
 		return diag.FromErr(err)
 	}
 
-	d.SetId(connector.ConnectorID)
-
-	return combineErrors(
-		d.Set("cloud_provider", connector.Provider),
-		d.Set("connector_id", connector.ConnectorID),
-		d.Set("name", connector.Name),
-		d.Set("description", connector.Description),
-		d.Set("arn", connector.ARN),
-		d.Set("external_id", connector.ExternalID),
-		d.Set("is_portal_connector", connector.IsPortalConnector),
-		d.Set("is_gov_cloud", connector.IsGovCloud),
-		d.Set("is_china_region", connector.IsChinaRegion),
-		d.Set("is_disabled", connector.IsDisabled),
-		d.Set("aws_account_id", connector.AWSAccountID),
-		d.Set("account_alias", connector.AccountAlias),
-		d.Set("base_account_id", connector.BaseAccountID),
-		d.Set("tags", flattenAWSTags(connector.Tags)),
-		d.Set("last_synced_on", connector.LastSyncedOn),
-		d.Set("total_assets", connector.TotalAssets),
-		d.Set("state", connector.State),
-	)
-}
-
-func flattenAWSTags(tags []aws.Tag) []map[string]interface{} {
-	out := make([]map[string]interface{}, 0, len(tags))
-	for _, tag := range tags {
-		out = append(out, map[string]interface{}{
-			"name": tag.Name,
-			"uuid": tag.UUID,
-		})
+	var conn *qps.AWSConnector
+	if id := d.Get("connector_id").(string); id != "" {
+		log.Printf("[DEBUG] read aws connector %q", id)
+		conn, err = client.GetAWSConnector(ctx, id)
+		if err != nil {
+			return diag.FromErr(err)
+		}
+	} else {
+		name := d.Get("name").(string)
+		log.Printf("[DEBUG] search aws connector named %q", name)
+		conns, err := client.SearchAWSConnectors(ctx, nameFilter(name))
+		if err != nil {
+			return diag.FromErr(err)
+		}
+		if len(conns) == 0 {
+			return diag.Errorf("no aws connector named %q", name)
+		}
+		if len(conns) > 1 {
+			return diag.Errorf("%d aws connectors named %q; look the connector up "+
+				"by connector_id instead", len(conns), name)
+		}
+		conn = conns[0]
 	}
-	return out
+
+	d.SetId(conn.ID)
+	if err := setConnectorBaseData(d, conn.ConnectorBase); err != nil {
+		return diag.FromErr(err)
+	}
+	return combineErrors(
+		d.Set("arn", conn.ARN),
+		d.Set("external_id", conn.ExternalID),
+		d.Set("all_regions", conn.AllRegions),
+		d.Set("is_gov_cloud", conn.IsGovCloud),
+		d.Set("is_china_region", conn.IsChinaConfigured),
+		d.Set("aws_account_id", conn.AWSAccountID),
+		d.Set("qualys_aws_account_id", conn.QualysAWSAccountID),
+		d.Set("cloud_provider", "AWS"),
+	)
 }

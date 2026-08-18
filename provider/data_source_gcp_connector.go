@@ -2,101 +2,65 @@ package provider
 
 import (
 	"context"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"log"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	"github.com/sjackson0109/terraform-provider-qualys/qps"
 )
 
 func dataSourceGCPConnector() *schema.Resource {
-	return &schema.Resource{
-		Description: "Returns the details of the connector instances defined by the `connector_id`",
-		ReadContext: dataSourceGCPConnectorRead,
+	s := connectorDataSourceSchema()
+	s["project_id"] = &schema.Schema{
+		Description: "GCP project id the connector scans",
+		Type:        schema.TypeString,
+		Computed:    true,
+	}
 
-		Schema: map[string]*schema.Schema{
-			"cloud_provider": {
-				Description: "The cloud provider associated with this connector",
-				Type:        schema.TypeString,
-				Computed:    true,
-			},
-			"connector_id": {
-				Description: "The unique ID for this connector instance",
-				Type:        schema.TypeString,
-				Required:    true,
-			},
-			"description": {
-				Description: "A string describing this connector instance",
-				Type:        schema.TypeString,
-				Computed:    true,
-			},
-			"groups": {
-				Description: "Groups that this connector belong to",
-				Type:        schema.TypeSet,
-				Computed:    true,
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"name": {
-							Description: "Name of group",
-							Type:        schema.TypeString,
-							Computed:    true,
-						},
-						"uuid": {
-							Description: "ID of group",
-							Type:        schema.TypeString,
-							Computed:    true,
-						},
-					},
-				},
-			},
-			"last_synced_on": {
-				Description: "Last sync timestamp",
-				Type:        schema.TypeString,
-				Computed:    true,
-			},
-			"name": {
-				Description: "Name of the connector",
-				Type:        schema.TypeString,
-				Computed:    true,
-			},
-			"project_id": {
-				Description: "GCP project id",
-				Type:        schema.TypeString,
-				Computed:    true,
-			},
-			"total_assets": {
-				Description: "Total assets associated with this connector",
-				Type:        schema.TypeInt,
-				Computed:    true,
-			},
-			"state": {
-				Description: "State of the connector",
-				Type:        schema.TypeString,
-				Computed:    true,
-			},
-		},
+	return &schema.Resource{
+		Description: "Looks up a Connector v3 GCP connector by numeric id or by name",
+		ReadContext: dataSourceGCPConnectorRead,
+		Schema:      s,
 	}
 }
 
-func dataSourceGCPConnectorRead(_ context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	log.Printf("[DEBUG] Reading gcp connector %q ", d.Get("connector_id"))
-
-	service := gcpService(meta)
-	connector, err := service.Get(d.Get("connector_id").(string))
+func dataSourceGCPConnectorRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+	client, err := qpsClient(meta)
 	if err != nil {
 		return diag.FromErr(err)
 	}
 
-	d.SetId(connector.ConnectorID)
+	var conn *qps.GCPConnector
+	if id := d.Get("connector_id").(string); id != "" {
+		log.Printf("[DEBUG] read gcp connector %q", id)
+		conn, err = client.GetGCPConnector(ctx, id)
+		if err != nil {
+			return diag.FromErr(err)
+		}
+	} else {
+		name := d.Get("name").(string)
+		log.Printf("[DEBUG] search gcp connector named %q", name)
+		conns, err := client.SearchGCPConnectors(ctx, nameFilter(name))
+		if err != nil {
+			return diag.FromErr(err)
+		}
+		if len(conns) == 0 {
+			return diag.Errorf("no gcp connector named %q", name)
+		}
+		if len(conns) > 1 {
+			return diag.Errorf("%d gcp connectors named %q; look the connector up "+
+				"by connector_id instead", len(conns), name)
+		}
+		conn = conns[0]
+	}
 
+	d.SetId(conn.ID)
+	if err := setConnectorBaseData(d, conn.ConnectorBase); err != nil {
+		return diag.FromErr(err)
+	}
 	return combineErrors(
-		d.Set("cloud_provider", connector.Provider),
-		d.Set("connector_id", connector.ConnectorID),
-		d.Set("description", connector.Description),
-		d.Set("groups", connector.Groups),
-		d.Set("last_synced_on", connector.LastSyncedOn),
-		d.Set("project_id", connector.Project),
-		d.Set("name", connector.Name),
-		d.Set("total_assets", connector.TotalAssets),
-		d.Set("state", connector.State),
+		d.Set("project_id", conn.ProjectID),
+		d.Set("cloud_provider", "GCP"),
 	)
 }

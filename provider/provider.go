@@ -5,13 +5,10 @@ import (
 	"log"
 	"os"
 
-	"github.com/sjackson0109/terraform-provider-qualys/cloudview/aws"
-	"github.com/sjackson0109/terraform-provider-qualys/cloudview/azure"
-	"github.com/sjackson0109/terraform-provider-qualys/cloudview/gcp"
-	"github.com/sjackson0109/terraform-provider-qualys/qps"
-	"github.com/sjackson0109/terraform-provider-qualys/vmdr"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/sjackson0109/terraform-provider-qualys/qps"
+	"github.com/sjackson0109/terraform-provider-qualys/vmdr"
 )
 
 func Provider() *schema.Provider {
@@ -190,10 +187,5 @@ func providerConfigure(_ context.Context, d *schema.ResourceData) (interface{}, 
 	return &clients{
 		vmdr: vmdrClient,
 		qps:  qpsClient,
-		// The CloudView clients are retained for the existing GCP/AWS/Azure
-		// connector resources until they are migrated to the Connector v3 API.
-		gcp:   gcp.NewService(baseURL, username, password),
-		aws:   aws.NewService(baseURL, username, password),
-		azure: azure.NewService(baseURL, username, password),
 	}, nil
 }

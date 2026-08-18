@@ -2,130 +2,162 @@ package provider
 
 import (
 	"context"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
+	"encoding/json"
+	"errors"
 	"log"
 
-	"github.com/sjackson0109/terraform-provider-qualys/cloudview/gcp"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	"github.com/sjackson0109/terraform-provider-qualys/qps"
 )
 
 func resourceGCPConnector() *schema.Resource {
+	s := connectorCommonSchema()
+	s["gcp_credentials_json"] = &schema.Schema{
+		Description: "The JSON key file for a GCP service account, verbatim. The " +
+			"Connector v3 API embeds its fields directly, so the file's own " +
+			"project_id determines the scanned project. The API never returns " +
+			"key material, so this value is write-only and drift is not detected.",
+		Type:      schema.TypeString,
+		Sensitive: true,
+		Required:  true,
+	}
+	s["project_id"] = &schema.Schema{
+		Description: "GCP project id. Derived from gcp_credentials_json; if set " +
+			"explicitly it must match the key file's project_id.",
+		Type:     schema.TypeString,
+		Optional: true,
+		Computed: true,
+	}
+
 	return &schema.Resource{
-		Description:   "A Qualys connector used for scanning GCP project assets",
+		Description: "A Qualys connector used for scanning GCP project assets, " +
+			"via the Connector v3 API",
 		CreateContext: resourceGCPConnectorCreate,
 		ReadContext:   resourceGCPConnectorRead,
 		UpdateContext: resourceGCPConnectorUpdate,
 		DeleteContext: resourceGCPConnectorDelete,
+		CustomizeDiff: validateGCPProjectMatchesKey,
 		Importer: &schema.ResourceImporter{
 			StateContext: schema.ImportStatePassthroughContext,
 		},
+		Schema: s,
+	}
+}
 
-		Schema: map[string]*schema.Schema{
-			"connector_id": {
-				Description: "The unique ID for this connector instance",
-				Type:        schema.TypeString,
-				Computed:    true,
-			},
-			"name": {
-				Description: "Name of the connector",
-				Type:        schema.TypeString,
-				Required:    true,
-			},
-			"description": {
-				Description: "A string describing this connector instance",
-				Type:        schema.TypeString,
-				Optional:    true,
-			},
-			"gcp_credentials_json": {
-				Description: "The JSON credentials file for a GCP service account",
-				Type:        schema.TypeString,
-				Sensitive:   true,
-				Required:    true,
-			},
-			"project_id": {
-				Description: "GCP project id",
-				Type:        schema.TypeString,
-				Required:    true,
-			},
-			"cloud_provider": {
-				Description: "The cloud provider associated with this connector",
-				Type:        schema.TypeString,
-				Computed:    true,
-			},
-		},
+// validateGCPProjectMatchesKey catches a project_id that contradicts the key
+// file at plan time. The API scans the key's project regardless, so a
+// mismatched explicit project_id is a config error, not a preference.
+func validateGCPProjectMatchesKey(_ context.Context, d *schema.ResourceDiff, _ interface{}) error {
+	configured := d.Get("project_id").(string)
+	creds := d.Get("gcp_credentials_json").(string)
+	if configured == "" || creds == "" {
+		return nil
+	}
+	var key struct {
+		ProjectID string `json:"project_id"`
+	}
+	if err := json.Unmarshal([]byte(creds), &key); err != nil || key.ProjectID == "" {
+		// An undecodable key fails at apply with a clearer message; an absent
+		// project_id in the key leaves nothing to contradict.
+		return nil
+	}
+	if key.ProjectID != configured {
+		return errors.New("project_id does not match the key file's project_id; " +
+			"the connector scans the key's project, so either fix the mismatch or " +
+			"leave project_id unset to derive it")
+	}
+	return nil
+}
+
+func gcpConnectorInput(d *schema.ResourceData) qps.GCPConnectorInput {
+	return qps.GCPConnectorInput{
+		ConnectorBaseInput: connectorBaseInput(d),
+		CredentialsJSON:    d.Get("gcp_credentials_json").(string),
 	}
 }
 
 func resourceGCPConnectorCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	log.Printf("[DEBUG] create connector %q", d.Get("name").(string))
+	log.Printf("[DEBUG] create gcp connector %q", d.Get("name").(string))
 
-	opt := gcp.NewConnectorConfig().
-		WithName(d.Get("name").(string)).
-		WithDescription(d.Get("description").(string)).
-		WithCredentialsJSON(d.Get("gcp_credentials_json").(string)).
-		WithProjectId(d.Get("project_id").(string))
-
-	service := gcpService(meta)
-	connector, err := service.Create(opt)
+	client, err := qpsClient(meta)
 	if err != nil {
 		return diag.FromErr(err)
 	}
-
-	d.SetId(connector.ConnectorID)
-
+	conn, err := client.CreateGCPConnector(ctx, gcpConnectorInput(d))
+	if err != nil {
+		return diag.FromErr(err)
+	}
+	d.SetId(conn.ID)
 	return resourceGCPConnectorRead(ctx, d, meta)
 }
 
 func resourceGCPConnectorRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	log.Printf("[DEBUG] Reading gcp connector %q ", d.Id())
+	log.Printf("[DEBUG] read gcp connector %q", d.Id())
 
-	service := gcpService(meta)
-	connector, err := service.Get(d.Id())
+	client, err := qpsClient(meta)
 	if err != nil {
-		d.SetId("")
 		return diag.FromErr(err)
 	}
 
-	return resourceDataFromConnector(ctx, d, connector)
+	// State written by provider versions that used the deprecated CloudView
+	// v1 API holds the connector's UUID. The v3 API reports that UUID as
+	// cloudviewUuid, so a one-time lookup adopts the numeric v3 id in place.
+	if isCloudViewUUID(d.Id()) {
+		conn, err := client.FindGCPConnectorByCloudViewUUID(ctx, d.Id())
+		if err != nil {
+			if errors.Is(err, qps.ErrNotFound) {
+				return diag.Errorf("gcp connector: state id %s is a CloudView v1 UUID and "+
+					"no Connector v3 connector reports it as cloudviewUuid; remove it from "+
+					"state and re-import by its numeric v3 id "+
+					"(terraform state rm, then terraform import)", d.Id())
+			}
+			return diag.FromErr(err)
+		}
+		log.Printf("[INFO] gcp connector: adopted Connector v3 id %s for CloudView UUID %s",
+			conn.ID, d.Id())
+		d.SetId(conn.ID)
+	}
+
+	conn, err := client.GetGCPConnector(ctx, d.Id())
+	if err != nil {
+		if errors.Is(err, qps.ErrNotFound) {
+			d.SetId("")
+			return nil
+		}
+		return diag.FromErr(err)
+	}
+
+	if err := setConnectorBaseData(d, conn.ConnectorBase); err != nil {
+		return diag.FromErr(err)
+	}
+	return combineErrors(
+		d.Set("project_id", conn.ProjectID),
+		d.Set("cloud_provider", "GCP"),
+	)
 }
 
 func resourceGCPConnectorUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	log.Printf("[DEBUG] update gcp connector %s", d.Id())
 
-	opt := gcp.NewConnectorConfig().
-		WithName(d.Get("name").(string)).
-		WithDescription(d.Get("description").(string)).
-		WithCredentialsJSON(d.Get("gcp_credentials_json").(string)).
-		WithProjectId(d.Get("project_id").(string))
-
-	service := gcpService(meta)
-	err := service.Update(d.Id(), opt)
+	client, err := qpsClient(meta)
 	if err != nil {
 		return diag.FromErr(err)
 	}
-
+	// The v3 update responds with the id only; Read refreshes the rest.
+	if err := client.UpdateGCPConnector(ctx, d.Id(), gcpConnectorInput(d)); err != nil {
+		return diag.FromErr(err)
+	}
 	return resourceGCPConnectorRead(ctx, d, meta)
 }
 
-func resourceGCPConnectorDelete(_ context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	log.Printf("[DEBUG] Delete qualys connector %s", d.Id())
+func resourceGCPConnectorDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+	log.Printf("[DEBUG] delete gcp connector %s", d.Id())
 
-	service := gcpService(meta)
-	return diag.FromErr(service.Delete([]string{d.Id()}))
-}
-
-func resourceDataFromConnector(_ context.Context, d *schema.ResourceData, connector *gcp.Connector) diag.Diagnostics {
-	_, ok := d.GetOk("gcp_credentials_json")
-	if !ok {
-		if err := d.Set("gcp_credentials_json", ""); err != nil {
-			return diag.FromErr(err)
-		}
+	client, err := qpsClient(meta)
+	if err != nil {
+		return diag.FromErr(err)
 	}
-
-	return combineErrors(
-		d.Set("connector_id", connector.ConnectorID),
-		d.Set("name", connector.Name),
-		d.Set("description", connector.Description),
-		d.Set("project_id", connector.Project),
-	)
+	return diag.FromErr(client.DeleteGCPConnector(ctx, d.Id()))
 }

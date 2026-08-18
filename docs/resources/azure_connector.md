@@ -1,14 +1,14 @@
 ---
-page_title: "qualys_gcp_connector Resource - terraform-provider-qualys"
+page_title: "qualys_azure_connector Resource - terraform-provider-qualys"
 subcategory: ""
 description: |-
-  A Qualys connector used for scanning GCP project assets, via the Connector v3 API
+  A Qualys connector used for scanning Azure subscription assets, via the Connector v3 API
 ---
 
-# qualys_gcp_connector (Resource)
+# qualys_azure_connector (Resource)
 
-A Qualys connector used for scanning GCP project assets, via the Connector v3
-API (`/qps/rest/3.0/.../am/gcpassetdataconnector`).
+A Qualys connector used for scanning Azure subscription assets, via the
+Connector v3 API (`/qps/rest/3.0/.../am/azureassetdataconnector`).
 
 ~> This resource was migrated from the deprecated CloudView v1 API. State
 created by pre-migration provider versions holds a UUID id; on the first
@@ -22,10 +22,14 @@ welcome as issues or PRs.
 ## Example Usage
 
 ```terraform
-resource "qualys_gcp_connector" "dev" {
-  name                 = "dev_gcp"
-  description          = "Development project connector"
-  gcp_credentials_json = file("./service_account.json")
+resource "qualys_azure_connector" "dev" {
+  name        = "dev_azure"
+  description = "Development subscription connector"
+
+  application_id     = "00000000-0000-0000-0000-000000000000"
+  directory_id       = "11111111-1111-1111-1111-111111111111"
+  subscription_id    = "22222222-2222-2222-2222-222222222222"
+  authentication_key = var.azure_client_secret
 
   run_frequency = 240
   activation    = ["VM", "CLOUDVIEW"]
@@ -36,23 +40,22 @@ resource "qualys_gcp_connector" "dev" {
 
 ### Required
 
-- **gcp_credentials_json** (String, Sensitive) The JSON key file for a GCP
-  service account, verbatim. The Connector v3 API embeds its fields directly,
-  so the file's own `project_id` determines the scanned project. The API
-  never returns key material, so this value is write-only and drift is not
-  detected.
+- **application_id** (String) The unique ID of the Azure AD application
+  registration used to authenticate
+- **directory_id** (String) The unique ID of the Azure Active Directory
+  (tenant ID)
+- **subscription_id** (String) The unique ID of the Azure subscription to
+  scan
+- **authentication_key** (String, Sensitive) The client secret for the
+  Azure AD application. The API never returns it, so this value is
+  write-only and drift is not detected.
 - **name** (String) Name of the connector
 
 ### Optional
 
 - **description** (String) A string describing this connector instance
-- **project_id** (String) GCP project id. Derived from
-  `gcp_credentials_json`; if set explicitly it must match the key file's
-  `project_id` (checked at plan time). Kept optional for compatibility with
-  pre-migration configurations that were required to set it.
 - **run_frequency** (Number) How often the connector polls the cloud
-  account, in minutes. The GCP API documents this as required; defaults to
-  240, matching the Qualys UI default.
+  account, in minutes. Defaults to 240.
 - **disabled** (Boolean) Disables connector execution without deleting it
 - **is_remediation_enabled** (Boolean) Enables Qualys remediation for
   assets discovered by this connector
@@ -60,20 +63,24 @@ resource "qualys_gcp_connector" "dev" {
   assets: `VM`, `CERTVIEW`, `CLOUDVIEW`, `SCA`, `CSA`
 - **default_tag_ids** (Set of String) Asset tag ids applied to every asset
   this connector discovers
+- **is_gov_cloud** (Boolean, Deprecated) Read-only under the Connector v3
+  API; the value is reported, not settable
 
 ### Read-Only
 
 - **connector_id** (String) The connector's numeric Connector v3 id
+- **subscription_name** (String) The name of the Azure subscription
+  associated with this connector
 - **connector_state** (String) Lifecycle state (QUEUED, RUNNING,
   FINISHED_SUCCESS, FINISHED_ERRORS, ...)
 - **last_sync** (String) When the connector last synchronised, ISO-8601 UTC
 - **next_sync** (String) When the connector next synchronises, ISO-8601 UTC
 - **cloudview_uuid** (String) The deprecated CloudView v1 API's UUID for
   this connector; empty for connectors created directly under v3
-- **cloud_provider** (String) Always `GCP`
+- **cloud_provider** (String) Always `AZURE`
 
 ## Import
 
 ```shell
-terraform import qualys_gcp_connector.dev <numeric-connector-id>
+terraform import qualys_azure_connector.dev <numeric-connector-id>
 ```

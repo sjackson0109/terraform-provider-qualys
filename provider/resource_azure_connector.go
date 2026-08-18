@@ -2,17 +2,57 @@ package provider
 
 import (
 	"context"
+	"errors"
 	"log"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
-
-	"github.com/sjackson0109/terraform-provider-qualys/cloudview/azure"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	"github.com/sjackson0109/terraform-provider-qualys/qps"
 )
 
 func resourceAzureConnector() *schema.Resource {
+	s := connectorCommonSchema()
+	s["application_id"] = &schema.Schema{
+		Description: "The unique ID of the Azure AD application registration used to authenticate",
+		Type:        schema.TypeString,
+		Required:    true,
+	}
+	s["directory_id"] = &schema.Schema{
+		Description: "The unique ID of the Azure Active Directory (tenant ID)",
+		Type:        schema.TypeString,
+		Required:    true,
+	}
+	s["subscription_id"] = &schema.Schema{
+		Description: "The unique ID of the Azure subscription to scan",
+		Type:        schema.TypeString,
+		Required:    true,
+	}
+	s["authentication_key"] = &schema.Schema{
+		Description: "The client secret (authentication key) for the Azure AD " +
+			"application. The API never returns it, so this value is write-only " +
+			"and drift is not detected.",
+		Type:      schema.TypeString,
+		Sensitive: true,
+		Required:  true,
+	}
+	s["is_gov_cloud"] = &schema.Schema{
+		Description: "Whether this connector targets an Azure Government Cloud " +
+			"subscription. Read-only under the Connector v3 API.",
+		Type:       schema.TypeBool,
+		Optional:   true,
+		Computed:   true,
+		Deprecated: "The Connector v3 API has no Azure gov-cloud write field; the value is read-only.",
+	}
+	s["subscription_name"] = &schema.Schema{
+		Description: "The name of the Azure subscription associated with this connector",
+		Type:        schema.TypeString,
+		Computed:    true,
+	}
+
 	return &schema.Resource{
-		Description:   "A Qualys connector used for scanning Azure subscription assets",
+		Description: "A Qualys connector used for scanning Azure subscription assets, " +
+			"via the Connector v3 API",
 		CreateContext: resourceAzureConnectorCreate,
 		ReadContext:   resourceAzureConnectorRead,
 		UpdateContext: resourceAzureConnectorUpdate,
@@ -20,144 +60,104 @@ func resourceAzureConnector() *schema.Resource {
 		Importer: &schema.ResourceImporter{
 			StateContext: schema.ImportStatePassthroughContext,
 		},
+		Schema: s,
+	}
+}
 
-		Schema: map[string]*schema.Schema{
-			"connector_id": {
-				Description: "The unique ID for this connector instance",
-				Type:        schema.TypeString,
-				Computed:    true,
-			},
-			"name": {
-				Description: "Name of the connector",
-				Type:        schema.TypeString,
-				Required:    true,
-			},
-			"description": {
-				Description: "A string describing this connector instance",
-				Type:        schema.TypeString,
-				Optional:    true,
-			},
-			"application_id": {
-				Description: "The unique ID of the Azure AD application registration used to authenticate",
-				Type:        schema.TypeString,
-				Required:    true,
-			},
-			"directory_id": {
-				Description: "The unique ID of the Azure Active Directory (tenant ID)",
-				Type:        schema.TypeString,
-				Required:    true,
-			},
-			"subscription_id": {
-				Description: "The unique ID of the Azure subscription to scan",
-				Type:        schema.TypeString,
-				Required:    true,
-			},
-			"authentication_key": {
-				Description: "The client secret (authentication key) for the Azure AD application",
-				Type:        schema.TypeString,
-				Sensitive:   true,
-				Required:    true,
-			},
-			"is_gov_cloud": {
-				Description: "Whether this connector targets an Azure Government Cloud subscription",
-				Type:        schema.TypeBool,
-				Optional:    true,
-			},
-			"cloud_provider": {
-				Description: "The cloud provider associated with this connector",
-				Type:        schema.TypeString,
-				Computed:    true,
-			},
-			"subscription_name": {
-				Description: "The name of the Azure subscription associated with this connector",
-				Type:        schema.TypeString,
-				Computed:    true,
-			},
-		},
+func azureConnectorInput(d *schema.ResourceData) qps.AzureConnectorInput {
+	return qps.AzureConnectorInput{
+		ConnectorBaseInput: connectorBaseInput(d),
+		ApplicationID:      d.Get("application_id").(string),
+		DirectoryID:        d.Get("directory_id").(string),
+		SubscriptionID:     d.Get("subscription_id").(string),
+		AuthenticationKey:  d.Get("authentication_key").(string),
 	}
 }
 
 func resourceAzureConnectorCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	log.Printf("[DEBUG] create azure connector %q", d.Get("name").(string))
 
-	opt := azure.NewConnectorConfig().
-		WithName(d.Get("name").(string)).
-		WithDescription(d.Get("description").(string)).
-		WithApplicationID(d.Get("application_id").(string)).
-		WithDirectoryID(d.Get("directory_id").(string)).
-		WithSubscriptionID(d.Get("subscription_id").(string)).
-		WithAuthenticationKey(d.Get("authentication_key").(string)).
-		WithIsGovCloud(d.Get("is_gov_cloud").(bool))
-
-	service := azureService(meta)
-	connector, err := service.Create(opt)
+	client, err := qpsClient(meta)
 	if err != nil {
 		return diag.FromErr(err)
 	}
-
-	d.SetId(connector.ConnectorID)
-
+	conn, err := client.CreateAzureConnector(ctx, azureConnectorInput(d))
+	if err != nil {
+		return diag.FromErr(err)
+	}
+	d.SetId(conn.ID)
 	return resourceAzureConnectorRead(ctx, d, meta)
 }
 
 func resourceAzureConnectorRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	log.Printf("[DEBUG] Reading azure connector %q ", d.Id())
+	log.Printf("[DEBUG] read azure connector %q", d.Id())
 
-	service := azureService(meta)
-	connector, err := service.Get(d.Id())
+	client, err := qpsClient(meta)
 	if err != nil {
-		d.SetId("")
 		return diag.FromErr(err)
 	}
 
-	return resourceDataFromAzureConnector(ctx, d, connector)
+	// State written by provider versions that used the deprecated CloudView
+	// v1 API holds the connector's UUID. The v3 API reports that UUID as
+	// cloudviewUuid, so a one-time lookup adopts the numeric v3 id in place.
+	if isCloudViewUUID(d.Id()) {
+		conn, err := client.FindAzureConnectorByCloudViewUUID(ctx, d.Id())
+		if err != nil {
+			if errors.Is(err, qps.ErrNotFound) {
+				return diag.Errorf("azure connector: state id %s is a CloudView v1 UUID and "+
+					"no Connector v3 connector reports it as cloudviewUuid; remove it from "+
+					"state and re-import by its numeric v3 id "+
+					"(terraform state rm, then terraform import)", d.Id())
+			}
+			return diag.FromErr(err)
+		}
+		log.Printf("[INFO] azure connector: adopted Connector v3 id %s for CloudView UUID %s",
+			conn.ID, d.Id())
+		d.SetId(conn.ID)
+	}
+
+	conn, err := client.GetAzureConnector(ctx, d.Id())
+	if err != nil {
+		if errors.Is(err, qps.ErrNotFound) {
+			d.SetId("")
+			return nil
+		}
+		return diag.FromErr(err)
+	}
+
+	if err := setConnectorBaseData(d, conn.ConnectorBase); err != nil {
+		return diag.FromErr(err)
+	}
+	return combineErrors(
+		d.Set("application_id", conn.ApplicationID),
+		d.Set("directory_id", conn.DirectoryID),
+		d.Set("subscription_id", conn.SubscriptionID),
+		d.Set("subscription_name", conn.SubscriptionName),
+		d.Set("is_gov_cloud", conn.IsGovCloud),
+		d.Set("cloud_provider", "AZURE"),
+	)
 }
 
 func resourceAzureConnectorUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	log.Printf("[DEBUG] update azure connector %s", d.Id())
 
-	opt := azure.NewConnectorConfig().
-		WithName(d.Get("name").(string)).
-		WithDescription(d.Get("description").(string)).
-		WithApplicationID(d.Get("application_id").(string)).
-		WithDirectoryID(d.Get("directory_id").(string)).
-		WithSubscriptionID(d.Get("subscription_id").(string)).
-		WithAuthenticationKey(d.Get("authentication_key").(string)).
-		WithIsGovCloud(d.Get("is_gov_cloud").(bool))
-
-	service := azureService(meta)
-	err := service.Update(d.Id(), opt)
+	client, err := qpsClient(meta)
 	if err != nil {
 		return diag.FromErr(err)
 	}
-
+	// The v3 update responds with the id only; Read refreshes the rest.
+	if err := client.UpdateAzureConnector(ctx, d.Id(), azureConnectorInput(d)); err != nil {
+		return diag.FromErr(err)
+	}
 	return resourceAzureConnectorRead(ctx, d, meta)
 }
 
-func resourceAzureConnectorDelete(_ context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	log.Printf("[DEBUG] Delete qualys azure connector %s", d.Id())
+func resourceAzureConnectorDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+	log.Printf("[DEBUG] delete azure connector %s", d.Id())
 
-	service := azureService(meta)
-	return diag.FromErr(service.Delete([]string{d.Id()}))
-}
-
-func resourceDataFromAzureConnector(_ context.Context, d *schema.ResourceData, connector *azure.Connector) diag.Diagnostics {
-	_, ok := d.GetOk("authentication_key")
-	if !ok {
-		if err := d.Set("authentication_key", ""); err != nil {
-			return diag.FromErr(err)
-		}
+	client, err := qpsClient(meta)
+	if err != nil {
+		return diag.FromErr(err)
 	}
-
-	return combineErrors(
-		d.Set("connector_id", connector.ConnectorID),
-		d.Set("name", connector.Name),
-		d.Set("description", connector.Description),
-		d.Set("application_id", connector.ApplicationID),
-		d.Set("directory_id", connector.DirectoryID),
-		d.Set("subscription_id", connector.SubscriptionID),
-		d.Set("is_gov_cloud", connector.IsGovCloud),
-		d.Set("cloud_provider", connector.Provider),
-		d.Set("subscription_name", connector.SubscriptionName),
-	)
+	return diag.FromErr(client.DeleteAzureConnector(ctx, d.Id()))
 }

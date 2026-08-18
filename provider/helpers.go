@@ -6,24 +6,17 @@ import (
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
-
-	"github.com/sjackson0109/terraform-provider-qualys/cloudview/aws"
-	"github.com/sjackson0109/terraform-provider-qualys/cloudview/azure"
-	"github.com/sjackson0109/terraform-provider-qualys/cloudview/gcp"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/sjackson0109/terraform-provider-qualys/qps"
 	"github.com/sjackson0109/terraform-provider-qualys/vmdr"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 // clients bundles the per-API-family clients. The families differ in transport,
 // envelope, pagination and error model, so they are separate clients rather than
 // one client with mode switches.
 type clients struct {
-	vmdr  *vmdr.Client
-	qps   *qps.Client
-	gcp   *gcp.ConnectorService
-	aws   *aws.ConnectorService
-	azure *azure.ConnectorService
+	vmdr *vmdr.Client
+	qps  *qps.Client
 }
 
 func vmdrClient(meta interface{}) (*vmdr.Client, error) {
@@ -33,30 +26,6 @@ func vmdrClient(meta interface{}) (*vmdr.Client, error) {
 			"set `base_url`, `username` and `password` on the provider")
 	}
 	return c.vmdr, nil
-}
-
-func gcpService(meta interface{}) *gcp.ConnectorService {
-	c, ok := meta.(*clients)
-	if !ok {
-		return nil
-	}
-	return c.gcp
-}
-
-func awsService(meta interface{}) *aws.ConnectorService {
-	c, ok := meta.(*clients)
-	if !ok {
-		return nil
-	}
-	return c.aws
-}
-
-func azureService(meta interface{}) *azure.ConnectorService {
-	c, ok := meta.(*clients)
-	if !ok {
-		return nil
-	}
-	return c.azure
 }
 
 // stringSet reads a TypeSet of strings from resource data.

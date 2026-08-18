@@ -1,14 +1,14 @@
 ---
-page_title: "qualys_gcp_connector Resource - terraform-provider-qualys"
+page_title: "qualys_aws_connector Resource - terraform-provider-qualys"
 subcategory: ""
 description: |-
-  A Qualys connector used for scanning GCP project assets, via the Connector v3 API
+  A Qualys connector used for scanning AWS account assets, via the Connector v3 API
 ---
 
-# qualys_gcp_connector (Resource)
+# qualys_aws_connector (Resource)
 
-A Qualys connector used for scanning GCP project assets, via the Connector v3
-API (`/qps/rest/3.0/.../am/gcpassetdataconnector`).
+A Qualys connector used for scanning AWS account assets, via the Connector v3
+API (`/qps/rest/3.0/.../am/awsassetdataconnector`).
 
 ~> This resource was migrated from the deprecated CloudView v1 API. State
 created by pre-migration provider versions holds a UUID id; on the first
@@ -22,10 +22,11 @@ welcome as issues or PRs.
 ## Example Usage
 
 ```terraform
-resource "qualys_gcp_connector" "dev" {
-  name                 = "dev_gcp"
-  description          = "Development project connector"
-  gcp_credentials_json = file("./service_account.json")
+resource "qualys_aws_connector" "dev" {
+  name        = "dev_aws"
+  description = "Development account connector"
+  arn         = "arn:aws:iam::123456789012:role/qualys-connector-role"
+  external_id = "US1-123456-1234567890123"
 
   run_frequency = 240
   activation    = ["VM", "CLOUDVIEW"]
@@ -36,23 +37,24 @@ resource "qualys_gcp_connector" "dev" {
 
 ### Required
 
-- **gcp_credentials_json** (String, Sensitive) The JSON key file for a GCP
-  service account, verbatim. The Connector v3 API embeds its fields directly,
-  so the file's own `project_id` determines the scanned project. The API
-  never returns key material, so this value is write-only and drift is not
-  detected.
+- **arn** (String) The ARN of the IAM role Qualys assumes to scan this AWS
+  account. Trust the account in `qualys_aws_account_id` in the role's policy,
+  conditioned on `external_id`.
+- **external_id** (String) The external ID configured in the IAM role's
+  trust policy
 - **name** (String) Name of the connector
 
 ### Optional
 
 - **description** (String) A string describing this connector instance
-- **project_id** (String) GCP project id. Derived from
-  `gcp_credentials_json`; if set explicitly it must match the key file's
-  `project_id` (checked at plan time). Kept optional for compatibility with
-  pre-migration configurations that were required to set it.
+- **all_regions** (Boolean) Whether the connector scans all AWS regions.
+  Defaults to `true`. The Connector v3 API's per-region endpoint selection
+  is not carried by this provider yet, so `false` currently produces a
+  connector with no regions selected.
+- **is_gov_cloud** (Boolean) Whether this connector targets an AWS GovCloud
+  account
 - **run_frequency** (Number) How often the connector polls the cloud
-  account, in minutes. The GCP API documents this as required; defaults to
-  240, matching the Qualys UI default.
+  account, in minutes. Defaults to 240.
 - **disabled** (Boolean) Disables connector execution without deleting it
 - **is_remediation_enabled** (Boolean) Enables Qualys remediation for
   assets discovered by this connector
@@ -60,20 +62,28 @@ resource "qualys_gcp_connector" "dev" {
   assets: `VM`, `CERTVIEW`, `CLOUDVIEW`, `SCA`, `CSA`
 - **default_tag_ids** (Set of String) Asset tag ids applied to every asset
   this connector discovers
+- **is_china_region** (Boolean, Deprecated) Read-only under the Connector
+  v3 API; the value is reported, not settable
+- **is_portal_connector** (Boolean, Deprecated) No effect; the Connector v3
+  API always manages the portal (AssetView) connector itself
 
 ### Read-Only
 
 - **connector_id** (String) The connector's numeric Connector v3 id
+- **aws_account_id** (String) The AWS account ID associated with this
+  connector
+- **qualys_aws_account_id** (String) The Qualys-owned AWS account that
+  assumes the role; the account to trust in the IAM role's policy
 - **connector_state** (String) Lifecycle state (QUEUED, RUNNING,
   FINISHED_SUCCESS, FINISHED_ERRORS, ...)
 - **last_sync** (String) When the connector last synchronised, ISO-8601 UTC
 - **next_sync** (String) When the connector next synchronises, ISO-8601 UTC
 - **cloudview_uuid** (String) The deprecated CloudView v1 API's UUID for
   this connector; empty for connectors created directly under v3
-- **cloud_provider** (String) Always `GCP`
+- **cloud_provider** (String) Always `AWS`
 
 ## Import
 
 ```shell
-terraform import qualys_gcp_connector.dev <numeric-connector-id>
+terraform import qualys_aws_connector.dev <numeric-connector-id>
 ```
