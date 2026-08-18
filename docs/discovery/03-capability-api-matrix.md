@@ -299,7 +299,7 @@ Doc section: Scans → VM Scans. Path `/api/2.0/fo/scan/`.
 |---|---|---|---|---|
 | Launch/cancel/pause/resume | **imperative operation** | NOT a Terraform resource (no stable lifecycle: a scan is a job, re-runs are new refs, destroy is meaningless). Expose via runbook/CLI or an ephemeral "action" if ever justified | P3 | classified per task instruction |
 | Delete scan / fetch results | imperative operation | stale-scan cleanup subsystem | P3 | destructive delete — never blind-retry |
-| Scan list/status/summary | data source / validation operation | `data.qualys_was_scans` (list); summary Manager-only | P3 | — |
+| Scan list/status/summary | data source / validation operation | `data.qualys_vm_scans` (list); summary Manager-only | P3 | — |
 
 ---
 

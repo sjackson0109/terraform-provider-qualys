@@ -77,7 +77,7 @@ func Provider() *schema.Provider {
 
 			"qualys_tagged_assets":       dataSourceTaggedAssets(),
 			"qualys_auth_records":        dataSourceAuthRecords(),
-			"qualys_was_scans":               dataSourceScans(),
+			"qualys_vm_scans":            dataSourceScans(),
 			"qualys_reports":             dataSourceReports(),
 			"qualys_vm_report_schedules": dataSourceVMReportSchedules(),
 			"qualys_tenant_capabilities": dataSourceTenantCapabilities(),
