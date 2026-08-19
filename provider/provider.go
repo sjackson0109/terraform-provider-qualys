@@ -67,7 +67,7 @@ func Provider() *schema.Provider {
 			"qualys_vaults":               dataSourceVaults(),
 			"qualys_was_applications":     dataSourceWASApplications(),
 			"qualys_vm_scan_schedules":    dataSourceVMScanSchedules(),
-			"qualys_option_profiles":      dataSourceOptionProfiles(),
+			"qualys_vm_option_profiles":   dataSourceVMOptionProfiles(),
 			"qualys_host_detections":      dataSourceHostDetections(),
 			"qualys_vm_report_templates":  dataSourceVMReportTemplates(),
 			"qualys_domains":              dataSourceDomains(),
@@ -76,7 +76,7 @@ func Provider() *schema.Provider {
 			"qualys_was_report_templates": dataSourceWASReportTemplates(),
 
 			"qualys_tagged_assets":       dataSourceTaggedAssets(),
-			"qualys_auth_records":        dataSourceAuthRecords(),
+			"qualys_vm_auth_records":     dataSourceVMAuthRecords(),
 			"qualys_vm_scans":            dataSourceScans(),
 			"qualys_reports":             dataSourceReports(),
 			"qualys_vm_report_schedules": dataSourceVMReportSchedules(),

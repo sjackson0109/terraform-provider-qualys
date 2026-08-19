@@ -1,11 +1,11 @@
 ---
-page_title: "qualys_auth_records Data Source - terraform-provider-qualys"
+page_title: "qualys_vm_auth_records Data Source - terraform-provider-qualys"
 subcategory: ""
 description: |-
   Look up authentication records of one type.
 ---
 
-# qualys_auth_records (Data Source)
+# qualys_vm_auth_records (Data Source)
 
 Look up authentication records of one type. The VM/PA authentication API is
 per-type (`/api/2.0/fo/auth/<type>/`, this repository's discovery notes
@@ -15,12 +15,12 @@ cross-type list.
 ## Example Usage
 
 ```terraform
-data "qualys_auth_records" "windows" {
+data "qualys_vm_auth_records" "windows" {
   type = "windows"
 }
 
 output "windows_record_titles" {
-  value = [for r in data.qualys_auth_records.windows.auth_records : r.title]
+  value = [for r in data.qualys_vm_auth_records.windows.auth_records : r.title]
 }
 ```
 

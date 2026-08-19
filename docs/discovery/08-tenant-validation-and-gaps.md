@@ -670,7 +670,7 @@ Confirmed type slug from doc 03 §11); `qualys_vault` (create/update/delete,
 with per-vault-type parameters left as a generic passthrough map rather than
 a fabricated schema — see doc comment on `vmdr.VaultInput`);
 `qualys_excluded_ips`; `qualys_host_tag_assignment` and
-`data.qualys_tagged_assets`; `data.qualys_auth_records`; `data.qualys_vm_scans`;
+`data.qualys_tagged_assets`; `data.qualys_vm_auth_records`; `data.qualys_vm_scans`;
 `data.qualys_reports`; `data.qualys_vm_report_schedules`; and
 `data.qualys_tenant_capabilities` (the doc 08 §7-recommended
 `GET /qps/rest/portal/version` probe, decoded as a generic flattened map
@@ -827,6 +827,32 @@ resource had been renamed away. Both are restored to their original wording
 above. Corrected to `data.qualys_vm_scans` (README, docs, examples, the
 `vmdr/scan.go` and `vmdr/user.go` doc comments, and this file) — matching
 the same convention as the scan-schedule pair, with no schema change.
+
+### Twelfth pass — the same disambiguation for `data.qualys_option_profiles` and `data.qualys_auth_records`
+
+Follow-on to the eleventh pass: the user asked for the two remaining
+unprefixed VM/PA-only data sources with a `was_`-prefixed resource-side
+sibling — `data.qualys_option_profiles` (sibling `qualys_vm_option_profile`
+/ `qualys_was_option_profile`) and `data.qualys_auth_records` (sibling
+`qualys_was_auth_record`) — to be brought in line with the same convention,
+closing the latent ambiguity flagged when the eleventh pass was reported.
+Renamed to `data.qualys_vm_option_profiles` and `data.qualys_vm_auth_records`
+(Go function/file names, provider.go, README, doc/example pairs — renamed
+to match this repo's `vm_`-prefixed file-naming convention — and the living
+discovery docs 03/06/09, which track current names; doc 08's own
+pass-by-pass entries above keep the names as they stood at the time,
+consistent with how the tenth and eleventh passes are written). No schema
+change; nested attribute names (`option_profiles`, `auth_records`) are
+unchanged, matching how `findings`/`scan_schedules` stay unprefixed inside
+their own `vm_`/`was_`-prefixed twins.
+
+While fixing this, also found and corrected two rows in the README's
+breaking-changes table corrupted by an unrelated merge-conflict resolution
+in the Connector v3 migration work (`qualys_scan_schedule` /
+`data.qualys_scan_schedules`, the tenth pass's original pair, had been
+merged into a single wrong `qualys_was_scan_schedule` row that also
+overwrote the `data.qualys_scan_schedules` entry with a duplicate of the
+first row) — restored from the pre-migration commit.
 > docs.qualys.com (the discovery environment's network policy blocked it — see README),
 > then confirm empirically against a test subscription before each affected schema is
 > frozen.

@@ -3,28 +3,32 @@
 A Terraform provider for [Qualys](https://www.qualys.com/) VMDR and WAS
 (Web Application Scanning) configuration.
 
-### Breaking: four resources/data sources renamed for naming consistency
+### Breaking: resources/data sources renamed for naming consistency
 
 Where the same concept exists in both VM/PA and WAS, both sides are now
 consistently `vm_`/`was_`-prefixed (matching the convention `qualys_vm_option_profile`/
 `qualys_was_option_profile` and `data.qualys_vm_findings`/`data.qualys_was_findings`
-already established):
+already established); and where a VM/PA-only concept could be confused with
+a future WAS equivalent, it is prefixed `vm_` too:
 
 | Old name | New name |
 |---|---|
-| `qualys_was_scan_schedule` | `qualys_vm_scan_schedule` |
-| `data.qualys_was_scan_schedules` | `data.qualys_vm_scan_schedules` |
+| `qualys_scan_schedule` | `qualys_vm_scan_schedule` |
+| `data.qualys_scan_schedules` | `data.qualys_vm_scan_schedules` |
 | `data.qualys_report_schedules` | `data.qualys_vm_report_schedules` |
 | `data.qualys_report_templates` | `data.qualys_vm_report_templates` |
 | `qualys_web_application` | `qualys_was_application` |
 | `data.qualys_web_applications` | `data.qualys_was_applications` |
+| `data.qualys_scans` | `data.qualys_vm_scans` |
+| `data.qualys_option_profiles` | `data.qualys_vm_option_profiles` |
+| `data.qualys_auth_records` | `data.qualys_vm_auth_records` |
 
 If you have existing state referencing the old names, update your
 configuration to the new resource/data source type and run, for each
 affected instance:
 
 ```shell
-terraform state mv 'qualys_was_scan_schedule.example' 'qualys_vm_scan_schedule.example'
+terraform state mv 'qualys_scan_schedule.example' 'qualys_vm_scan_schedule.example'
 ```
 
 Data sources need no state migration — just update the type name in
@@ -80,7 +84,7 @@ WAS (Web Application Scanning):
 | `qualys_scanner_appliances` | Look up scanner appliances |
 | `qualys_vaults` | Look up credential vaults |
 | `qualys_vm_scan_schedules` | Look up VM scan schedules |
-| `qualys_option_profiles` | Look up VM scan option profiles |
+| `qualys_vm_option_profiles` | Look up VM scan option profiles |
 | `qualys_vm_report_templates` | Look up VM/PA report templates |
 | `qualys_domains` | Look up asset domains and their netblocks |
 | `qualys_was_applications` | Look up WAS web applications |
@@ -90,7 +94,7 @@ WAS (Web Application Scanning):
 | `qualys_aws_connector` | Look up an AWS connector by numeric id or name |
 | `qualys_azure_connector` | Look up an Azure connector by numeric id or name |
 | `qualys_tagged_assets` | Look up AssetView/CSAM host assets by tag |
-| `qualys_auth_records` | Look up scan authentication records of one type |
+| `qualys_vm_auth_records` | Look up scan authentication records of one type |
 | `qualys_vm_scans` | Look up VM scan jobs |
 | `qualys_reports` | Look up generated VM/PA reports |
 | `qualys_vm_report_schedules` | Look up scheduled report definitions (list-only: there is no report schedule write API) |

@@ -271,7 +271,7 @@ closers:
 
 | Classification | Terraform mapping | Import | Destructive | Priority | Unresolved |
 |---|---|---|---|---|---|
-| resource (field-level API) + data source; XML import/export = provider helper | `qualys_vm_option_profile`; `data.qualys_option_profiles` | profile ID | delete breaks referencing scans/schedules | **P0–P1** (dependency of scans/schedules) | vulnerability-detection / auth-toggle / brute-force parameter names; `default`+`global` on update; 2.0→4.0/5.0 delta |
+| resource (field-level API) + data source; XML import/export = provider helper | `qualys_vm_option_profile`; `data.qualys_vm_option_profiles` | profile ID | delete breaks referencing scans/schedules | **P0–P1** (dependency of scans/schedules) | vulnerability-detection / auth-toggle / brute-force parameter names; `default`+`global` on update; 2.0→4.0/5.0 delta |
 
 ---
 
@@ -427,7 +427,7 @@ AdminBastion, HashiCorp; Azure Key Vault at least for Palo Alto records (10.1).
 
 | Classification | Terraform mapping | Import | Priority | Notes |
 |---|---|---|---|---|
-| resource (per family) + data source | **Both approaches** (per task question): `qualys_auth_record_<type>` resources with **write-only** credential arguments + vault reference support; `data.qualys_auth_records` for referencing pre-existing records | record ID | P1–P2 (Windows/Unix first — onboarding needs) | vault-backed records preferred to raw passwords; drift on credentials undetectable by design |
+| resource (per family) + data source | **Both approaches** (per task question): `qualys_auth_record_<type>` resources with **write-only** credential arguments + vault reference support; `data.qualys_vm_auth_records` for referencing pre-existing records | record ID | P1–P2 (Windows/Unix first — onboarding needs) | vault-backed records preferred to raw passwords; drift on credentials undetectable by design |
 | Vaults | resource | `qualys_vault` | vault ID | P2 | per-type vault param schemas `Unverified` |
 
 ---

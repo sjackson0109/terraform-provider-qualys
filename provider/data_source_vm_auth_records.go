@@ -4,10 +4,10 @@ import (
 	"context"
 	"sort"
 
-	"github.com/sjackson0109/terraform-provider-qualys/vmdr"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
+	"github.com/sjackson0109/terraform-provider-qualys/vmdr"
 )
 
 // authRecordTypeSlugs are the Confirmed type slugs from doc 03 §11.
@@ -19,13 +19,13 @@ var authRecordTypeSlugs = []string{
 	"oracle_weblogic", "jboss", "kubernetes", "docker", "palo_alto_firewall",
 }
 
-func dataSourceAuthRecords() *schema.Resource {
+func dataSourceVMAuthRecords() *schema.Resource {
 	return &schema.Resource{
 		Description: "Look up authentication records of one type. The VM/PA authentication " +
 			"API is per-type (`/api/2.0/fo/auth/<type>/`, doc 03 §11), so `type` selects " +
 			"which endpoint this reads from — there is no cross-type list.",
 
-		ReadContext: dataSourceAuthRecordsRead,
+		ReadContext: dataSourceVMAuthRecordsRead,
 
 		Schema: map[string]*schema.Schema{
 			"type": {
@@ -65,7 +65,7 @@ func dataSourceAuthRecords() *schema.Resource {
 	}
 }
 
-func dataSourceAuthRecordsRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+func dataSourceVMAuthRecordsRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	c, err := vmdrClient(meta)
 	if err != nil {
 		return diag.FromErr(err)

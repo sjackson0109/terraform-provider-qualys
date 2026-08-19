@@ -9,12 +9,12 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
-func dataSourceOptionProfiles() *schema.Resource {
+func dataSourceVMOptionProfiles() *schema.Resource {
 	return &schema.Resource{
 		Description: "Look up Qualys VM scan option profiles, for referencing profiles " +
 			"managed outside Terraform from scan schedules.",
 
-		ReadContext: dataSourceOptionProfilesRead,
+		ReadContext: dataSourceVMOptionProfilesRead,
 
 		Schema: map[string]*schema.Schema{
 			"title_contains": {
@@ -44,7 +44,7 @@ func dataSourceOptionProfiles() *schema.Resource {
 	}
 }
 
-func dataSourceOptionProfilesRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+func dataSourceVMOptionProfilesRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	c, err := vmdrClient(meta)
 	if err != nil {
 		return diag.FromErr(err)

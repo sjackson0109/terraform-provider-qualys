@@ -69,7 +69,7 @@ host detections (data source) ─→ stale-asset review ─→ purge (imperative
 ## Phase 3 — Authenticated scanning (P1–P2)
 
 11. `qualys_vault`, then `qualys_auth_record_windows` / `qualys_auth_record_unix`
-    (write-only secrets, vault references) + `data.qualys_auth_records`.
+    (write-only secrets, vault references) + `data.qualys_vm_auth_records`.
 12. `qualys_host_tag_assignment`; `qualys_domain`.
 
 ## Phase 4 — WAS onboarding (P2)
