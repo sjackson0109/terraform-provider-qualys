@@ -315,20 +315,62 @@ CI (`.github/workflows/ci.yaml`) additionally runs `staticcheck`,
 the Go version from `go.mod`'s own `go`/`toolchain` directives rather than
 a hardcoded value in the workflow.
 
-### Acceptance tests
+### Integration tests vs. acceptance tests
 
-`provider/resource_gcp_connector_acc_test.go` demonstrates a real
-Terraform-protocol acceptance test (`TF_ACC=1`, via the SDK's
-`helper/resource` package) against a local mock server — covering create,
-a credential-rotation update, a no-op plan and import for the GCP
-connector. It needs a `terraform` binary on `PATH` (or
-`TF_ACC_TERRAFORM_PATH` set); it does not run by default, so it never
-affects a plain `go test ./...`. This is the first resource covered, not
-the last — `qualys_asset_tag`, `qualys_vm_option_profile`,
+This provider has two genuinely different kinds of Terraform-protocol test,
+and the distinction matters: only one of them says anything about a real
+Qualys subscription.
+
+Both drive a real `terraform` binary and this provider's real binary over
+the real plugin protocol, via the SDK's `helper/resource` package — so both
+need a `terraform` binary on `PATH` (or `TF_ACC_TERRAFORM_PATH` set), and
+neither runs on a plain `go test ./...` (see below for why each is gated
+the way it is).
+
+**Integration tests** — files named `*_integration_test.go`, test functions
+named `TestIntegration*`:
+
+- [`provider/resource_gcp_connector_integration_test.go`](provider/resource_gcp_connector_integration_test.go) (`TestIntegrationGCPConnectorLifecycle`)
+- [`provider/resource_asset_group_integration_test.go`](provider/resource_asset_group_integration_test.go) (`TestIntegrationAssetGroupLifecycle`)
+- [`provider/resource_was_option_profile_integration_test.go`](provider/resource_was_option_profile_integration_test.go) (`TestIntegrationWASOptionProfileLifecycle`)
+
+Each runs a full create → refresh → update → refresh → no-op plan → import →
+delete cycle against an in-memory mock of the relevant Qualys HTTP API
+defined in the same file — not a real Qualys endpoint. They prove the full
+chain from Terraform configuration through this provider's schema, CRUD
+functions and wire encoding down to an HTTP request, and that a genuine
+`plan`/`apply`/`refresh`/`import`/`destroy` cycle behaves correctly against
+whatever that mock returns. They do **not** prove that Qualys's real API
+actually accepts or returns what the mock assumes — see
+[`provider/acctest_helpers_test.go`](provider/acctest_helpers_test.go) for
+how the mock's TLS certificate is trusted for the one `terraform`/provider
+subprocess pair each test spawns. They need no credentials and are gated on
+`TF_ACC=1` purely so they never run unintentionally inside a plain
+`go test ./...`, not because they need real ones — CI (`.github/workflows/ci.yaml`)
+runs them explicitly, with `TF_ACC=1` set and each test's `--- PASS` line
+checked individually, in a dedicated step separate from the plain
+`go test ./...` step (which always skips them).
+
+**Acceptance tests** — files named `*_acceptance_test.go`, test functions
+named `TestAcceptance*`:
+
+- [`provider/resource_gcp_connector_acceptance_test.go`](provider/resource_gcp_connector_acceptance_test.go) (`TestAcceptanceGCPConnectorLifecycle`) — currently the only resource with one
+
+These are gated on `TF_ACC=1` **and** an authorised real Qualys tenant:
+credentials (`QUALYS_URL`/`QUALYS_USERNAME`/`QUALYS_PASSWORD`) and any
+resource-specific configuration (e.g. `QUALYS_TEST_GCP_CREDENTIALS_JSON`)
+come entirely from environment variables, never hardcoded, and
+`requireRealTenantConfig` skips (not fails) a given acceptance test when its
+specific configuration is absent. These are the only tests in this
+repository that prove live Qualys behaviour — and **no live acceptance test
+has yet been executed against a real tenant**; the GCP connector's is a
+skeleton, ready to run once a maintainer supplies real credentials and a
+service-account key, and every other resource still needs its own
+acceptance test written. `qualys_asset_tag`, `qualys_vm_option_profile`,
 `qualys_vm_scan_schedule`, `qualys_was_application`,
-`qualys_was_auth_record`, a WAS scheduling resource and the AWS/Azure
-connectors are natural next candidates, following the same
-mock-server-backed pattern.
+`qualys_was_auth_record`, the asset group and WAS option profile resources
+already covered by an integration test, and the AWS/Azure connectors are
+natural next candidates for both kinds of test.
 
 ## References
 

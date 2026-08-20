@@ -155,7 +155,7 @@ func TestIntegrationWASOptionProfileLifecycle(t *testing.T) {
 	mock := newMockWASOptionProfileServer()
 	srv := httptest.NewTLSServer(mock)
 	defer srv.Close()
-	accMockServerEnv(t, srv.URL)
+	accMockServerEnv(t, srv)
 
 	resource.Test(t, resource.TestCase{
 		ProviderFactories: accProviders,

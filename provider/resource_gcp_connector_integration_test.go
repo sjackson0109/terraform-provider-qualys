@@ -203,15 +203,16 @@ func (m *mockGCPConnectorServer) writeConnector(w http.ResponseWriter, conn map[
 // process under the real terraform binary this test shells out to, and
 // that process does not share this test's *http.Client — it builds its
 // own via qps.NewClient, which trusts the OS certificate store, not
-// httptest.NewTLSServer's self-signed certificate. That makes every step
-// fail on TLS verification in this environment. IsUnitTest would make that
-// failure run — and break — on every plain `go test ./...`, which is worse
-// than a test that requires deliberate opt-in and fails clearly when run.
-// Fixing this for real needs provider support for a custom trusted CA
-// bundle — a feature that would need to be justified independently (e.g.
-// self-hosted Qualys platforms behind an internal CA), not added solely to
-// make this local mock reachable. Not implemented here; see the task's
-// final report.
+// httptest.NewTLSServer's self-signed certificate. Left alone, that makes
+// every step fail on TLS verification in this environment — not a reason
+// to weaken the provider's HTTPS enforcement, but a reason to give the
+// provider subprocess a trust root for this one test run; see
+// accMockServerEnv / trustMockServerCertificate in acctest_helpers_test.go
+// for how. IsUnitTest would make a TLS failure run — and break — on every
+// plain `go test ./...` if that mechanism were ever unavailable (e.g. on
+// Windows, where it deliberately skips instead — see
+// trustMockServerCertificate), which is worse than a test that requires
+// deliberate opt-in and fails clearly when run.
 func TestIntegrationGCPConnectorLifecycle(t *testing.T) {
 	// No IsUnitTest here (see doc comment above), so resource.Test's own
 	// TF_ACC gate applies — this is a mock-backed integration test, not a
@@ -222,7 +223,7 @@ func TestIntegrationGCPConnectorLifecycle(t *testing.T) {
 	mock := newMockGCPConnectorServer()
 	srv := httptest.NewTLSServer(mock)
 	defer srv.Close()
-	accMockServerEnv(t, srv.URL)
+	accMockServerEnv(t, srv)
 
 	keyA := `{"type":"service_account","project_id":"project-a","private_key":"x"}`
 	keyB := `{"type":"service_account","project_id":"project-b","private_key":"y"}`

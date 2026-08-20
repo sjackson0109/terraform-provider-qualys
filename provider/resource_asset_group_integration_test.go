@@ -76,9 +76,15 @@ func (m *mockAssetGroupServer) edit(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, `<SIMPLE_RETURN><RESPONSE><CODE>999</CODE><TEXT>not found</TEXT></RESPONSE></SIMPLE_RETURN>`)
 		return
 	}
+	// The edit action's fields are prefixed (set_title, set_comments, ...),
+	// matching the real API's documented parameter names (see
+	// vmdr.UpdateAssetGroup) — unlike add's bare names (title, comments).
+	// Strip the prefix so list() below can read a single, consistent set of
+	// keys regardless of whether a group's current state came from add or
+	// edit.
 	stored := url.Values{}
 	for k, v := range r.Form {
-		stored[k] = v
+		stored[strings.TrimPrefix(k, "set_")] = v
 	}
 	m.byID[id] = stored
 	fmt.Fprint(w, `<SIMPLE_RETURN><RESPONSE><TEXT>Asset Group Updated Successfully</TEXT></RESPONSE></SIMPLE_RETURN>`)
@@ -135,7 +141,7 @@ func TestIntegrationAssetGroupLifecycle(t *testing.T) {
 	mock := newMockAssetGroupServer()
 	srv := httptest.NewTLSServer(mock)
 	defer srv.Close()
-	accMockServerEnv(t, srv.URL)
+	accMockServerEnv(t, srv)
 
 	resource.Test(t, resource.TestCase{
 		ProviderFactories: accProviders,

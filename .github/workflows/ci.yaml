@@ -63,6 +63,46 @@ jobs:
           LOCAL: true
           CGO_ENABLED: 1
         run: go test -race ./...
+      - name: Setup Terraform (for integration tests)
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_wrapper: false
+      - name: Integration tests (mock-backed Terraform lifecycle)
+        # TestIntegrationGCPConnectorLifecycle, TestIntegrationAssetGroupLifecycle
+        # and TestIntegrationWASOptionProfileLifecycle each drive a real
+        # terraform binary and this provider's real binary over the real
+        # plugin protocol against an in-memory mock Qualys API (see
+        # provider/*_integration_test.go) — proving Terraform/provider
+        # lifecycle behaviour, not live Qualys API compatibility (see
+        # README.md's Testing section). They are gated on TF_ACC=1 purely to
+        # avoid ever running unintentionally in the plain `go test ./...`
+        # step above, not because they need real credentials — the "Test"
+        # step above does not set TF_ACC, so it always skips them, which is
+        # why this step exists: without it, nothing in this workflow would
+        # ever actually execute them. -run scopes to exactly these three, and
+        # explicitly checking for a "--- PASS" line per test (rather than
+        # trusting the step's own exit code alone) makes a future change that
+        # silently skips or removes one of them fail CI loudly instead of
+        # quietly passing.
+        env:
+          LOCAL: true
+          TF_ACC: '1'
+        run: |
+          tests="TestIntegrationGCPConnectorLifecycle TestIntegrationAssetGroupLifecycle TestIntegrationWASOptionProfileLifecycle"
+          pattern=$(echo "$tests" | tr ' ' '|')
+
+          set +e
+          go test ./provider/... -run "^(${pattern})\$" -v 2>&1 | tee /tmp/integration-test.log
+          status=${PIPESTATUS[0]}
+          set -e
+
+          for t in $tests; do
+            if ! grep -q -- "--- PASS: ${t}" /tmp/integration-test.log; then
+              echo "::error::${t} did not report PASS in the integration test log above"
+              status=1
+            fi
+          done
+          exit "$status"
   release:
     if: startsWith(github.ref, 'refs/tags')
     needs: [ syntax_and_build ]

@@ -1,8 +1,12 @@
 package provider
 
 import (
+	"encoding/pem"
 	"fmt"
+	"net/http/httptest"
 	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -56,17 +60,86 @@ func mockCredential(label string) string {
 	return strings.Join([]string{"local-mock-only", label, "not-a-real-credential"}, "-")
 }
 
-// accMockServerEnv points the provider at a local mock server for an
-// integration test, and restores the previous environment afterward.
-// baseURL must be an https:// URL (qps.Client refuses plain HTTP), matching
-// what httptest.NewTLSServer produces.
-func accMockServerEnv(t *testing.T, baseURL string) {
+// accMockServerEnv points the provider at srv (an httptest.NewTLSServer)
+// for an integration test, and restores the previous environment
+// afterward. It also arranges for the *provider subprocess* — a separate
+// process the real terraform binary launches, which does not share this
+// test's srv.Client() — to trust srv's certificate; see
+// trustMockServerCertificate for how and why.
+func accMockServerEnv(t *testing.T, srv *httptest.Server) {
 	t.Helper()
+	trustMockServerCertificate(t, srv)
 	setTestEnv(t, map[string]string{
-		"QUALYS_URL":      baseURL,
+		"QUALYS_URL":      srv.URL,
 		"QUALYS_USERNAME": mockCredential("username"),
 		"QUALYS_PASSWORD": mockCredential("password"),
 	})
+}
+
+// trustMockServerCertificate makes srv's self-signed certificate trusted by
+// every process this test run spawns — the real terraform binary
+// resource.Test shells out to, and the real provider binary that terraform
+// in turn launches as its own subprocess — without weakening the provider
+// itself. qps.NewClient/vmdr.NewClient build an *http.Client with no custom
+// TLSClientConfig, so they fall back to the OS trust store; that store has
+// no way to know about a certificate httptest.NewTLSServer generated fresh
+// for this one test run, so every HTTPS call from the provider subprocess
+// would otherwise fail TLS verification — not because the provider's HTTPS
+// enforcement is broken (it is exactly the enforcement working as intended
+// against a genuinely untrusted certificate), but because the mock's
+// identity is unknown to anything outside this test.
+//
+// The fix operates entirely at the OS/process-environment layer, never by
+// adding a way for the provider to skip or customise verification:
+//
+//   - The certificate is written to a PEM file inside a t.TempDir(), which
+//     the testing package removes automatically when the test ends — no
+//     manual cleanup, and nothing left behind on disk.
+//   - SSL_CERT_FILE, which crypto/x509 documents as overriding the default
+//     trusted-root locations, is set to that file for the duration of the
+//     test via setTestEnv (which restores or unsets it in t.Cleanup).
+//     terraform-exec inherits this test process's environment by default
+//     when it shells out to the terraform binary, and Terraform's plugin
+//     protocol passes environment through to the provider subprocess it
+//     launches in turn, so the trust extends exactly as far as the two
+//     processes this one test run creates — not the developer's or CI
+//     runner's ambient trust store, and not any other test.
+//   - HTTPS itself is unchanged: the provider still refuses non-https
+//     base URLs and still performs full certificate verification: it
+//     verifies against a trust root this test supplied for this run only,
+//     rather than skipping verification.
+//
+// SSL_CERT_FILE is a Unix mechanism (crypto/x509/root_unix.go — "Unix
+// systems other than macOS"); Go's Windows root-trust path (root_windows.go)
+// does not read it, and this suite deliberately does not fall back to
+// modifying the Windows certificate store, which is global OS state a test
+// process cannot safely own and clean up on its own. On Windows this skips
+// with a clear explanation instead. CI runs on ubuntu-latest, where this
+// mechanism applies and these tests run to completion.
+func trustMockServerCertificate(t *testing.T, srv *httptest.Server) {
+	t.Helper()
+
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping: this integration test needs the provider subprocess to trust " +
+			"the local mock server's certificate via SSL_CERT_FILE, which Go's " +
+			"crypto/x509 only honours on Unix (root_unix.go) — not on Windows " +
+			"(root_windows.go uses the OS certificate store instead, and this test " +
+			"suite deliberately does not modify that automatically). Run on Linux or " +
+			"macOS, or in CI (ubuntu-latest), where this test runs to completion.")
+	}
+
+	cert := srv.Certificate()
+	if cert == nil {
+		t.Fatal("mock server has no certificate — was it created with httptest.NewTLSServer?")
+	}
+
+	pemBytes := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: cert.Raw})
+	certPath := filepath.Join(t.TempDir(), "mock-server-ca.pem")
+	if err := os.WriteFile(certPath, pemBytes, 0o600); err != nil {
+		t.Fatalf("writing mock server certificate: %v", err)
+	}
+
+	setTestEnv(t, map[string]string{"SSL_CERT_FILE": certPath})
 }
 
 func setTestEnv(t *testing.T, vars map[string]string) {
