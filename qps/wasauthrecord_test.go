@@ -269,6 +269,49 @@ func TestCreateWASAuthRecordSendsComments(t *testing.T) {
 	}
 }
 
+// TestUpdateWASAuthRecordSendsEmptyTagsToClear is a regression test:
+// tag_ids was only ever sent when non-empty (`if len(in.TagIDs) > 0`), so
+// clearing every tag in configuration produced a nil pointer that
+// omitempty dropped from the request entirely — the server's previous
+// tags were left in place forever.
+func TestUpdateWASAuthRecordSendsEmptyTagsToClear(t *testing.T) {
+	var gotBody map[string]interface{}
+
+	c, srv := testClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(b, &gotBody)
+		fmt.Fprint(w, `{"ServiceResponse":{"responseCode":"SUCCESS","count":1,
+		  "data":[{"WebAppAuthRecord":{"id":80}}]}}`)
+	}))
+	defer srv.Close()
+
+	// TagIDs deliberately nil: this is "clear every tag", not "leave tags
+	// alone".
+	err := c.UpdateWASAuthRecord(context.Background(), "80", WASAuthRecordInput{
+		Name:   "x",
+		Server: &WASServerRecord{Username: "u", Password: "p"},
+	})
+	if err != nil {
+		t.Fatalf("UpdateWASAuthRecord: %v", err)
+	}
+
+	sreq, _ := gotBody["ServiceRequest"].(map[string]interface{})
+	data, _ := sreq["data"].(map[string]interface{})
+	record, _ := data["WebAppAuthRecord"].(map[string]interface{})
+
+	tags, present := record["tags"]
+	if !present {
+		t.Fatal("tags key must be present (even empty) so the API can " +
+			"distinguish 'clear this' from 'leave unchanged'")
+	}
+	tagsMap, _ := tags.(map[string]interface{})
+	tagSet, _ := tagsMap["set"].(map[string]interface{})
+	tagSimples, _ := tagSet["TagSimple"].([]interface{})
+	if len(tagSimples) != 0 {
+		t.Errorf("tags.set.TagSimple = %v, want an empty (but present) list", tagSimples)
+	}
+}
+
 // CreateWASAuthRecord must reject a request with neither record type: it has
 // no credential the crawler could use, and the API accepting it silently
 // would only surface as unauthenticated scan results much later.

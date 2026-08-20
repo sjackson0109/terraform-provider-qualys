@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 
-	"github.com/sjackson0109/terraform-provider-qualys/qps"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
+	"github.com/sjackson0109/terraform-provider-qualys/qps"
 )
 
 func resourceWASReportSchedule() *schema.Resource {
@@ -175,15 +175,7 @@ func resourceWASReportScheduleRead(ctx context.Context, d *schema.ResourceData, 
 	sched, err := c.GetWASReportSchedule(ctx, d.Id())
 	if err != nil {
 		if errors.Is(err, qps.ErrNotFound) {
-			d.SetId("")
-			return diag.Diagnostics{{
-				Severity: diag.Warning,
-				Summary:  "WAS report schedule no longer visible; removing it from state",
-				Detail: "Qualys reported OBJECT_NOT_FOUND, which it also returns for objects " +
-					"outside the caller's scope. If the schedule still exists and the credentials' " +
-					"scope changed, restore the scope before applying, or Terraform will create a " +
-					"duplicate.",
-			}}
+			return qpsNotFoundOnRead(d, "WAS report schedule")
 		}
 		return diag.FromErr(err)
 	}

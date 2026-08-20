@@ -39,11 +39,9 @@ func resourceAWSConnector() *schema.Resource {
 	}
 	s["is_china_region"] = &schema.Schema{
 		Description: "Whether this connector targets an AWS China region account. " +
-			"Read-only under the Connector v3 API.",
-		Type:       schema.TypeBool,
-		Optional:   true,
-		Computed:   true,
-		Deprecated: "The Connector v3 API has no China-region write field; the value is read-only.",
+			"Read-only: the Connector v3 API reports this but has no field to set it.",
+		Type:     schema.TypeBool,
+		Computed: true,
 	}
 	s["is_portal_connector"] = &schema.Schema{
 		Description: "No effect. The Connector v3 API always manages the portal " +
@@ -135,8 +133,7 @@ func resourceAWSConnectorRead(ctx context.Context, d *schema.ResourceData, meta 
 	conn, err := client.GetAWSConnector(ctx, d.Id())
 	if err != nil {
 		if errors.Is(err, qps.ErrNotFound) {
-			d.SetId("")
-			return nil
+			return qpsNotFoundOnRead(d, "AWS connector")
 		}
 		return diag.FromErr(err)
 	}
@@ -177,5 +174,14 @@ func resourceAWSConnectorDelete(ctx context.Context, d *schema.ResourceData, met
 	if err != nil {
 		return diag.FromErr(err)
 	}
-	return diag.FromErr(client.DeleteAWSConnector(ctx, d.Id()))
+	if err := client.DeleteAWSConnector(ctx, d.Id()); err != nil {
+		if errors.Is(err, qps.ErrNotFound) {
+			// Already gone (or already out of scope) from this caller's
+			// perspective — either way, the desired end state of Delete is
+			// achieved, so this must succeed rather than error.
+			return nil
+		}
+		return diag.FromErr(err)
+	}
+	return nil
 }

@@ -3,9 +3,9 @@ package provider
 import (
 	"testing"
 
-	"github.com/sjackson0109/terraform-provider-qualys/qps"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/sjackson0109/terraform-provider-qualys/qps"
 )
 
 func TestWASFindingsSchemaValidatesSeverity(t *testing.T) {

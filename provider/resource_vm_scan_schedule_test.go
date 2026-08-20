@@ -1,10 +1,16 @@
 package provider
 
 import (
+	"context"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
+	"github.com/sjackson0109/terraform-provider-qualys/vmdr"
 )
 
 func validSchedule() map[string]interface{} {
@@ -89,5 +95,58 @@ func TestScanScheduleWeekdayNamesAreValidated(t *testing.T) {
 	// catches an easy confusion between the two encodings.
 	if _, errs := v("1", "weekdays"); len(errs) == 0 {
 		t.Error("expected a numeric day to be rejected; weekdays takes names")
+	}
+}
+
+// TestScanScheduleReadRefreshesRecurrenceAndTargets is a regression test:
+// Read's values map used to omit weekdays, day_of_week, start_date and ips
+// even though the list/get API genuinely returns all four (unlike
+// asset_group_ids, which the API only ever reports by title — see the
+// comment in resourceVMScanScheduleRead). A schedule imported or refreshed
+// after drifting outside Terraform used to silently show the wrong (zero)
+// value for these fields with no diff ever appearing.
+func TestScanScheduleReadRefreshesRecurrenceAndTargets(t *testing.T) {
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `<SCHEDULE_SCAN_LIST_OUTPUT><RESPONSE><SCHEDULE_SCAN_LIST>
+		  <SCAN>
+		    <ID>160642</ID><ACTIVE>1</ACTIVE><TITLE>nightly</TITLE>
+		    <OPTION_PROFILE><ID>51451401</ID><TITLE>web</TITLE></OPTION_PROFILE>
+		    <SCHEDULE>
+		      <START_DATE_UTC>08/20/2026</START_DATE_UTC>
+		      <START_HOUR>2</START_HOUR><START_MINUTE>30</START_MINUTE>
+		      <TIME_ZONE><TIME_ZONE_CODE>US-NY</TIME_ZONE_CODE></TIME_ZONE>
+		      <WEEKLY frequency_weeks="2" weekdays="monday,friday"/>
+		    </SCHEDULE>
+		    <TARGET>
+		      <IP_SET><IP>10.0.0.5</IP><IP>10.0.0.9</IP></IP_SET>
+		    </TARGET>
+		  </SCAN>
+		</SCHEDULE_SCAN_LIST></RESPONSE></SCHEDULE_SCAN_LIST_OUTPUT>`)
+	}))
+	defer srv.Close()
+	c, err := vmdr.NewClient(vmdr.Config{
+		BaseURL: srv.URL, Username: "u", Password: "p", HTTPClient: srv.Client(), MaxRetries: 1,
+	})
+	if err != nil {
+		t.Fatalf("vmdr.NewClient: %v", err)
+	}
+
+	r := resourceVMScanSchedule()
+	d := r.Data(&terraform.InstanceState{ID: "160642"})
+	diags := r.ReadContext(context.Background(), d, &clients{vmdr: c})
+	if diags.HasError() {
+		t.Fatalf("Read: %v", diags)
+	}
+
+	weekdays := stringSetFromInterface(d.Get("weekdays"))
+	if len(weekdays) != 2 {
+		t.Errorf("weekdays = %v, want 2 entries", weekdays)
+	}
+	if got := d.Get("start_date").(string); got != "08/20/2026" {
+		t.Errorf("start_date = %q", got)
+	}
+	ips := stringSetFromInterface(d.Get("ips"))
+	if len(ips) != 2 {
+		t.Errorf("ips = %v, want 2 entries", ips)
 	}
 }

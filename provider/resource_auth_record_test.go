@@ -1,8 +1,15 @@
 package provider
 
 import (
+	"context"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
+	"github.com/sjackson0109/terraform-provider-qualys/vmdr"
 )
 
 // A record with neither a password nor a vault is accepted by Qualys, and scans
@@ -84,5 +91,41 @@ func TestAuthRecordAllowsUnknownCredentialAtPlanTime(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("a computed password must not fail the plan: %v", err)
+	}
+}
+
+// TestAuthRecordReadRefreshesVaultType is a regression test: vault_type is
+// genuinely returned by the list API (vmdr/auth.go's authRecordGeneric
+// decodes VAULT>VAULT_TYPE) but Read's values map used to omit it — a
+// record referencing a vault would never round-trip its vault_type into
+// state, producing a permanent diff for anyone who set it explicitly.
+func TestAuthRecordReadRefreshesVaultType(t *testing.T) {
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `<AUTH_UNIX_LIST_OUTPUT><RESPONSE><AUTH_UNIX_LIST>
+		  <AUTH_UNIX_RECORD>
+		    <ID>9001</ID><TITLE>linux-scan</TITLE><USERNAME>scanner</USERNAME>
+		    <VAULT><VAULT_ID>500</VAULT_ID><VAULT_TYPE>cyberark_aim</VAULT_TYPE></VAULT>
+		  </AUTH_UNIX_RECORD>
+		</AUTH_UNIX_LIST></RESPONSE></AUTH_UNIX_LIST_OUTPUT>`)
+	}))
+	defer srv.Close()
+	c, err := vmdr.NewClient(vmdr.Config{
+		BaseURL: srv.URL, Username: "u", Password: "p", HTTPClient: srv.Client(), MaxRetries: 1,
+	})
+	if err != nil {
+		t.Fatalf("vmdr.NewClient: %v", err)
+	}
+
+	r := resourceUnixAuthRecord()
+	d := r.Data(&terraform.InstanceState{ID: "9001"})
+	diags := r.ReadContext(context.Background(), d, &clients{vmdr: c})
+	if diags.HasError() {
+		t.Fatalf("Read: %v", diags)
+	}
+	if got := d.Get("vault_type").(string); got != "cyberark_aim" {
+		t.Errorf("vault_type = %q, want %q", got, "cyberark_aim")
+	}
+	if got := d.Get("vault_id").(string); got != "500" {
+		t.Errorf("vault_id = %q, want %q", got, "500")
 	}
 }

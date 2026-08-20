@@ -52,11 +52,5 @@ func (c *Client) ImportWASBurp(ctx context.Context, in WASBurpImport) error {
 		return fmt.Errorf("qualys qps: WAS Burp import requires the Burp XML report content")
 	}
 	return c.call(ctx, http.MethodPost, "/qps/rest/3.0/import/was/burp",
-		&ServiceRequest{Data: wasBurpImportWire{
-			WebAppID:              in.WebAppID,
-			PurgeResults:          in.PurgeResults,
-			CloseUnreportedIssues: in.CloseUnreportedIssues,
-			FileName:              in.FileName,
-			BurpXML:               in.BurpXML,
-		}}, nil, true)
+		&ServiceRequest{Data: wasBurpImportWire(in)}, nil, true)
 }

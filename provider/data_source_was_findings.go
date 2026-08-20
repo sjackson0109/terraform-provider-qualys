@@ -6,14 +6,13 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
-	"strings"
 	"time"
 
-	"github.com/sjackson0109/terraform-provider-qualys/qps"
-	"github.com/sjackson0109/terraform-provider-qualys/vmdr"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
+	"github.com/sjackson0109/terraform-provider-qualys/qps"
+	"github.com/sjackson0109/terraform-provider-qualys/vmdr"
 )
 
 func dataSourceWASFindings() *schema.Resource {
@@ -301,6 +300,9 @@ func dataSourceWASFindingsRead(ctx context.Context, d *schema.ResourceData, meta
 		severity = strconv.Itoa(v.(int))
 	}
 	var isIgnored *bool
+	// See provider/data_source_users.go's identical GetOkExists usage for
+	// why this deprecated (SA1019) call is deliberate here.
+	//lint:ignore SA1019 see data_source_users.go
 	if v, ok := d.GetOkExists("is_ignored"); ok {
 		b := v.(bool)
 		isIgnored = &b
@@ -491,6 +493,18 @@ type wasFindingFilters struct {
 }
 
 func filterWASFindings(findings []*qps.WASFinding, f wasFindingFilters) ([]*qps.WASFinding, error) {
+	// after/before are constant across every finding in this pass — see
+	// filterVMFindings' identical reasoning for pre-parsing them once
+	// rather than on every finding in the loop below.
+	firstDetected, err := parseDateBound(time.RFC3339Nano, f.FirstDetectedAfter, f.FirstDetectedBefore)
+	if err != nil {
+		return nil, err
+	}
+	lastDetected, err := parseDateBound(time.RFC3339Nano, f.LastDetectedAfter, f.LastDetectedBefore)
+	if err != nil {
+		return nil, err
+	}
+
 	qidSet := toStringSet(f.QIDs)
 	statusSet := toStringSet(f.Statuses)
 	typeSet := toStringSet(f.Types)
@@ -517,14 +531,14 @@ func filterWASFindings(findings []*qps.WASFinding, f wasFindingFilters) ([]*qps.
 			continue
 		}
 
-		ok, err := withinWASDateFilter(finding.FirstDetectedDate, f.FirstDetectedAfter, f.FirstDetectedBefore)
+		ok, err := withinDateBound(finding.FirstDetectedDate, firstDetected)
 		if err != nil {
 			return nil, err
 		}
 		if !ok {
 			continue
 		}
-		ok, err = withinWASDateFilter(finding.LastDetectedDate, f.LastDetectedAfter, f.LastDetectedBefore)
+		ok, err = withinDateBound(finding.LastDetectedDate, lastDetected)
 		if err != nil {
 			return nil, err
 		}
@@ -548,45 +562,12 @@ func toStringSet(values []string) map[string]bool {
 	return out
 }
 
-// withinWASDateFilter mirrors data_source_vm_findings.go's withinDateFilter,
-// with one difference: it parses with time.RFC3339Nano rather than
-// time.RFC3339, since this session has no confirmed evidence for whether
-// WAS finding timestamps ever carry fractional seconds and RFC3339Nano
-// parses both forms. See withinDateFilter's doc comment for the shared
-// reasoning on excluding a finding with a missing value, and on treating a
-// value this provider itself decoded as unparseable as a surfaced error.
-func withinWASDateFilter(value, after, before string) (bool, error) {
-	if after == "" && before == "" {
-		return true, nil
-	}
-	if strings.TrimSpace(value) == "" {
-		return false, nil
-	}
-	t, err := time.Parse(time.RFC3339Nano, value)
-	if err != nil {
-		return false, fmt.Errorf("qualys: finding datetime %q is not RFC3339; "+
-			"cannot evaluate a date filter against it", value)
-	}
-	if after != "" {
-		afterT, err := time.Parse(time.RFC3339Nano, after)
-		if err != nil {
-			return false, fmt.Errorf("qualys: parsing date filter %q: %w", after, err)
-		}
-		if t.Before(afterT) {
-			return false, nil
-		}
-	}
-	if before != "" {
-		beforeT, err := time.Parse(time.RFC3339Nano, before)
-		if err != nil {
-			return false, fmt.Errorf("qualys: parsing date filter %q: %w", before, err)
-		}
-		if t.After(beforeT) {
-			return false, nil
-		}
-	}
-	return true, nil
-}
+// WAS finding date filters use time.RFC3339Nano (not time.RFC3339, as VM
+// findings do): this session has no confirmed evidence for whether WAS
+// finding timestamps ever carry fractional seconds, and RFC3339Nano parses
+// both forms. See filterWASFindings, which calls the shared
+// parseDateBound/withinDateBound in data_source_vm_findings.go with that
+// layout.
 
 // sortWASFindings orders findings by numeric Qualys finding ID — already a
 // globally unique, consistently sortable identity, so no secondary sort

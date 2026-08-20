@@ -66,7 +66,13 @@ type dnsMappingsWire struct {
 }
 
 type dnsCommentsWire struct {
-	Set  []string `json:"set,omitempty"`
+	// Set deliberately has no omitempty: an empty (but non-nil, always
+	// allocated by wasDNSOverrideInputToWire) slice must still render as
+	// "set":[] on the wire, or clearing comments back to empty could never
+	// reach the API — see that function's doc comment. List keeps
+	// omitempty; it is decode-only (a response never needs to distinguish
+	// "server sent an empty list" from "server sent nothing").
+	Set  []string `json:"set"`
 	List []string `json:"list,omitempty"`
 }
 
@@ -92,7 +98,7 @@ func dnsMappingsToWire(mappings []WASDNSMapping) *dnsMappingsWire {
 	}
 	wire := make([]dnsMappingWire, 0, len(mappings))
 	for _, m := range mappings {
-		wire = append(wire, dnsMappingWire{HostName: m.HostName, IPAddress: m.IPAddress})
+		wire = append(wire, dnsMappingWire(m))
 	}
 	return &dnsMappingsWire{Set: &dnsMappingSetWire{DnsMapping: wire}}
 }
@@ -102,16 +108,22 @@ func wasDNSOverrideInputToWire(in WASDNSOverrideInput) *wasDNSOverrideWire {
 		Name:     in.Name,
 		Mappings: dnsMappingsToWire(in.Mappings),
 	}
-	if len(in.Comments) > 0 {
-		w.Comments = &dnsCommentsWire{Set: in.Comments}
+
+	// Comments and Tags are always sent, even empty — the same "clearing
+	// this back to empty must actually reach the API" reasoning as
+	// dnsMappingsToWire's own unconditional allocation just above.
+	comments := in.Comments
+	if comments == nil {
+		comments = []string{}
 	}
-	if len(in.TagIDs) > 0 {
-		simples := make([]tagSimple, 0, len(in.TagIDs))
-		for _, id := range in.TagIDs {
-			simples = append(simples, tagSimple{ID: json.Number(id)})
-		}
-		w.Tags = &webAppTagList{Set: &tagSimpleList{TagSimple: simples}}
+	w.Comments = &dnsCommentsWire{Set: comments}
+
+	simples := make([]tagSimple, 0, len(in.TagIDs))
+	for _, id := range in.TagIDs {
+		simples = append(simples, tagSimple{ID: json.Number(id)})
 	}
+	w.Tags = &webAppTagList{Set: &tagSimpleList{TagSimple: simples}}
+
 	return w
 }
 
@@ -129,7 +141,7 @@ func (w *wasDNSOverrideWire) toWASDNSOverride() *WASDNSOverride {
 		}
 		if set != nil {
 			for _, m := range set.DnsMapping {
-				out.Mappings = append(out.Mappings, WASDNSMapping{HostName: m.HostName, IPAddress: m.IPAddress})
+				out.Mappings = append(out.Mappings, WASDNSMapping(m))
 			}
 		}
 	}

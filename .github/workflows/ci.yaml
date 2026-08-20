@@ -17,16 +17,32 @@ jobs:
       - name: Setup Golang
         uses: actions/setup-go@c4a742cab115ed795e34d4513e2cf7d472deb55f # v3.3.1
         with:
-          # go.mod's `go 1.13` directive predates this provider's current
-          # dependencies (terraform-plugin-sdk/v2, resty/v2) and is kept
-          # unbumped as a separate concern from this workflow; pinning an
-          # explicit, modern toolchain here avoids CI depending on whether
-          # a decade-old Go release can still build them.
-          go-version: '1.21'
+          # go.mod's own `go`/`toolchain` directives (go 1.25, toolchain
+          # go1.26.6) are authoritative — go.mod's `toolchain` line pins a
+          # specific patched release for known CVEs, and this reads it
+          # directly rather than hardcoding a version here that could drift
+          # out of sync with it.
+          go-version-file: go.mod
       - name: Check gofmt (syntax/style)
         run: ./scripts/gofmtcheck.sh
       - name: go vet
         run: go vet ./...
+      - name: staticcheck
+        # Pinned by version (not @latest) for deterministic, reproducible
+        # CI runs — a tool update should be a deliberate diff, not a
+        # silent change in what "passing CI" means.
+        run: |
+          go install honnef.co/go/tools/cmd/staticcheck@v0.8.0
+          staticcheck ./...
+      - name: govulncheck
+        # Scans this module's actual call graph for known-vulnerable
+        # dependency code paths (not just "is a vulnerable version listed",
+        # which would also flag vulnerabilities in code this provider never
+        # reaches). Also pinned by version for the same reason as
+        # staticcheck above.
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@v1.7.0
+          govulncheck ./...
       - name: Build
         env:
           # Must be outside the checked-out working tree: the Makefile's
@@ -42,6 +58,11 @@ jobs:
         env:
           LOCAL: true
         run: go test ./...
+      - name: Test (race detector)
+        env:
+          LOCAL: true
+          CGO_ENABLED: 1
+        run: go test -race ./...
   release:
     if: startsWith(github.ref, 'refs/tags')
     needs: [ syntax_and_build ]
@@ -56,6 +77,6 @@ jobs:
       - name: Setup Golang
         uses: actions/setup-go@c4a742cab115ed795e34d4513e2cf7d472deb55f # v3.3.1
         with:
-          go-version: '1.21' # matches syntax_and_build; see its comment above
+          go-version-file: go.mod # matches syntax_and_build; see its comment above
       - name: Release
         run: scripts/goreleaser.sh

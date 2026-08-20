@@ -62,14 +62,22 @@ resource "qualys_aws_connector" "dev" {
   assets: `VM`, `CERTVIEW`, `CLOUDVIEW`, `SCA`, `CSA`
 - **default_tag_ids** (Set of String) Asset tag ids applied to every asset
   this connector discovers
-- **is_china_region** (Boolean, Deprecated) Read-only under the Connector
-  v3 API; the value is reported, not settable
 - **is_portal_connector** (Boolean, Deprecated) No effect; the Connector v3
   API always manages the portal (AssetView) connector itself
 
 ### Read-Only
 
 - **connector_id** (String) The connector's numeric Connector v3 id
+- **is_china_region** (Boolean) Whether this connector targets an AWS China
+  region account. The Connector v3 API only reports this; it has no field
+  to set it.
+
+  ~> **Breaking change:** this was previously `Optional`. The write path
+  never actually worked — the value was silently discarded on every
+  create/update and immediately overwritten by the next Read, producing a
+  permanent, unresolvable diff for any configuration that set it
+  explicitly. Remove `is_china_region` from configuration; Terraform will
+  now report it correctly without you setting it.
 - **aws_account_id** (String) The AWS account ID associated with this
   connector
 - **qualys_aws_account_id** (String) The Qualys-owned AWS account that

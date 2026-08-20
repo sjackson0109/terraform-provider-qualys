@@ -5,10 +5,10 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/sjackson0109/terraform-provider-qualys/vmdr"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
+	"github.com/sjackson0109/terraform-provider-qualys/vmdr"
 )
 
 // resourceAuthRecord builds a record resource for one authentication type.
@@ -190,13 +190,14 @@ func resourceAuthRecordRead(t vmdr.AuthRecordType) schema.ReadContextFunc {
 		// The password is deliberately absent: it is never read back, so drift in
 		// the credential itself is not detected. Everything else is refreshed.
 		return diag.FromErr(setAll(d, map[string]interface{}{
-			"title":    r.Title,
-			"username": r.Username,
-			"comments": r.Comments,
-			"ips":      r.IPs,
-			"vault_id": r.VaultID,
-			"created":  r.Created,
-			"modified": r.Modified,
+			"title":      r.Title,
+			"username":   r.Username,
+			"comments":   r.Comments,
+			"ips":        r.IPs,
+			"vault_id":   r.VaultID,
+			"vault_type": r.VaultType,
+			"created":    r.Created,
+			"modified":   r.Modified,
 		}))
 	}
 }

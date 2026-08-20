@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 
-	"github.com/sjackson0109/terraform-provider-qualys/vmdr"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
+	"github.com/sjackson0109/terraform-provider-qualys/vmdr"
 )
 
 func resourceVMScanSchedule() *schema.Resource {
@@ -402,12 +402,28 @@ func resourceVMScanScheduleRead(ctx context.Context, d *schema.ResourceData, met
 		"frequency_weeks":  s.FrequencyWeeks,
 		"frequency_months": s.FrequencyMonths,
 		"day_of_month":     s.DayOfMonth,
+		"day_of_week":      s.DayOfWeek,
 		"week_of_month":    s.WeekOfMonth,
+		"weekdays":         s.Weekdays,
+		"start_date":       s.StartDate,
 		"start_hour":       s.StartHour,
 		"start_minute":     s.StartMinute,
 		"time_zone_code":   s.TimeZoneCode,
 		"observe_dst":      s.ObserveDST,
+		"ips":              s.IPs,
 	}
+	// The remaining schema attributes (exclude_ips, network_id,
+	// scanner_names, use_*_scanners, tag_include_ids/tag_exclude_ids/
+	// tag_include_selector, recurrence, end_after_hours/end_after_minutes,
+	// notify_*, recipient_group_ids, asset_group_ids) are deliberately not
+	// refreshed here: the list/get XML response this session confirmed
+	// (vmdr/scanschedule.go's decode struct) simply does not return them —
+	// the same class of API limitation vmdr.VMOptionProfile's doc comment
+	// already documents for a different resource, not an oversight.
+	// AssetGroupTitles is the one exception the wire format does return,
+	// but the schema's asset_group_ids expects IDs, which this endpoint
+	// never reports on read (see ScanSchedule's own doc comment) — writing
+	// it here would silently zero out a configured value, not fix a bug.
 
 	// option_profile_id and option_profile_title are alternatives (ExactlyOneOf).
 	// Refresh whichever one the configuration uses; writing both would give the

@@ -4,9 +4,9 @@ import (
 	"context"
 	"sort"
 
-	"github.com/sjackson0109/terraform-provider-qualys/vmdr"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/sjackson0109/terraform-provider-qualys/vmdr"
 )
 
 func dataSourceVMReportSchedules() *schema.Resource {
@@ -52,6 +52,9 @@ func dataSourceVMReportSchedulesRead(ctx context.Context, d *schema.ResourceData
 	}
 
 	filter := vmdr.ReportScheduleFilter{ID: d.Get("id").(string)}
+	// See provider/data_source_users.go's identical GetOkExists usage for
+	// why this deprecated (SA1019) call is deliberate here.
+	//lint:ignore SA1019 see data_source_users.go
 	if v, ok := d.GetOkExists("active"); ok {
 		b := v.(bool)
 		filter.Active = &b
