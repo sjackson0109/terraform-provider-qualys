@@ -7,9 +7,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/sjackson0109/terraform-provider-qualys/vmdr"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/sjackson0109/terraform-provider-qualys/vmdr"
 )
 
 func dataSourceAssetGroups() *schema.Resource {

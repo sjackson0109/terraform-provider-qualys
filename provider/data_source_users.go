@@ -4,9 +4,9 @@ import (
 	"context"
 	"sort"
 
-	"github.com/sjackson0109/terraform-provider-qualys/vmdr"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/sjackson0109/terraform-provider-qualys/vmdr"
 )
 
 func dataSourceUsers() *schema.Resource {
@@ -111,6 +111,13 @@ func dataSourceUsersRead(ctx context.Context, d *schema.ResourceData, meta inter
 		ExternalIDContains:    d.Get("external_id_contains").(string),
 		ShowAccessPermissions: d.Get("show_access_permissions").(bool),
 	}
+	// GetOkExists is deprecated by the SDK (SA1019) but remains the only
+	// way this SDK version offers to detect "was this Optional bool
+	// explicitly set" — GetOk can't distinguish false-because-unset from
+	// false-because-configured for TypeBool. The alternative is a
+	// TypeString tri-state field, a breaking schema change not justified
+	// here.
+	//lint:ignore SA1019 see comment above
 	if v, ok := d.GetOkExists("external_id_assigned"); ok {
 		b := v.(bool)
 		filter.ExternalIDAssigned = &b

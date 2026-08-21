@@ -11,33 +11,68 @@ import (
 // tolerance, cloudviewUuid adoption lookup) is tested in the qps package
 // against a TLS mock; these tests cover the plan-time surface.
 
-func TestGCPConnectorRejectsMismatchedProjectID(t *testing.T) {
-	err := diffFor(t, resourceGCPConnector(), map[string]interface{}{
-		"name":                 "dev-gcp",
-		"gcp_credentials_json": `{"type":"service_account","project_id":"actual-project"}`,
-		"project_id":           "other-project",
-	})
+// gcpProjectIDConflict carries the actual comparison logic behind
+// validateGCPProjectMatchesKey's CustomizeDiff, and is unit tested
+// directly. The CustomizeDiff wrapper itself relies on GetRawConfig to
+// distinguish "the user explicitly set project_id in this configuration"
+// from "d.Get is returning a value merely inherited from prior state" —
+// this repo's diffFor test helper drives CustomizeDiff through the older
+// *schema.Resource.Diff() path, which never populates GetRawConfig, so it
+// cannot exercise that distinction either way (see the wrapper's doc
+// comment). These tests cover what diffFor can meaningfully assert: the
+// wrapper doesn't panic and doesn't misuse gcpProjectIDConflict's
+// zero-value ("not explicitly configured") case.
+
+func TestGCPProjectIDConflictRejectsExplicitMismatch(t *testing.T) {
+	err := gcpProjectIDConflict(true, "other-project",
+		`{"type":"service_account","project_id":"actual-project"}`)
 	if err == nil {
-		t.Fatal("expected a plan-time error: the connector scans the key's project, " +
-			"so a contradicting project_id is a config error")
+		t.Fatal("expected an error: the connector scans the key's project, " +
+			"so a contradicting explicit project_id is a config error")
 	}
 	if !strings.Contains(err.Error(), "does not match") {
 		t.Errorf("unexpected error: %v", err)
 	}
 }
 
-func TestGCPConnectorAcceptsMatchingOrDerivedProjectID(t *testing.T) {
-	key := `{"type":"service_account","project_id":"my-project"}`
+func TestGCPProjectIDConflictAcceptsExplicitMatch(t *testing.T) {
+	err := gcpProjectIDConflict(true, "my-project",
+		`{"type":"service_account","project_id":"my-project"}`)
+	if err != nil {
+		t.Errorf("a matching explicit project_id should be valid: %v", err)
+	}
+}
 
+func TestGCPProjectIDConflictSkipsWhenNotExplicitlyConfigured(t *testing.T) {
+	// This is the regression case: configuredExplicitly=false must be
+	// treated as "nothing to validate" even when configuredProjectID
+	// carries a stale value from prior state (e.g. project-a) that
+	// contradicts a freshly rotated key for a different project
+	// (project-b) — rejecting that would block a legitimate credential
+	// rotation the user never asked to have validated against the old
+	// project at all.
+	err := gcpProjectIDConflict(false, "project-a",
+		`{"type":"service_account","project_id":"project-b"}`)
+	if err != nil {
+		t.Errorf("configuredExplicitly=false must never produce an error, got: %v", err)
+	}
+}
+
+func TestGCPConnectorPlanTimeCheckDoesNotErrorWithoutExplicitConfig(t *testing.T) {
+	// diffFor cannot populate GetRawConfig (see comment above), so under
+	// this harness validateGCPProjectMatchesKey always takes the
+	// "nothing explicitly configured" branch — this just confirms the
+	// wrapper itself doesn't panic or misfire in that branch.
+	key := `{"type":"service_account","project_id":"my-project"}`
 	if err := diffFor(t, resourceGCPConnector(), map[string]interface{}{
 		"name": "dev-gcp", "gcp_credentials_json": key, "project_id": "my-project",
 	}); err != nil {
-		t.Errorf("a matching explicit project_id should be valid: %v", err)
+		t.Errorf("unexpected error: %v", err)
 	}
 	if err := diffFor(t, resourceGCPConnector(), map[string]interface{}{
 		"name": "dev-gcp", "gcp_credentials_json": key,
 	}); err != nil {
-		t.Errorf("an unset project_id should be valid (derived from the key): %v", err)
+		t.Errorf("unexpected error: %v", err)
 	}
 }
 

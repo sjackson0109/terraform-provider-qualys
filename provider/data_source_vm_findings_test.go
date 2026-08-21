@@ -1,10 +1,15 @@
 package provider
 
 import (
+	"context"
+	"errors"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
-	"github.com/sjackson0109/terraform-provider-qualys/vmdr"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/sjackson0109/terraform-provider-qualys/vmdr"
 )
 
 func TestVMFindingsSchemaValidatesSeverityRange(t *testing.T) {
@@ -167,11 +172,83 @@ func TestFetchKnowledgeBaseCollectsUniqueQIDsOnly(t *testing.T) {
 	// This test only confirms the QID de-duplication this function performs
 	// before calling out, using a nil client and a zero-finding input (the
 	// one case this function can exercise without a real client).
-	kb, err := fetchKnowledgeBase(nil, nil, nil)
+	kb, err := fetchKnowledgeBase(context.TODO(), nil, nil)
 	if err != nil {
 		t.Fatalf("fetchKnowledgeBase: %v", err)
 	}
 	if kb != nil {
 		t.Errorf("kb = %v, want nil for no findings", kb)
 	}
+}
+
+// TestResolveAssetGroupIPsUsesOneBulkRequest is a regression test: this
+// used to call GetAssetGroup once per configured asset_group_id (N HTTP
+// requests for N groups). resolveAssetGroupIPs must resolve every group in
+// a single ListAssetGroups(IDs: [...]) call instead.
+func TestResolveAssetGroupIPsUsesOneBulkRequest(t *testing.T) {
+	requests := 0
+	c, srv := vmdrTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		fmt.Fprint(w, `<ASSET_GROUP_LIST_OUTPUT><RESPONSE>
+		  <ASSET_GROUP_LIST>
+		    <ASSET_GROUP><ID>1</ID><TITLE>a</TITLE><IP_SET><IP>10.0.0.1</IP></IP_SET></ASSET_GROUP>
+		    <ASSET_GROUP><ID>2</ID><TITLE>b</TITLE><IP_SET><IP>10.0.0.2</IP></IP_SET></ASSET_GROUP>
+		  </ASSET_GROUP_LIST>
+		</RESPONSE></ASSET_GROUP_LIST_OUTPUT>`)
+	}))
+	defer srv.Close()
+
+	ips, err := resolveAssetGroupIPs(context.Background(), c, []string{"1", "2"})
+	if err != nil {
+		t.Fatalf("resolveAssetGroupIPs: %v", err)
+	}
+	if requests != 1 {
+		t.Errorf("made %d HTTP requests for 2 groups, want exactly 1 (bulk lookup)", requests)
+	}
+	if len(ips) != 2 || ips[0] != "10.0.0.1" || ips[1] != "10.0.0.2" {
+		t.Errorf("ips = %v", ips)
+	}
+}
+
+// TestResolveAssetGroupIPsErrorsOnMissingGroup confirms the bulk lookup
+// still surfaces a clear error for a mistyped/inaccessible group id — a
+// bulk search for N ids where one doesn't match returns the other N-1
+// without an API error, which would otherwise silently under-resolve IPs
+// with no indication anything was missed.
+func TestResolveAssetGroupIPsErrorsOnMissingGroup(t *testing.T) {
+	c, srv := vmdrTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `<ASSET_GROUP_LIST_OUTPUT><RESPONSE>
+		  <ASSET_GROUP_LIST>
+		    <ASSET_GROUP><ID>1</ID><TITLE>a</TITLE><IP_SET><IP>10.0.0.1</IP></IP_SET></ASSET_GROUP>
+		  </ASSET_GROUP_LIST>
+		</RESPONSE></ASSET_GROUP_LIST_OUTPUT>`)
+	}))
+	defer srv.Close()
+
+	_, err := resolveAssetGroupIPs(context.Background(), c, []string{"1", "404"})
+	if err == nil {
+		t.Fatal("expected an error for asset group 404, which the mock server never returned")
+	}
+	if !errors.Is(err, vmdr.ErrNotFound) {
+		t.Errorf("error = %v, want it to wrap vmdr.ErrNotFound", err)
+	}
+}
+
+// vmdrTestClient builds a *vmdr.Client against a local TLS mock server, the
+// provider-package equivalent of vmdr's own internal testClient helper
+// (unexported, so not usable directly from this package).
+func vmdrTestClient(t *testing.T, h http.Handler) (*vmdr.Client, *httptest.Server) {
+	t.Helper()
+	srv := httptest.NewTLSServer(h)
+	c, err := vmdr.NewClient(vmdr.Config{
+		BaseURL:    srv.URL,
+		Username:   "u",
+		Password:   "p",
+		HTTPClient: srv.Client(),
+		MaxRetries: 1,
+	})
+	if err != nil {
+		t.Fatalf("vmdr.NewClient: %v", err)
+	}
+	return c, srv
 }

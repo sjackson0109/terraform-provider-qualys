@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 
-	"github.com/sjackson0109/terraform-provider-qualys/qps"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/sjackson0109/terraform-provider-qualys/qps"
 )
 
 func resourceHostTagAssignment() *schema.Resource {
@@ -79,14 +79,15 @@ func resourceHostTagAssignmentRead(ctx context.Context, d *schema.ResourceData, 
 	}})
 	if err != nil {
 		if errors.Is(err, qps.ErrNotFound) {
-			d.SetId("")
-			return nil
+			return qpsNotFoundOnRead(d, "host asset")
 		}
 		return diag.FromErr(err)
 	}
 	if len(assets) == 0 {
-		d.SetId("")
-		return nil
+		// A scoped search silently omits an out-of-scope host exactly like
+		// OBJECT_NOT_FOUND does for a direct get — same ambiguity, different
+		// shape (see qpsNotFoundOnRead).
+		return qpsNotFoundOnRead(d, "host asset")
 	}
 
 	tagIDs := make([]string, 0, len(assets[0].Tags))

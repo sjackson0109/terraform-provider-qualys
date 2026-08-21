@@ -97,6 +97,58 @@ func TestUpdateWASDNSOverrideSendsIDInBodyNotPath(t *testing.T) {
 	}
 }
 
+// TestUpdateWASDNSOverrideSendsEmptyCommentsAndTagsToClear is a regression
+// test: comments/tag_ids were only ever sent when non-empty (`if
+// len(in.Comments) > 0` / `if len(in.TagIDs) > 0`), so clearing either back
+// to empty in configuration produced a nil pointer that omitempty dropped
+// from the request entirely — the server's previous value was left in
+// place forever.
+func TestUpdateWASDNSOverrideSendsEmptyCommentsAndTagsToClear(t *testing.T) {
+	var gotBody map[string]interface{}
+	c, srv := testClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(b, &gotBody)
+		fmt.Fprint(w, `{"ServiceResponse":{"responseCode":"SUCCESS"}}`)
+	}))
+	defer srv.Close()
+
+	// Comments/TagIDs deliberately nil: this is "clear them", not "leave
+	// them alone".
+	if err := c.UpdateWASDNSOverride(context.Background(), "57020", WASDNSOverrideInput{
+		Name:     "Customer Production DNS",
+		Mappings: []WASDNSMapping{{HostName: "portal.customer.com", IPAddress: "10.100.5.30"}},
+	}); err != nil {
+		t.Fatalf("UpdateWASDNSOverride: %v", err)
+	}
+
+	sreq, _ := gotBody["ServiceRequest"].(map[string]interface{})
+	data, _ := sreq["data"].(map[string]interface{})
+	dnsOverride, _ := data["DnsOverride"].(map[string]interface{})
+
+	comments, present := dnsOverride["comments"]
+	if !present {
+		t.Fatal("comments key must be present (even empty) so the API can " +
+			"distinguish 'clear this' from 'leave unchanged'")
+	}
+	commentsMap, _ := comments.(map[string]interface{})
+	commentsSet, _ := commentsMap["set"].([]interface{})
+	if len(commentsSet) != 0 {
+		t.Errorf("comments.set = %v, want an empty (but present) list", commentsSet)
+	}
+
+	tags, present := dnsOverride["tags"]
+	if !present {
+		t.Fatal("tags key must be present (even empty) so the API can " +
+			"distinguish 'clear this' from 'leave unchanged'")
+	}
+	tagsMap, _ := tags.(map[string]interface{})
+	tagSet, _ := tagsMap["set"].(map[string]interface{})
+	tagSimples, _ := tagSet["TagSimple"].([]interface{})
+	if len(tagSimples) != 0 {
+		t.Errorf("tags.set.TagSimple = %v, want an empty (but present) list", tagSimples)
+	}
+}
+
 // The delete endpoint likewise takes no ID in the URL path — it travels as
 // a filter criterion instead.
 func TestDeleteWASDNSOverrideSendsIDAsFilterNotPath(t *testing.T) {

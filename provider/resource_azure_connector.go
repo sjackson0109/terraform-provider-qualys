@@ -38,11 +38,10 @@ func resourceAzureConnector() *schema.Resource {
 	}
 	s["is_gov_cloud"] = &schema.Schema{
 		Description: "Whether this connector targets an Azure Government Cloud " +
-			"subscription. Read-only under the Connector v3 API.",
-		Type:       schema.TypeBool,
-		Optional:   true,
-		Computed:   true,
-		Deprecated: "The Connector v3 API has no Azure gov-cloud write field; the value is read-only.",
+			"subscription. Read-only: the Connector v3 API reports this but has no " +
+			"field to set it (unlike AWS's is_gov_cloud, which is a real write field).",
+		Type:     schema.TypeBool,
+		Computed: true,
 	}
 	s["subscription_name"] = &schema.Schema{
 		Description: "The name of the Azure subscription associated with this connector",
@@ -119,8 +118,7 @@ func resourceAzureConnectorRead(ctx context.Context, d *schema.ResourceData, met
 	conn, err := client.GetAzureConnector(ctx, d.Id())
 	if err != nil {
 		if errors.Is(err, qps.ErrNotFound) {
-			d.SetId("")
-			return nil
+			return qpsNotFoundOnRead(d, "Azure connector")
 		}
 		return diag.FromErr(err)
 	}
@@ -159,5 +157,14 @@ func resourceAzureConnectorDelete(ctx context.Context, d *schema.ResourceData, m
 	if err != nil {
 		return diag.FromErr(err)
 	}
-	return diag.FromErr(client.DeleteAzureConnector(ctx, d.Id()))
+	if err := client.DeleteAzureConnector(ctx, d.Id()); err != nil {
+		if errors.Is(err, qps.ErrNotFound) {
+			// Already gone (or already out of scope) from this caller's
+			// perspective — either way, the desired end state of Delete is
+			// achieved, so this must succeed rather than error.
+			return nil
+		}
+		return diag.FromErr(err)
+	}
+	return nil
 }

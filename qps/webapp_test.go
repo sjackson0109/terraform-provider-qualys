@@ -278,6 +278,65 @@ func TestGetWebAppDecodesCrawlingScriptsAndMalwareFlags(t *testing.T) {
 	}
 }
 
+// TestUpdateWebAppSendsFalseMalwareFlagsAndEmptyAttributes is a regression
+// test: MalwareMonitoring/MalwareNotification were only ever sent as `true`
+// (guarded by `if in.MalwareMonitoring`), so setting either back to false
+// in configuration produced a nil pointer that omitempty dropped from the
+// request entirely — the server's previous (enabled) value was left in
+// place forever. Attributes had the identical bug for the whole collection
+// (`if len(in.Attributes) > 0`): clearing every attribute in configuration
+// could never reach the API either.
+func TestUpdateWebAppSendsFalseMalwareFlagsAndEmptyAttributes(t *testing.T) {
+	var gotBody map[string]interface{}
+	c, srv := testClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(b, &gotBody)
+		fmt.Fprint(w, `{"ServiceResponse":{"responseCode":"SUCCESS","count":1,
+		  "data":[{"WebApp":{"id":558}}]}}`)
+	}))
+	defer srv.Close()
+
+	err := c.UpdateWebApp(context.Background(), "558", WebAppInput{
+		Name: "storefront", URL: "https://shop.example.com",
+		MalwareMonitoring:   false,
+		MalwareNotification: false,
+		// Attributes deliberately nil/empty: this is "clear every
+		// attribute", not "leave attributes alone".
+	})
+	if err != nil {
+		t.Fatalf("UpdateWebApp: %v", err)
+	}
+
+	sreq, _ := gotBody["ServiceRequest"].(map[string]interface{})
+	data, _ := sreq["data"].(map[string]interface{})
+	webapp, _ := data["WebApp"].(map[string]interface{})
+
+	monitoring, present := webapp["malwareMonitoring"]
+	if !present {
+		t.Fatal("malwareMonitoring key must be present (as false) so the API can " +
+			"distinguish 'turn this off' from 'leave unchanged'; omitting it was the bug")
+	}
+	if monitoring != false {
+		t.Errorf("malwareMonitoring = %v, want false", monitoring)
+	}
+	notification, present := webapp["malwareNotification"]
+	if !present || notification != false {
+		t.Errorf("malwareNotification = %v (present=%v), want false", notification, present)
+	}
+
+	attrs, present := webapp["attributes"]
+	if !present {
+		t.Fatal("attributes key must be present (even empty) so the API can " +
+			"distinguish 'clear every attribute' from 'leave unchanged'")
+	}
+	attrsMap, _ := attrs.(map[string]interface{})
+	attrSet, _ := attrsMap["set"].(map[string]interface{})
+	attrList, _ := attrSet["Attribute"].([]interface{})
+	if len(attrList) != 0 {
+		t.Errorf("Attribute = %v, want an empty (but present) list", attrList)
+	}
+}
+
 func TestUpdateWebAppAuthRecordAssociationsNoopWithNothingToDo(t *testing.T) {
 	c, srv := testClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("no request should be sent with nothing to add or remove")

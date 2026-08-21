@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sjackson0109/terraform-provider-qualys/vmdr"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
+	"github.com/sjackson0109/terraform-provider-qualys/vmdr"
 )
 
 func dataSourceVMFindings() *schema.Resource {
@@ -245,12 +245,12 @@ func dataSourceVMFindingsRead(ctx context.Context, d *schema.ResourceData, meta 
 	}
 
 	ips := stringSet(d, "ips")
-	for _, groupID := range stringSet(d, "asset_group_ids") {
-		group, err := c.GetAssetGroup(ctx, groupID)
+	if groupIDs := stringSet(d, "asset_group_ids"); len(groupIDs) > 0 {
+		groupIPs, err := resolveAssetGroupIPs(ctx, c, groupIDs)
 		if err != nil {
 			return diag.FromErr(fmt.Errorf("resolving asset_group_ids: %w", err))
 		}
-		ips = append(ips, group.IPs...)
+		ips = append(ips, groupIPs...)
 	}
 
 	findings, conflicts, err := c.ListVMFindings(ctx, vmdr.VMFindingFilter{
@@ -360,6 +360,38 @@ func dataSourceVMFindingsRead(ctx context.Context, d *schema.ResourceData, meta 
 	return diags
 }
 
+// resolveAssetGroupIPs looks up every group in ids and returns their
+// combined static IPs, in one bulk request rather than one per group id —
+// vmdr.ListAssetGroups accepts multiple ids in a single (paginated) call.
+//
+// A bulk lookup for N ids where one doesn't match typically returns the
+// other N-1 without an API error, which would otherwise silently drop a
+// mistyped asset_group_id from IP resolution with no indication anything
+// was missed. This checks every requested id came back, so a bad id still
+// produces a clear error instead of a quietly incomplete result — the same
+// guarantee the previous per-id GetAssetGroup loop gave, at 1 API call
+// instead of N.
+func resolveAssetGroupIPs(ctx context.Context, c *vmdr.Client, ids []string) ([]string, error) {
+	groups, err := c.ListAssetGroups(ctx, vmdr.AssetGroupFilter{IDs: ids})
+	if err != nil {
+		return nil, err
+	}
+
+	found := make(map[string]bool, len(groups))
+	var ips []string
+	for _, g := range groups {
+		found[g.ID] = true
+		ips = append(ips, g.IPs...)
+	}
+
+	for _, id := range ids {
+		if !found[id] {
+			return nil, fmt.Errorf("asset group %s: %w", id, vmdr.ErrNotFound)
+		}
+	}
+	return ips, nil
+}
+
 // vmFindingFilters are the finding-scope filters applied client-side, after
 // ListVMFindings returns — see VMFindingFilter's doc comment for why these
 // specifically aren't sent as query parameters.
@@ -377,6 +409,23 @@ type vmFindingFilters struct {
 }
 
 func filterVMFindings(findings []*vmdr.VMFinding, f vmFindingFilters) ([]*vmdr.VMFinding, error) {
+	// after/before are constant across every finding in this pass, so each
+	// bound is parsed once here rather than re-parsed on every finding
+	// inside the loop below — on a large result set that was the dominant
+	// cost of this function (three bounds x two ends x every finding).
+	firstFound, err := parseDateBound(time.RFC3339, f.FirstFoundAfter, f.FirstFoundBefore)
+	if err != nil {
+		return nil, err
+	}
+	lastFound, err := parseDateBound(time.RFC3339, f.LastFoundAfter, f.LastFoundBefore)
+	if err != nil {
+		return nil, err
+	}
+	lastTest, err := parseDateBound(time.RFC3339, f.LastTestAfter, f.LastTestBefore)
+	if err != nil {
+		return nil, err
+	}
+
 	var qidSet map[string]bool
 	if len(f.QIDs) > 0 {
 		qidSet = make(map[string]bool, len(f.QIDs))
@@ -396,21 +445,21 @@ func filterVMFindings(findings []*vmdr.VMFinding, f vmFindingFilters) ([]*vmdr.V
 		if f.MaximumSeverity > 0 && finding.Severity > f.MaximumSeverity {
 			continue
 		}
-		ok, err := withinDateFilter(finding.FirstFoundDatetime, f.FirstFoundAfter, f.FirstFoundBefore)
+		ok, err := withinDateBound(finding.FirstFoundDatetime, firstFound)
 		if err != nil {
 			return nil, err
 		}
 		if !ok {
 			continue
 		}
-		ok, err = withinDateFilter(finding.LastFoundDatetime, f.LastFoundAfter, f.LastFoundBefore)
+		ok, err = withinDateBound(finding.LastFoundDatetime, lastFound)
 		if err != nil {
 			return nil, err
 		}
 		if !ok {
 			continue
 		}
-		ok, err = withinDateFilter(finding.LastTestDatetime, f.LastTestAfter, f.LastTestBefore)
+		ok, err = withinDateBound(finding.LastTestDatetime, lastTest)
 		if err != nil {
 			return nil, err
 		}
@@ -422,45 +471,67 @@ func filterVMFindings(findings []*vmdr.VMFinding, f vmFindingFilters) ([]*vmdr.V
 	return out, nil
 }
 
-// withinDateFilter reports whether value (a Qualys RFC3339 datetime, or
-// empty if Qualys did not report one for this finding) falls within
-// [after, before]. Either bound may be empty to leave that side open. A
-// finding whose value is empty cannot be shown to satisfy a bound that was
-// actually configured, so it is excluded rather than assumed to pass —
+// parsedDateBound is an [after, before] date-filter pair, parsed once by
+// parseDateBound rather than on every finding a filter pass evaluates it
+// against. Shared by data.qualys_vm_findings and data.qualys_was_findings
+// (the latter via a different layout — RFC3339Nano — see
+// data_source_was_findings.go).
+type parsedDateBound struct {
+	layout              string
+	after, before       time.Time
+	hasAfter, hasBefore bool
+}
+
+func (b parsedDateBound) empty() bool { return !b.hasAfter && !b.hasBefore }
+
+// parseDateBound parses after/before once, using layout (time.RFC3339 for
+// VM findings, time.RFC3339Nano for WAS — see withinDateBound). Either of
+// after/before may be empty to leave that side open.
+func parseDateBound(layout, after, before string) (parsedDateBound, error) {
+	b := parsedDateBound{layout: layout}
+	if after != "" {
+		t, err := time.Parse(layout, after)
+		if err != nil {
+			return parsedDateBound{}, fmt.Errorf("qualys: parsing date filter %q: %w", after, err)
+		}
+		b.after, b.hasAfter = t, true
+	}
+	if before != "" {
+		t, err := time.Parse(layout, before)
+		if err != nil {
+			return parsedDateBound{}, fmt.Errorf("qualys: parsing date filter %q: %w", before, err)
+		}
+		b.before, b.hasBefore = t, true
+	}
+	return b, nil
+}
+
+// withinDateBound reports whether value (a Qualys datetime in b's layout,
+// or empty if Qualys did not report one for this finding) falls within b.
+// A finding whose value is empty cannot be shown to satisfy a bound that
+// was actually configured, so it is excluded rather than assumed to pass —
 // deterministic and conservative, rather than a silent pass-through.
-func withinDateFilter(value, after, before string) (bool, error) {
-	if after == "" && before == "" {
+func withinDateBound(value string, b parsedDateBound) (bool, error) {
+	if b.empty() {
 		return true, nil
 	}
 	if strings.TrimSpace(value) == "" {
 		return false, nil
 	}
-	t, err := time.Parse(time.RFC3339, value)
+	t, err := time.Parse(b.layout, value)
 	if err != nil {
 		// A value this provider itself decoded failing to parse indicates a
 		// format this data source doesn't yet handle, not a user input
 		// mistake — surfaced rather than silently excluding the finding, so
 		// it isn't mistaken for "didn't match."
-		return false, fmt.Errorf("qualys: finding datetime %q is not RFC3339; "+
-			"cannot evaluate a date filter against it", value)
+		return false, fmt.Errorf("qualys: finding datetime %q does not match the expected "+
+			"format; cannot evaluate a date filter against it", value)
 	}
-	if after != "" {
-		afterT, err := time.Parse(time.RFC3339, after)
-		if err != nil {
-			return false, fmt.Errorf("qualys: parsing date filter %q: %w", after, err)
-		}
-		if t.Before(afterT) {
-			return false, nil
-		}
+	if b.hasAfter && t.Before(b.after) {
+		return false, nil
 	}
-	if before != "" {
-		beforeT, err := time.Parse(time.RFC3339, before)
-		if err != nil {
-			return false, fmt.Errorf("qualys: parsing date filter %q: %w", before, err)
-		}
-		if t.After(beforeT) {
-			return false, nil
-		}
+	if b.hasBefore && t.After(b.before) {
+		return false, nil
 	}
 	return true, nil
 }

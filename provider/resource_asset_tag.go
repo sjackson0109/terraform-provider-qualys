@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 
-	"github.com/sjackson0109/terraform-provider-qualys/qps"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
+	"github.com/sjackson0109/terraform-provider-qualys/qps"
 )
 
 func resourceAssetTag() *schema.Resource {
@@ -149,18 +149,7 @@ func resourceAssetTagRead(ctx context.Context, d *schema.ResourceData, meta inte
 	tag, err := c.GetTag(ctx, d.Id())
 	if err != nil {
 		if errors.Is(err, qps.ErrNotFound) {
-			// OBJECT_NOT_FOUND also covers "outside your scope", so warn rather
-			// than silently dropping: if this is a permissions change, recreating
-			// the tag would be the wrong response.
-			d.SetId("")
-			return diag.Diagnostics{{
-				Severity: diag.Warning,
-				Summary:  "Asset tag no longer visible; removing it from state",
-				Detail: "Qualys reported OBJECT_NOT_FOUND, which it also returns for objects " +
-					"outside the caller's scope. If the tag still exists and the credentials' " +
-					"scope changed, restore the scope before applying, or Terraform will " +
-					"create a duplicate tag.",
-			}}
+			return qpsNotFoundOnRead(d, "asset tag")
 		}
 		return diag.FromErr(err)
 	}

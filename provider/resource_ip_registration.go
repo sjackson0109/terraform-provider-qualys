@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/sjackson0109/terraform-provider-qualys/vmdr"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
+	"github.com/sjackson0109/terraform-provider-qualys/vmdr"
 )
 
 func resourceIPRegistration() *schema.Resource {
@@ -164,6 +164,8 @@ func resourceIPRegistrationRead(ctx context.Context, d *schema.ResourceData, met
 	h := hosts[0]
 	return diag.FromErr(setAll(d, map[string]interface{}{
 		"tracking_method": h.TrackingMethod,
+		"owner":           h.Owner,
+		"comment":         h.Comments,
 	}))
 }
 

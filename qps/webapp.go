@@ -284,7 +284,7 @@ func (w *webAppWire) toWebApp() *WebApp {
 		}
 		if set != nil {
 			for _, a := range set.Attribute {
-				out.Attributes = append(out.Attributes, WebAppAttribute{Name: a.Name, Value: a.Value})
+				out.Attributes = append(out.Attributes, WebAppAttribute(a))
 			}
 		}
 	}
@@ -342,13 +342,16 @@ func webAppInputToWire(in WebAppInput) *webAppWire {
 	}
 	w.Tags = &webAppTagList{Set: &tagSimpleList{TagSimple: simples}}
 
-	if len(in.Attributes) > 0 {
-		attrs := make([]webAppAttributeWire, 0, len(in.Attributes))
-		for _, a := range in.Attributes {
-			attrs = append(attrs, webAppAttributeWire{Name: a.Name, Value: a.Value})
-		}
-		w.Attributes = &webAppAttributesWire{Set: &webAppAttributeSet{Attribute: attrs}}
+	// Always sent, like Tags above — even empty. This is an authoritative
+	// collection: gating on len(...) > 0 would mean clearing every
+	// attribute in configuration could never reach the API (an omitted key
+	// leaves the server's previous attributes in place), the same bug
+	// tags avoids by never having had the guard in the first place.
+	attrs := make([]webAppAttributeWire, 0, len(in.Attributes))
+	for _, a := range in.Attributes {
+		attrs = append(attrs, webAppAttributeWire(a))
 	}
+	w.Attributes = &webAppAttributesWire{Set: &webAppAttributeSet{Attribute: attrs}}
 
 	if in.CancelScansAt != "" || in.CancelScansAfterNHours > 0 || strings.TrimSpace(in.DefaultDNSOverrideID) != "" {
 		cfg := &webAppConfigWire{
@@ -379,12 +382,15 @@ func webAppInputToWire(in WebAppInput) *webAppWire {
 		}
 	}
 
-	if in.MalwareMonitoring {
-		w.MalwareMonitoring = boolPtr(true)
-	}
-	if in.MalwareNotification {
-		w.MalwareNotification = boolPtr(true)
-	}
+	// Always sent as a real boolean (never gated on the value being true),
+	// so turning either flag off in configuration actually reaches the
+	// API. The previous "only send when true" form meant WebAppInput{
+	// MalwareMonitoring: false} produced a nil pointer, omitempty dropped
+	// the key entirely, and the server's previous (enabled) value was left
+	// in place forever — malware monitoring could be turned on through
+	// Terraform but never back off.
+	w.MalwareMonitoring = boolPtr(in.MalwareMonitoring)
+	w.MalwareNotification = boolPtr(in.MalwareNotification)
 
 	return w
 }

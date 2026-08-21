@@ -63,12 +63,21 @@ resource "qualys_azure_connector" "dev" {
   assets: `VM`, `CERTVIEW`, `CLOUDVIEW`, `SCA`, `CSA`
 - **default_tag_ids** (Set of String) Asset tag ids applied to every asset
   this connector discovers
-- **is_gov_cloud** (Boolean, Deprecated) Read-only under the Connector v3
-  API; the value is reported, not settable
 
 ### Read-Only
 
 - **connector_id** (String) The connector's numeric Connector v3 id
+- **is_gov_cloud** (Boolean) Whether this connector targets an Azure
+  Government Cloud subscription. The Connector v3 API only reports this
+  (unlike AWS's `is_gov_cloud`, which is a real write field); Azure has no
+  field to set it.
+
+  ~> **Breaking change:** this was previously `Optional`. The write path
+  never actually worked — the value was silently discarded on every
+  create/update and immediately overwritten by the next Read, producing a
+  permanent, unresolvable diff for any configuration that set it
+  explicitly. Remove `is_gov_cloud` from configuration; Terraform will now
+  report it correctly without you setting it.
 - **subscription_name** (String) The name of the Azure subscription
   associated with this connector
 - **connector_state** (String) Lifecycle state (QUEUED, RUNNING,

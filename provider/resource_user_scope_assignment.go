@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 
-	"github.com/sjackson0109/terraform-provider-qualys/qps"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/sjackson0109/terraform-provider-qualys/qps"
 )
 
 func resourceUserScopeAssignment() *schema.Resource {
@@ -96,8 +96,7 @@ func resourceUserScopeAssignmentRead(ctx context.Context, d *schema.ResourceData
 	u, err := c.GetUser(ctx, d.Id())
 	if err != nil {
 		if errors.Is(err, qps.ErrNotFound) {
-			d.SetId("")
-			return nil
+			return qpsNotFoundOnRead(d, "user")
 		}
 		return diag.FromErr(err)
 	}

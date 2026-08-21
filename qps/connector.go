@@ -83,7 +83,17 @@ type ConnectorBase struct {
 	CloudViewUUID string
 
 	ActivationModules []string
-	DefaultTags       []TagRef
+	// ActivationModulesRecognized is false when the response's activation
+	// collection didn't match any JSON shape this client understands (doc
+	// 12: no confirmed JSON response sample exists for this field). false
+	// means Read could not determine the real value, not that it is empty
+	// — callers must not overwrite previously-known state with it.
+	ActivationModulesRecognized bool
+
+	DefaultTags []TagRef
+	// DefaultTagsRecognized has the same meaning as
+	// ActivationModulesRecognized, for DefaultTags.
+	DefaultTagsRecognized bool
 }
 
 // connectorWireBase is the request-side shared shape.
@@ -109,6 +119,27 @@ type tagSetWire struct {
 	} `json:"set"`
 }
 
+// baseInputToWire always populates Activation and DefaultTags, even when
+// empty, unlike an omitempty-style "only send if non-empty" encoding.
+//
+// Update must be able to express "clear this back to empty": Activation and
+// DefaultTags are both pointer fields with a `json:"...,omitempty"` tag, but
+// omitempty only drops a nil pointer, not an empty collection behind a
+// non-nil one — so always allocating the wrapper here, and never gating on
+// len(...) > 0, is what makes the wire body carry an explicit empty `set`
+// rather than omitting the key entirely. An omitted key leaves the field at
+// its previous server-side value forever, which is what silently prevented
+// clearing activation/defaultTags before this.
+//
+// Unverified against a live tenant: doc 12 confirms request collections
+// nest under `set`, but no official sample shows an empty `set` sent to
+// clear a previously-populated collection specifically. This is the
+// natural reading of the documented shape (the same field, sent with zero
+// elements), not an invented parameter, but it has not been proven against
+// a real connector. If this instead behaves as "no-op" rather than "clear"
+// on some tenant, that would surface as Activation/DefaultTagIDs failing to
+// clear — narrowly scoped to this one behaviour, not the connector's other
+// documented fields.
 func baseInputToWire(in ConnectorBaseInput) connectorWireBase {
 	w := connectorWireBase{
 		Name:                 in.Name,
@@ -117,17 +148,22 @@ func baseInputToWire(in ConnectorBaseInput) connectorWireBase {
 		Disabled:             in.Disabled,
 		IsRemediationEnabled: in.IsRemediationEnabled,
 	}
-	if len(in.ActivationModules) > 0 {
-		w.Activation = &activationSetWire{}
-		w.Activation.Set.ActivationModule = in.ActivationModules
+
+	w.Activation = &activationSetWire{}
+	w.Activation.Set.ActivationModule = in.ActivationModules
+	if w.Activation.Set.ActivationModule == nil {
+		w.Activation.Set.ActivationModule = []string{}
 	}
-	if len(in.DefaultTagIDs) > 0 {
-		w.DefaultTags = &tagSetWire{}
-		for _, id := range in.DefaultTagIDs {
-			w.DefaultTags.Set.TagSimple = append(w.DefaultTags.Set.TagSimple,
-				tagSimple{ID: json.Number(id)})
-		}
+
+	w.DefaultTags = &tagSetWire{}
+	for _, id := range in.DefaultTagIDs {
+		w.DefaultTags.Set.TagSimple = append(w.DefaultTags.Set.TagSimple,
+			tagSimple{ID: json.Number(id)})
 	}
+	if w.DefaultTags.Set.TagSimple == nil {
+		w.DefaultTags.Set.TagSimple = []tagSimple{}
+	}
+
 	return w
 }
 
@@ -150,20 +186,24 @@ type connectorRespBase struct {
 
 func (w *connectorRespBase) toBase() ConnectorBase {
 	freq, _ := strconv.Atoi(w.RunFrequency.String())
+	activation, activationOK := decodeActivationModules(w.Activation)
+	tags, tagsOK := decodeTagRefs(w.DefaultTags)
 	return ConnectorBase{
-		ID:                   w.ID.String(),
-		Name:                 w.Name,
-		Description:          w.Description,
-		State:                w.ConnectorState,
-		Disabled:             bool(w.Disabled),
-		RunFrequency:         freq,
-		IsRemediationEnabled: bool(w.IsRemediationEnabled),
-		LastSync:             w.LastSync,
-		NextSync:             w.NextSync,
-		LastError:            w.LastError,
-		CloudViewUUID:        w.CloudViewUUID,
-		ActivationModules:    decodeActivationModules(w.Activation),
-		DefaultTags:          decodeTagRefs(w.DefaultTags),
+		ID:                          w.ID.String(),
+		Name:                        w.Name,
+		Description:                 w.Description,
+		State:                       w.ConnectorState,
+		Disabled:                    bool(w.Disabled),
+		RunFrequency:                freq,
+		IsRemediationEnabled:        bool(w.IsRemediationEnabled),
+		LastSync:                    w.LastSync,
+		NextSync:                    w.NextSync,
+		LastError:                   w.LastError,
+		CloudViewUUID:               w.CloudViewUUID,
+		ActivationModules:           activation,
+		ActivationModulesRecognized: activationOK,
+		DefaultTags:                 tags,
+		DefaultTagsRecognized:       tagsOK,
 	}
 }
 
@@ -191,41 +231,64 @@ func (b *flexBool) UnmarshalJSON(data []byte) error {
 // but show no JSON response sample containing it, so this accepts every
 // plausible JSON rendering of that XML rather than asserting one:
 // {"list": {"ActivationModule": [...]}} / {"list": [...]} / a bare array.
-// An unrecognised shape yields nil rather than an error: the field is
-// informational state, not something worth failing a refresh over.
-func decodeActivationModules(raw json.RawMessage) []string {
-	if len(raw) == 0 {
-		return nil
+//
+// recognized is false only when raw is present but matches none of these
+// shapes. Callers use that to tell "the connector genuinely has no
+// activation modules" (recognized=true, modules=nil — must be written to
+// state, or a real clear on the server can never reach state) apart from
+// "this response's shape wasn't one we planned for" (recognized=false —
+// must not overwrite a previously-known state value with a guess of empty).
+func decodeActivationModules(raw json.RawMessage) (modules []string, recognized bool) {
+	if isJSONAbsentOrNull(raw) {
+		return nil, true
 	}
 	var direct []string
 	if err := json.Unmarshal(raw, &direct); err == nil {
-		return direct
+		return direct, true
 	}
-	var wrapped struct {
-		List json.RawMessage `json:"list"`
+	// Go's json.Unmarshal into a struct silently ignores keys the struct
+	// doesn't declare, so decoding into {List json.RawMessage `json:"list"`}
+	// alone cannot tell "this object has a list key" apart from "this
+	// object has neither a list key nor anything we recognize" — both
+	// leave List at its zero value. Checking key presence via a raw map
+	// first is what makes that distinction, and it is exactly the
+	// distinction "recognized" exists to preserve.
+	var obj map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &obj); err != nil {
+		return nil, false
 	}
-	if err := json.Unmarshal(raw, &wrapped); err != nil || len(wrapped.List) == 0 {
-		return nil
+	listRaw, hasList := obj["list"]
+	if !hasList {
+		return nil, false
 	}
-	if err := json.Unmarshal(wrapped.List, &direct); err == nil {
-		return direct
+	if isJSONAbsentOrNull(listRaw) {
+		return nil, true
+	}
+	if err := json.Unmarshal(listRaw, &direct); err == nil {
+		return direct, true
 	}
 	var named struct {
 		ActivationModule []string `json:"ActivationModule"`
 	}
-	if err := json.Unmarshal(wrapped.List, &named); err == nil {
-		return named.ActivationModule
+	if err := json.Unmarshal(listRaw, &named); err == nil {
+		return named.ActivationModule, true
 	}
-	return nil
+	return nil, false
+}
+
+// isJSONAbsentOrNull reports whether raw represents a field that was never
+// present in the parent object (empty json.RawMessage) or was present as a
+// literal JSON null — both mean "nothing here", as opposed to a value this
+// package failed to parse.
+func isJSONAbsentOrNull(raw json.RawMessage) bool {
+	trimmed := strings.TrimSpace(string(raw))
+	return trimmed == "" || trimmed == "null"
 }
 
 // decodeTagRefs reads the defaultTags collection from a response, with the
-// same shape tolerance (and the same silent-nil on unrecognised shapes) as
+// same shape tolerance and the same recognized-flag contract as
 // decodeActivationModules.
-func decodeTagRefs(raw json.RawMessage) []TagRef {
-	if len(raw) == 0 {
-		return nil
-	}
+func decodeTagRefs(raw json.RawMessage) (refs []TagRef, recognized bool) {
 	toRefs := func(simples []tagSimple) []TagRef {
 		out := make([]TagRef, 0, len(simples))
 		for _, s := range simples {
@@ -233,26 +296,36 @@ func decodeTagRefs(raw json.RawMessage) []TagRef {
 		}
 		return out
 	}
+	if isJSONAbsentOrNull(raw) {
+		return nil, true
+	}
 	var direct []tagSimple
 	if err := json.Unmarshal(raw, &direct); err == nil {
-		return toRefs(direct)
+		return toRefs(direct), true
 	}
-	var wrapped struct {
-		List json.RawMessage `json:"list"`
+	// See decodeActivationModules for why key presence is checked via a raw
+	// map rather than struct-decode success.
+	var obj map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &obj); err != nil {
+		return nil, false
 	}
-	if err := json.Unmarshal(raw, &wrapped); err != nil || len(wrapped.List) == 0 {
-		return nil
+	listRaw, hasList := obj["list"]
+	if !hasList {
+		return nil, false
 	}
-	if err := json.Unmarshal(wrapped.List, &direct); err == nil {
-		return toRefs(direct)
+	if isJSONAbsentOrNull(listRaw) {
+		return nil, true
+	}
+	if err := json.Unmarshal(listRaw, &direct); err == nil {
+		return toRefs(direct), true
 	}
 	var named struct {
 		TagSimple []tagSimple `json:"TagSimple"`
 	}
-	if err := json.Unmarshal(wrapped.List, &named); err == nil {
-		return toRefs(named.TagSimple)
+	if err := json.Unmarshal(listRaw, &named); err == nil {
+		return toRefs(named.TagSimple), true
 	}
-	return nil
+	return nil, false
 }
 
 // requireConnectorID validates an id destined for a /<verb>/am/.../<id> path.

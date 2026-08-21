@@ -263,12 +263,102 @@ func TestActivationDecodingToleratesDocumentedShapes(t *testing.T) {
 		`["VM","SCA"]`,
 	}
 	for _, raw := range cases {
-		got := decodeActivationModules(json.RawMessage(raw))
+		got, recognized := decodeActivationModules(json.RawMessage(raw))
+		if !recognized {
+			t.Errorf("decodeActivationModules(%s): recognized = false, want true", raw)
+		}
 		if len(got) != 2 || got[0] != "VM" || got[1] != "SCA" {
 			t.Errorf("decodeActivationModules(%s) = %v", raw, got)
 		}
 	}
-	if got := decodeActivationModules(json.RawMessage(`{"unexpected":1}`)); got != nil {
-		t.Errorf("unrecognised shape must yield nil, got %v", got)
+
+	got, recognized := decodeActivationModules(json.RawMessage(`{"unexpected":1}`))
+	if recognized {
+		t.Errorf("an unrecognised shape must report recognized=false, so callers don't "+
+			"overwrite previously-known state with a guess of empty; got recognized=true, modules=%v", got)
+	}
+	if got != nil {
+		t.Errorf("unrecognised shape should yield nil modules, got %v", got)
+	}
+
+	empty, recognized := decodeActivationModules(nil)
+	if !recognized {
+		t.Error("an absent activation key must be recognized as genuinely empty, not treated " +
+			"as an unrecognized shape — a real server-side clear must be able to reach state")
+	}
+	if len(empty) != 0 {
+		t.Errorf("empty input should yield no modules, got %v", empty)
+	}
+}
+
+func TestTagRefDecodingDistinguishesEmptyFromUnrecognized(t *testing.T) {
+	refs, recognized := decodeTagRefs(json.RawMessage(`{"list":{"TagSimple":[{"id":1,"name":"prod"}]}}`))
+	if !recognized || len(refs) != 1 || refs[0].ID != "1" || refs[0].Name != "prod" {
+		t.Errorf("decodeTagRefs(list.TagSimple) = %v, recognized=%v", refs, recognized)
+	}
+
+	empty, recognized := decodeTagRefs(nil)
+	if !recognized || len(empty) != 0 {
+		t.Errorf("an absent defaultTags key must decode as recognized+empty, got %v, recognized=%v",
+			empty, recognized)
+	}
+
+	_, recognized = decodeTagRefs(json.RawMessage(`{"unexpected":1}`))
+	if recognized {
+		t.Error("an unrecognised shape must report recognized=false")
+	}
+}
+
+// TestUpdateSendsEmptyActivationAndTagsToClear is a regression test for a
+// bug where clearing activation/default_tag_ids back to empty in config
+// never reached the API: the wire encoder only sent the field when
+// len(...) > 0, so a JSON "omitempty" pointer field was left nil and the
+// key was omitted from the request body entirely, leaving the server's
+// previous value in place forever.
+func TestUpdateSendsEmptyActivationAndTagsToClear(t *testing.T) {
+	var gotBody map[string]interface{}
+
+	c, srv := testClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(b, &gotBody)
+		fmt.Fprint(w, `{"ServiceResponse":{"responseCode":"SUCCESS","count":1,"data":[
+		  {"AwsAssetDataConnector":{"id":1998546}}]}}`)
+	}))
+	defer srv.Close()
+
+	// Deliberately empty/nil: this is what connectorBaseInput produces when
+	// the user has cleared activation/default_tag_ids in configuration.
+	err := c.UpdateAWSConnector(context.Background(), "1998546", AWSConnectorInput{
+		ConnectorBaseInput: ConnectorBaseInput{Name: "dev-aws"},
+	})
+	if err != nil {
+		t.Fatalf("UpdateAWSConnector: %v", err)
+	}
+
+	sr, _ := gotBody["ServiceRequest"].(map[string]interface{})
+	data, _ := sr["data"].(map[string]interface{})
+	wire, _ := data["AwsAssetDataConnector"].(map[string]interface{})
+
+	activation, ok := wire["activation"]
+	if !ok {
+		t.Fatal("activation key must be present in the update body (even empty) so the API " +
+			"can distinguish 'clear this' from 'leave unchanged'; omitting it entirely was the bug")
+	}
+	activationMap, _ := activation.(map[string]interface{})
+	set, _ := activationMap["set"].(map[string]interface{})
+	modules, _ := set["ActivationModule"].([]interface{})
+	if len(modules) != 0 {
+		t.Errorf("ActivationModule = %v, want an empty (but present) list", modules)
+	}
+
+	defaultTags, ok := wire["defaultTags"]
+	if !ok {
+		t.Fatal("defaultTags key must be present in the update body (even empty), same reasoning")
+	}
+	tagsMap, _ := defaultTags.(map[string]interface{})
+	tagSet, _ := tagsMap["set"].(map[string]interface{})
+	tagSimple, _ := tagSet["TagSimple"].([]interface{})
+	if len(tagSimple) != 0 {
+		t.Errorf("TagSimple = %v, want an empty (but present) list", tagSimple)
 	}
 }

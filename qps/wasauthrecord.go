@@ -274,7 +274,7 @@ func wasAuthFieldsToWire(fields []WASAuthField) *wasAuthFieldsWire {
 	}
 	wire := make([]wasAuthFieldWire, 0, len(fields))
 	for _, f := range fields {
-		wire = append(wire, wasAuthFieldWire{Name: f.Name, Value: f.Value, Secured: f.Secured})
+		wire = append(wire, wasAuthFieldWire(f))
 	}
 	return &wasAuthFieldsWire{Set: &wasAuthFieldSet{WebAppAuthFormRecordField: wire}}
 }
@@ -289,13 +289,14 @@ func wasSeleniumScriptToWire(s *WASSeleniumScript) *wasSeleniumScriptWire {
 func wasAuthRecordInputToWire(in WASAuthRecordInput) *wasAuthRecordWire {
 	w := &wasAuthRecordWire{Name: in.Name, Comments: in.Comments}
 
-	if len(in.TagIDs) > 0 {
-		simples := make([]tagSimple, 0, len(in.TagIDs))
-		for _, id := range in.TagIDs {
-			simples = append(simples, tagSimple{ID: json.Number(id)})
-		}
-		w.Tags = &webAppTagList{Set: &tagSimpleList{TagSimple: simples}}
+	// Always sent, even empty — see wasDNSOverrideInputToWire's identical
+	// reasoning: gating this on len(...) > 0 would mean clearing all tags
+	// in configuration could never reach the API.
+	simples := make([]tagSimple, 0, len(in.TagIDs))
+	for _, id := range in.TagIDs {
+		simples = append(simples, tagSimple{ID: json.Number(id)})
 	}
+	w.Tags = &webAppTagList{Set: &tagSimpleList{TagSimple: simples}}
 
 	if in.Form != nil {
 		sslOnly, authVault := in.Form.SSLOnly, in.Form.AuthVault

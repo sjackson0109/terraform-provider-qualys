@@ -140,13 +140,16 @@ func setConnectorBaseData(d *schema.ResourceData, base qps.ConnectorBase) error 
 		"cloudview_uuid":         base.CloudViewUUID,
 	}
 	// The response-side collection nesting is doc-tolerant rather than
-	// Confirmed (doc 12); when decoding yields nothing for an attribute the
-	// user did not configure, leave it unset rather than writing an empty
-	// set over a configured value.
-	if len(base.ActivationModules) > 0 || len(stringSet(d, "activation")) == 0 {
+	// Confirmed (doc 12: no JSON response sample exists for either field).
+	// Recognized is true whenever the response matched a known shape,
+	// including a genuinely empty result — write-back only skips on a
+	// truly unrecognized shape, so a real server-side clear reaches state
+	// instead of being masked by a blanket "count is zero, so skip" check
+	// that could never tell "cleared" apart from "shape didn't decode".
+	if base.ActivationModulesRecognized {
 		values["activation"] = base.ActivationModules
 	}
-	if len(tagIDs) > 0 || len(stringSet(d, "default_tag_ids")) == 0 {
+	if base.DefaultTagsRecognized {
 		values["default_tag_ids"] = tagIDs
 	}
 	return setAll(d, values)

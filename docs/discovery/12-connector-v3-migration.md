@@ -160,3 +160,52 @@ key material is never returned. Update accepts `authRecord` with only
   responses, `cloudviewUuid` presence on search results for all three
   clouds, and whether v1 UUID-era connectors appear in v3 listings at
   all on a given subscription.
+
+## Hardening pass (post-implementation code review)
+
+A subsequent review of this implementation (no live tenant available;
+same evidence constraints as the migration itself) found and fixed
+several correctness bugs the initial build had:
+
+- **`is_china_region` (AWS) / `is_gov_cloud` (Azure) were `Optional`
+  with no working write path.** Neither `AWSConnectorInput` nor
+  `AzureConnectorInput` had a field to carry them, so a configured value
+  was silently discarded on every create/update and overwritten by the
+  next Read — a permanent, unresolvable diff. Both are now `Computed`-only.
+  Breaking change; see the README's Connector v3 migration section.
+- **`activation`/`default_tag_ids` could never be cleared back to
+  empty.** `baseInputToWire` only populated these fields when non-empty
+  (`if len(...) > 0`), so clearing them in configuration produced a
+  request with the key omitted entirely (`omitempty` on a still-nil
+  pointer) — the server's previous value was left in place forever.
+  Fixed by always allocating the wrapper and sending an explicit empty
+  `set` collection. Unverified against a live tenant whether an empty
+  `set` is interpreted as "clear" rather than a no-op — flagged in
+  `qps/connector.go`'s doc comment on `baseInputToWire`.
+- **The response-side "doc-tolerant decode" masked genuine drift.**
+  `setConnectorBaseData`'s write-back for `activation`/`default_tag_ids`
+  used to skip writing whenever the decoded count was zero, unable to
+  tell "the server genuinely cleared this" apart from "the response
+  shape didn't decode." `decodeActivationModules`/`decodeTagRefs` now
+  return a `recognized` flag distinguishing the two, and write-back is
+  keyed on that instead of on count.
+- **GCP credential rotation could hit a false-positive plan-time
+  error.** `validateGCPProjectMatchesKey` compared `d.Get("project_id")`
+  — which, for an Optional+Computed attribute the user never set,
+  returns whatever value Read last stored from state — against a newly
+  rotated key's `project_id`. Rotating credentials to a different
+  project without ever having set `project_id` explicitly failed at
+  plan time. Fixed via `GetRawConfig`, which reflects only what is
+  literally present in the current configuration.
+- **Connector `Delete` was not idempotent on `OBJECT_NOT_FOUND`.**
+  Unlike every other qps-backed resource in this provider, the three
+  connectors' `Delete` functions did not treat a not-found response as
+  "already gone, therefore success" — an unattended `terraform destroy`
+  against an already-absent connector would fail rather than complete.
+  Now consistent with the rest of the provider (see the README's
+  discussion of `OBJECT_NOT_FOUND` policy).
+- **Read's `OBJECT_NOT_FOUND` handling could plan an unintended
+  recreate.** Same code, same fix, provider-wide — see the README.
+
+Regression tests for all of the above live in `qps/connector_test.go`
+and `provider/connector_test.go`/`provider/notfound_test.go`.

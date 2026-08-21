@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 
-	"github.com/sjackson0109/terraform-provider-qualys/qps"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/sjackson0109/terraform-provider-qualys/qps"
 )
 
 func resourceWASDNSOverride() *schema.Resource {
@@ -128,15 +128,7 @@ func resourceWASDNSOverrideRead(ctx context.Context, d *schema.ResourceData, met
 	override, err := c.GetWASDNSOverride(ctx, d.Id())
 	if err != nil {
 		if errors.Is(err, qps.ErrNotFound) {
-			d.SetId("")
-			return diag.Diagnostics{{
-				Severity: diag.Warning,
-				Summary:  "WAS DNS override no longer visible; removing it from state",
-				Detail: "Qualys reported OBJECT_NOT_FOUND, which it also returns for objects " +
-					"outside the caller's scope. If the record still exists and the credentials' " +
-					"scope changed, restore the scope before applying, or Terraform will create a " +
-					"duplicate.",
-			}}
+			return qpsNotFoundOnRead(d, "WAS DNS override")
 		}
 		return diag.FromErr(err)
 	}

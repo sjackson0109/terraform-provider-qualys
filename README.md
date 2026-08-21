@@ -221,6 +221,23 @@ A few behaviours are deliberate and worth knowing before you read the code:
 - **Destructive operations are never retried automatically.** A blocked or timed
   out response does not prove the operation did not take effect, and repeating a
   purge or delete on that assumption is not safe.
+- **A qps `OBJECT_NOT_FOUND` on Read never silently drops a resource from
+  state.** The portal APIs return this same code both when an object was
+  genuinely deleted and when it still exists but has fallen outside the
+  caller's scope (a role, scope-tag or business unit change) — the response
+  gives no way to tell the two apart. Clearing the id in the ambiguous case
+  is exactly what causes Terraform to plan an unattended recreate of an
+  object that may still exist, so every qps-backed resource's Read instead
+  leaves state untouched and returns an error explaining why, with the
+  `terraform state rm` command to run once you've confirmed the object is
+  actually gone (`provider/notfound.go`). `Delete` is the mirror case and
+  keeps the opposite, correct behaviour: an `OBJECT_NOT_FOUND` there means
+  the desired end state is already achieved, so it succeeds rather than
+  errors, keeping `terraform destroy` idempotent. VM/PA (`vmdr/`) resources
+  are unaffected by this policy — that client classifies not-found via a
+  narrow, deliberately conservative text match rather than a single
+  ambiguous code (see `vmdr/errors.go`'s `ErrNotFound` doc comment), so the
+  same ambiguity does not arise there.
 - **Member lists are authoritative.** Removing an entry from configuration
   removes it in Qualys; the provider uses the API's `set_*`/`set` parameters
   rather than the additive ones, except where an object's own API confirms an
@@ -252,6 +269,16 @@ service-principal fields), and the resources gain optional `run_frequency`,
 attributes. GCP's `project_id` is now derived from the key file and may be
 left unset.
 
+**Breaking:** `qualys_aws_connector.is_china_region` and
+`qualys_azure_connector.is_gov_cloud` are now read-only. Both were
+`Optional` under the old CloudView v1 client but never had a working write
+path under Connector v3 — any value set for them was silently discarded on
+every apply and immediately overwritten by the next refresh, producing a
+permanent diff for anyone who configured them explicitly. Remove them from
+configuration; Terraform reports their real value without you setting it.
+AWS's `is_gov_cloud` is unaffected — it is a genuine, working write field
+under Connector v3, unlike Azure's identically-named attribute.
+
 State migrates itself: v1 state holds a connector UUID where v3 uses numeric
 ids, and on the first refresh the provider finds the connector whose
 `cloudviewUuid` matches and adopts the numeric id. If that lookup fails
@@ -282,6 +309,68 @@ make docs     # regenerate docs/ with tfplugindocs
 `make docs` requires network access to download the Terraform CLI. The files
 under `docs/` are kept in sync by hand when that is unavailable; regenerate them
 whenever you can, and prefer the generated output on any conflict.
+
+CI (`.github/workflows/ci.yaml`) additionally runs `staticcheck`,
+`govulncheck` and `go test -race` on every push and pull request, reading
+the Go version from `go.mod`'s own `go`/`toolchain` directives rather than
+a hardcoded value in the workflow.
+
+### Integration tests vs. acceptance tests
+
+This provider has two genuinely different kinds of Terraform-protocol test,
+and the distinction matters: only one of them says anything about a real
+Qualys subscription.
+
+Both drive a real `terraform` binary and this provider's real binary over
+the real plugin protocol, via the SDK's `helper/resource` package — so both
+need a `terraform` binary on `PATH` (or `TF_ACC_TERRAFORM_PATH` set), and
+neither runs on a plain `go test ./...` (see below for why each is gated
+the way it is).
+
+**Integration tests** — files named `*_integration_test.go`, test functions
+named `TestIntegration*`:
+
+- [`provider/resource_gcp_connector_integration_test.go`](provider/resource_gcp_connector_integration_test.go) (`TestIntegrationGCPConnectorLifecycle`)
+- [`provider/resource_asset_group_integration_test.go`](provider/resource_asset_group_integration_test.go) (`TestIntegrationAssetGroupLifecycle`)
+- [`provider/resource_was_option_profile_integration_test.go`](provider/resource_was_option_profile_integration_test.go) (`TestIntegrationWASOptionProfileLifecycle`)
+
+Each runs a full create → refresh → update → refresh → no-op plan → import →
+delete cycle against an in-memory mock of the relevant Qualys HTTP API
+defined in the same file — not a real Qualys endpoint. They prove the full
+chain from Terraform configuration through this provider's schema, CRUD
+functions and wire encoding down to an HTTP request, and that a genuine
+`plan`/`apply`/`refresh`/`import`/`destroy` cycle behaves correctly against
+whatever that mock returns. They do **not** prove that Qualys's real API
+actually accepts or returns what the mock assumes — see
+[`provider/acctest_helpers_test.go`](provider/acctest_helpers_test.go) for
+how the mock's TLS certificate is trusted for the one `terraform`/provider
+subprocess pair each test spawns. They need no credentials and are gated on
+`TF_ACC=1` purely so they never run unintentionally inside a plain
+`go test ./...`, not because they need real ones — CI (`.github/workflows/ci.yaml`)
+runs them explicitly, with `TF_ACC=1` set and each test's `--- PASS` line
+checked individually, in a dedicated step separate from the plain
+`go test ./...` step (which always skips them).
+
+**Acceptance tests** — files named `*_acceptance_test.go`, test functions
+named `TestAcceptance*`:
+
+- [`provider/resource_gcp_connector_acceptance_test.go`](provider/resource_gcp_connector_acceptance_test.go) (`TestAcceptanceGCPConnectorLifecycle`) — currently the only resource with one
+
+These are gated on `TF_ACC=1` **and** an authorised real Qualys tenant:
+credentials (`QUALYS_URL`/`QUALYS_USERNAME`/`QUALYS_PASSWORD`) and any
+resource-specific configuration (e.g. `QUALYS_TEST_GCP_CREDENTIALS_JSON`)
+come entirely from environment variables, never hardcoded, and
+`requireRealTenantConfig` skips (not fails) a given acceptance test when its
+specific configuration is absent. These are the only tests in this
+repository that prove live Qualys behaviour — and **no live acceptance test
+has yet been executed against a real tenant**; the GCP connector's is a
+skeleton, ready to run once a maintainer supplies real credentials and a
+service-account key, and every other resource still needs its own
+acceptance test written. `qualys_asset_tag`, `qualys_vm_option_profile`,
+`qualys_vm_scan_schedule`, `qualys_was_application`,
+`qualys_was_auth_record`, the asset group and WAS option profile resources
+already covered by an integration test, and the AWS/Azure connectors are
+natural next candidates for both kinds of test.
 
 ## References
 
