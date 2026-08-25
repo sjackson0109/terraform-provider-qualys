@@ -75,6 +75,9 @@ func Provider() *schema.Provider {
 			"qualys_was_findings":         dataSourceWASFindings(),
 			"qualys_was_report_templates": dataSourceWASReportTemplates(),
 			"qualys_was_option_profiles":  dataSourceWASOptionProfiles(),
+			"qualys_was_auth_records":     dataSourceWASAuthRecords(),
+			"qualys_was_dns_overrides":    dataSourceWASDNSOverrides(),
+			"qualys_static_search_lists":  dataSourceStaticSearchLists(),
 
 			"qualys_tagged_assets":       dataSourceTaggedAssets(),
 			"qualys_vm_auth_records":     dataSourceVMAuthRecords(),
