@@ -32,16 +32,16 @@ func dataSourceWASOptionProfiles() *schema.Resource {
 				Computed:    true,
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
-						"id":                          {Type: schema.TypeString, Computed: true},
-						"name":                        {Type: schema.TypeString, Computed: true},
-						"comments":                    {Type: schema.TypeString, Computed: true},
-						"max_crawl_requests":          {Type: schema.TypeInt, Computed: true},
-						"performance":                 {Type: schema.TypeString, Computed: true},
-						"bruteforce_option":           {Type: schema.TypeString, Computed: true},
-						"timeout_error_threshold":     {Type: schema.TypeInt, Computed: true},
-						"unexpected_error_threshold":  {Type: schema.TypeInt, Computed: true},
-						"detect_credit_card_numbers":  {Type: schema.TypeBool, Computed: true},
-						"detect_social_security_nums": {Type: schema.TypeBool, Computed: true},
+						"id":                             {Type: schema.TypeString, Computed: true},
+						"name":                           {Type: schema.TypeString, Computed: true},
+						"comments":                       {Type: schema.TypeString, Computed: true},
+						"max_crawl_requests":             {Type: schema.TypeInt, Computed: true},
+						"performance":                    {Type: schema.TypeString, Computed: true},
+						"bruteforce_option":              {Type: schema.TypeString, Computed: true},
+						"timeout_error_threshold":        {Type: schema.TypeInt, Computed: true},
+						"unexpected_error_threshold":     {Type: schema.TypeInt, Computed: true},
+						"detect_credit_card_numbers":     {Type: schema.TypeBool, Computed: true},
+						"detect_social_security_numbers": {Type: schema.TypeBool, Computed: true},
 					},
 				},
 			},
@@ -77,16 +77,16 @@ func dataSourceWASOptionProfilesRead(ctx context.Context, d *schema.ResourceData
 	for _, p := range profiles {
 		ids = append(ids, p.ID)
 		out = append(out, map[string]interface{}{
-			"id":                          p.ID,
-			"name":                        p.Name,
-			"comments":                    p.Comments,
-			"max_crawl_requests":          p.MaxCrawlRequests,
-			"performance":                 p.Performance,
-			"bruteforce_option":           p.BruteforceOption,
-			"timeout_error_threshold":     p.TimeoutErrorThreshold,
-			"unexpected_error_threshold":  p.UnexpectedErrorThreshold,
-			"detect_credit_card_numbers":  p.DetectCreditCardNumbers,
-			"detect_social_security_nums": p.DetectSocialSecurityNums,
+			"id":                             p.ID,
+			"name":                           p.Name,
+			"comments":                       p.Comments,
+			"max_crawl_requests":             p.MaxCrawlRequests,
+			"performance":                    p.Performance,
+			"bruteforce_option":              p.BruteforceOption,
+			"timeout_error_threshold":        p.TimeoutErrorThreshold,
+			"unexpected_error_threshold":     p.UnexpectedErrorThreshold,
+			"detect_credit_card_numbers":     p.DetectCreditCardNumbers,
+			"detect_social_security_numbers": p.DetectSocialSecurityNums,
 		})
 	}
 

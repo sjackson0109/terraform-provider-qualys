@@ -44,7 +44,7 @@ Read-Only:
 - **bruteforce_option** (String)
 - **comments** (String)
 - **detect_credit_card_numbers** (Boolean)
-- **detect_social_security_nums** (Boolean)
+- **detect_social_security_numbers** (Boolean)
 - **id** (String)
 - **max_crawl_requests** (Number)
 - **name** (String)
