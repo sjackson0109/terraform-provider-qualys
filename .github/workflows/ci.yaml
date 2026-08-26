@@ -68,27 +68,28 @@ jobs:
         with:
           terraform_wrapper: false
       - name: Integration tests (mock-backed Terraform lifecycle)
-        # TestIntegrationGCPConnectorLifecycle, TestIntegrationAssetGroupLifecycle
-        # and TestIntegrationWASOptionProfileLifecycle each drive a real
-        # terraform binary and this provider's real binary over the real
-        # plugin protocol against an in-memory mock Qualys API (see
-        # provider/*_integration_test.go) — proving Terraform/provider
-        # lifecycle behaviour, not live Qualys API compatibility (see
-        # README.md's Testing section). They are gated on TF_ACC=1 purely to
-        # avoid ever running unintentionally in the plain `go test ./...`
-        # step above, not because they need real credentials — the "Test"
-        # step above does not set TF_ACC, so it always skips them, which is
-        # why this step exists: without it, nothing in this workflow would
-        # ever actually execute them. -run scopes to exactly these three, and
-        # explicitly checking for a "--- PASS" line per test (rather than
-        # trusting the step's own exit code alone) makes a future change that
-        # silently skips or removes one of them fail CI loudly instead of
-        # quietly passing.
+        # Every TestIntegration* test drives a real terraform binary and
+        # this provider's real binary over the real plugin protocol against
+        # an in-memory mock Qualys API (see provider/*_integration_test.go)
+        # — proving Terraform/provider lifecycle and read behaviour, not
+        # live Qualys API compatibility (see README.md's Testing section).
+        # They are gated on TF_ACC=1 purely to avoid ever running
+        # unintentionally in the plain `go test ./...` step above, not
+        # because they need real credentials — that step does not set
+        # TF_ACC, so it always skips them, which is why this step exists:
+        # without it, nothing in this workflow would ever actually execute
+        # them. -run scopes to exactly this enumerated list, and explicitly
+        # checking for a "--- PASS" line per test (rather than trusting the
+        # step's own exit code alone) makes a future change that silently
+        # skips or removes one of them fail CI loudly instead of quietly
+        # passing — including a new *_integration_test.go file added
+        # without also adding its test name here, so this list needs a
+        # manual update alongside any new integration test.
         env:
           LOCAL: true
           TF_ACC: '1'
         run: |
-          tests="TestIntegrationGCPConnectorLifecycle TestIntegrationAssetGroupLifecycle TestIntegrationWASOptionProfileLifecycle"
+          tests="TestIntegrationGCPConnectorLifecycle TestIntegrationAssetGroupLifecycle TestIntegrationWASOptionProfileLifecycle TestIntegrationWASOptionProfilesDataSource TestIntegrationWASAuthRecordsDataSource TestIntegrationWASDNSOverridesDataSource TestIntegrationStaticSearchListsDataSource"
           pattern=$(echo "$tests" | tr ' ' '|')
 
           set +e
