@@ -1,0 +1,107 @@
+name: Step 1 - Convert Qualys XLSX to JSON
+
+on:
+  workflow_dispatch:
+    inputs:
+      xlsx:
+        description: Path to the Qualys XLSX workbook
+        required: true
+        default: resources/Qualys_Configuration_Template_All_Resources.xlsx
+      output:
+        description: Output JSON path
+        required: true
+        default: qualys.auto.json
+
+permissions:
+  contents: read
+
+jobs:
+  convert:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install converter dependency
+        run: python -m pip install --disable-pip-version-check openpyxl==3.1.5
+
+      - name: Convert named Excel tables to JSON
+        env:
+          INPUT_XLSX: ${{ inputs.xlsx }}
+          OUTPUT_JSON: ${{ inputs.output }}
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          from openpyxl import load_workbook
+
+          source = Path(os.environ["INPUT_XLSX"])
+          output = Path(os.environ["OUTPUT_JSON"])
+          wb = load_workbook(source, data_only=True)
+
+          result = {}
+
+          def normalise(header, value):
+              if value is None or value == "":
+                  return None, None
+              if header.endswith("__list"):
+                  key = header[:-6]
+                  if isinstance(value, str):
+                      vals = [v.strip() for v in value.split(";") if v.strip()]
+                  else:
+                      vals = [value]
+                  return key, vals
+              if header.endswith("__json"):
+                  key = header[:-6]
+                  if isinstance(value, str):
+                      return key, json.loads(value)
+                  return key, value
+              return header, value
+
+          # Worksheet names are deliberately ignored. Only Excel named tables matter.
+          for ws in wb.worksheets:
+              # openpyxl's TableList.items() yields (name, ref_string) pairs,
+              # not (name, Table) -- ws.tables[name] (dict-style access) is
+              # what returns the Table object with a .ref attribute. Using
+              # table.ref here throws "'str' object has no attribute 'ref'"
+              # on every workbook, with the exact openpyxl version pinned
+              # above (3.1.5) -- confirmed by actually running this against
+              # a real workbook, not assumed from documentation.
+              for table_name, table_ref in ws.tables.items():
+                  rows = ws[table_ref]
+                  headers = [str(c.value).strip() for c in rows[0]]
+                  objects = []
+                  for row in rows[1:]:
+                      raw = dict(zip(headers, [c.value for c in row]))
+                      enabled = raw.get("enabled")
+                      if enabled not in (True, 1, "TRUE", "True", "true", "YES", "Yes", "yes"):
+                          continue
+                      obj = {}
+                      for h, v in raw.items():
+                          k, nv = normalise(h, v)
+                          if k is not None and nv is not None:
+                              obj[k] = nv
+                      if obj:
+                          objects.append(obj)
+                  result[table_name] = objects
+
+          output.parent.mkdir(parents=True, exist_ok=True)
+          output.write_text(json.dumps(result, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+          print(f"Wrote {output}")
+          for name in sorted(result):
+              print(f"{name}: {len(result[name])}")
+          PY
+
+      - name: Validate JSON
+        env:
+          OUTPUT_JSON: ${{ inputs.output }}
+        run: python -m json.tool "$OUTPUT_JSON" >/dev/null
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: qualys-json
+          path: ${{ inputs.output }}

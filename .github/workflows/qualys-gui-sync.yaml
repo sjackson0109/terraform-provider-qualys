@@ -1,0 +1,57 @@
+name: Step 2 - Sync Qualys Business Units and Users (GUI)
+
+# Companion to the Terraform provider. Business units and user accounts have no
+# API, so they are driven through the legacy GUI session endpoints by
+# resources/qualys_gui_sync.py. Run this after Step 1 (convert-qualys-xlsx.yml)
+# and before/after terraform apply as appropriate.
+
+on:
+  workflow_dispatch:
+    inputs:
+      xlsx:
+        description: Path to the Qualys XLSX workbook
+        required: true
+        default: resources/Qualys_Configuration_Template_All_Resources.xlsx
+      state:
+        description: State file path (idempotency)
+        required: true
+        default: qualys_gui_state.json
+      dry_run:
+        description: Print actions without applying
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: python -m pip install --disable-pip-version-check requests==2.32.3 openpyxl==3.1.5
+
+      - name: Sync business units and users
+        env:
+          QUALYS_GUI_URL: ${{ secrets.QUALYS_GUI_URL }}
+          QUALYS_USERNAME: ${{ secrets.QUALYS_USERNAME }}
+          QUALYS_PASSWORD: ${{ secrets.QUALYS_PASSWORD }}
+          QUALYS_API_URL: ${{ secrets.QUALYS_API_URL }}
+        shell: bash
+        run: |
+          ARGS=("${{ inputs.xlsx }}" --state "${{ inputs.state }}")
+          if [ "${{ inputs.dry_run }}" = "true" ]; then ARGS+=(--dry-run); fi
+          python resources/qualys_gui_sync.py "${ARGS[@]}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: qualys-gui-state
+          path: ${{ inputs.state }}
+          if-no-files-found: warn
